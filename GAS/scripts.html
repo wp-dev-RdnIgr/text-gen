@@ -15,7 +15,10 @@ var state = {
   expandedClientId: null,
   currentGeneration: null,
   genDataRows: [],
-  genSimulationTimer: null
+  genSimulationTimer: null,
+  expandedTextId: null,
+  expandedProgressTextId: null,
+  progressTexts: []
 };
 
 // --- Инициализация ---
@@ -846,6 +849,9 @@ function simulateGeneration() {
       next.uniqueness_score = Math.floor(Math.random() * 20 + 80);
       next.ai_score = Math.floor(Math.random() * 30 + 5);
       next.gdoc_url = '#doc-' + next.id;
+      next.content = generateFakeContent(next.source_data ? next.source_data.topic : 'Текст', null);
+      next.comment = '';
+      next.regeneration_count = 0;
       state.currentGeneration.completed_texts++;
     } else {
       next.status = 'failed';
@@ -944,21 +950,181 @@ function renderResultsTab() {
   }
 
   var tbody = document.getElementById('results-texts-table');
-  var statusLabels = { completed: 'Готово', failed: 'Ошибка' };
-  var statusClasses = { completed: 'badge-success', failed: 'badge-danger' };
+  var statusLabels = { completed: 'Готово', failed: 'Ошибка', pending: 'Ожидает', processing: 'Обработка...' };
+  var statusClasses = { completed: 'badge-success', failed: 'badge-danger', pending: '', processing: 'badge-warning' };
   var html = '';
   state.texts.forEach(function(t, i) {
-    html += '<tr>' +
+    var isExpanded = state.expandedTextId === t.id;
+    var expandClass = isExpanded ? ' expanded' : '';
+    var regenBadge = t.regeneration_count ? '<span class="regeneration-badge">x' + t.regeneration_count + '</span>' : '';
+    var commentIndicator = t.comment ? '<span class="result-comment-saved" title="Есть комментарий"><span class="comment-indicator"></span></span>' : '';
+
+    // Основная строка
+    html += '<tr class="result-row" onclick="toggleTextPreview(\'' + t.id + '\')">' +
+      '<td><span class="result-expand-icon' + expandClass + '">&#9654;</span></td>' +
       '<td>' + (i + 1) + '</td>' +
-      '<td>' + escapeHtml(t.source_data ? t.source_data.topic : '') + '</td>' +
+      '<td>' + escapeHtml(t.source_data ? t.source_data.topic : '') + regenBadge + commentIndicator + '</td>' +
       '<td><span class="badge ' + (statusClasses[t.status] || '') + '">' + (statusLabels[t.status] || t.status) + '</span></td>' +
       '<td>' + (t.uniqueness_score != null ? t.uniqueness_score + '%' : '—') + '</td>' +
       '<td>' + (t.ai_score != null ? t.ai_score + '%' : '—') + '</td>' +
-      '<td>' + (t.gdoc_url ? '<a href="' + t.gdoc_url + '" target="_blank">Открыть</a>' : '—') + '</td>' +
-      '<td>' + (t.error_message ? '<span class="text-danger">' + escapeHtml(t.error_message) + '</span>' : '') + '</td>' +
+      '<td>' + (t.gdoc_url ? '<a href="' + t.gdoc_url + '" target="_blank" onclick="event.stopPropagation();">Открыть</a>' : '—') + '</td>' +
+      '<td><button class="btn btn-sm btn-regenerate" onclick="event.stopPropagation(); regenerateText(\'' + t.id + '\')">Перегенерировать</button></td>' +
+    '</tr>';
+
+    // Раскрывающаяся детализация
+    html += '<tr class="result-detail-row" id="detail-' + t.id + '" style="display:' + (isExpanded ? 'table-row' : 'none') + ';">' +
+      '<td colspan="8">' +
+        '<div class="result-detail-content">' +
+          (t.error_message ? '<div class="result-error-box">Ошибка: ' + escapeHtml(t.error_message) + '</div>' : '') +
+          '<div class="result-text-preview" id="preview-' + t.id + '">' +
+            (t.content ? t.content : '<span class="text-secondary">Текст не сгенерирован</span>') +
+          '</div>' +
+          '<div class="result-actions-bar">' +
+            '<div class="result-comment-area">' +
+              '<div class="result-comment-label">Комментарий к правкам</div>' +
+              '<textarea id="comment-' + t.id + '" placeholder="Укажите, что нужно изменить при перегенерации..." onchange="saveTextComment(\'' + t.id + '\')" onclick="event.stopPropagation();">' + escapeHtml(t.comment || '') + '</textarea>' +
+            '</div>' +
+            '<div class="result-action-buttons">' +
+              '<button class="btn btn-sm btn-regenerate" id="regen-btn-' + t.id + '" onclick="event.stopPropagation(); regenerateText(\'' + t.id + '\')">Перегенерировать</button>' +
+              (t.gdoc_url ? '<a href="' + t.gdoc_url + '" target="_blank" class="btn btn-sm" onclick="event.stopPropagation();">Открыть документ</a>' : '') +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</td>' +
     '</tr>';
   });
   tbody.innerHTML = html;
+}
+
+// --- Раскрыть/скрыть превью текста ---
+function toggleTextPreview(textId) {
+  var detailRow = document.getElementById('detail-' + textId);
+  if (!detailRow) return;
+
+  if (state.expandedTextId === textId) {
+    detailRow.style.display = 'none';
+    state.expandedTextId = null;
+  } else {
+    // Закрыть предыдущий
+    if (state.expandedTextId) {
+      var prev = document.getElementById('detail-' + state.expandedTextId);
+      if (prev) prev.style.display = 'none';
+    }
+    detailRow.style.display = 'table-row';
+    state.expandedTextId = textId;
+  }
+
+  // Обновить иконки
+  var icons = document.querySelectorAll('.result-expand-icon');
+  for (var i = 0; i < icons.length; i++) {
+    icons[i].classList.remove('expanded');
+  }
+  if (state.expandedTextId) {
+    var row = detailRow.previousElementSibling;
+    if (row) {
+      var icon = row.querySelector('.result-expand-icon');
+      if (icon) icon.classList.add('expanded');
+    }
+  }
+}
+
+// --- Сохранить комментарий к тексту ---
+function saveTextComment(textId) {
+  var textarea = document.getElementById('comment-' + textId);
+  if (!textarea) return;
+  var comment = textarea.value.trim();
+
+  var text = state.texts.find(function(t) { return t.id === textId; });
+  if (text) {
+    text.comment = comment;
+    showToast('Комментарий сохранен', 'success');
+  }
+}
+
+// --- Перегенерировать один текст ---
+function regenerateText(textId) {
+  var text = state.texts.find(function(t) { return t.id === textId; });
+  if (!text) return;
+
+  // Получить комментарий если есть
+  var commentEl = document.getElementById('comment-' + textId);
+  if (commentEl) {
+    text.comment = commentEl.value.trim();
+  }
+
+  var btn = document.getElementById('regen-btn-' + textId);
+  if (btn) {
+    btn.classList.add('regenerating');
+    btn.textContent = 'Генерация...';
+  }
+
+  // Установить статус
+  text.status = 'processing';
+  text.regeneration_count = (text.regeneration_count || 0) + 1;
+  renderResultsTab();
+
+  // Расширить строку обратно
+  state.expandedTextId = textId;
+  var detailRow = document.getElementById('detail-' + textId);
+  if (detailRow) detailRow.style.display = 'table-row';
+  var row = detailRow ? detailRow.previousElementSibling : null;
+  if (row) {
+    var icon = row.querySelector('.result-expand-icon');
+    if (icon) icon.classList.add('expanded');
+  }
+
+  showToast('Перегенерация запущена' + (text.comment ? ' (с учетом комментария)' : ''), 'info');
+
+  // Симуляция перегенерации
+  setTimeout(function() {
+    var success = Math.random() > 0.1; // 90% успех при перегенерации
+    if (success) {
+      text.status = 'completed';
+      text.uniqueness_score = Math.floor(Math.random() * 15 + 85);
+      text.ai_score = Math.floor(Math.random() * 25 + 5);
+      text.content = generateFakeContent(text.source_data ? text.source_data.topic : 'Текст', text.comment);
+      text.error_message = null;
+      showToast('Текст "' + escapeHtml((text.source_data && text.source_data.topic) || '') + '" перегенерирован', 'success');
+    } else {
+      text.status = 'failed';
+      text.error_message = 'API timeout при перегенерации (симуляция)';
+      showToast('Ошибка перегенерации', 'error');
+    }
+    renderResultsTab();
+    // Восстановить раскрытое состояние
+    state.expandedTextId = textId;
+    var dr = document.getElementById('detail-' + textId);
+    if (dr) dr.style.display = 'table-row';
+    var r2 = dr ? dr.previousElementSibling : null;
+    if (r2) {
+      var ic = r2.querySelector('.result-expand-icon');
+      if (ic) ic.classList.add('expanded');
+    }
+  }, 2000 + Math.random() * 2000);
+}
+
+// --- Генератор фейкового контента (симуляция) ---
+function generateFakeContent(topic, comment) {
+  topic = topic || 'Тема статьи';
+  var commentNote = comment ? '\n\n[Учтен комментарий: ' + comment + ']\n' : '';
+
+  var paragraphs = [
+    'В данной статье мы подробно рассмотрим ключевые аспекты темы «' + escapeHtml(topic) + '». Эта информация будет полезна как начинающим, так и опытным специалистам, которые хотят углубить свои знания.',
+    'Современный рынок предлагает множество решений и подходов. Важно разобраться в основных критериях выбора, чтобы принять взвешенное решение. Рассмотрим каждый из них подробнее.',
+    'Первое, на что стоит обратить внимание — это качество и надежность. Независимо от бюджета, этот фактор остается определяющим. Многие эксперты рекомендуют начинать именно с оценки этого параметра.',
+    'Не менее важным является соотношение цены и функциональности. Переплата за ненужные функции — одна из самых распространенных ошибок. Составьте список действительно необходимых характеристик перед покупкой.',
+    'Отзывы реальных пользователей — ценный источник информации. Обращайте внимание на отзывы, оставленные через 2-3 месяца использования, когда первые впечатления уже сменились объективной оценкой.',
+    'Подведем итоги. Выбор требует внимательного подхода и анализа. Используйте рекомендации из этой статьи, чтобы сделать оптимальный выбор. Если у вас остались вопросы — оставляйте комментарии.'
+  ];
+
+  var content = '<h1>' + escapeHtml(topic) + '</h1>\n\n';
+  content += '<h2>Введение</h2>\n<p>' + paragraphs[0] + '</p>\n\n';
+  content += '<h2>Основные критерии</h2>\n<p>' + paragraphs[1] + '</p>\n<p>' + paragraphs[2] + '</p>\n\n';
+  content += '<h2>На что обратить внимание</h2>\n<p>' + paragraphs[3] + '</p>\n<p>' + paragraphs[4] + '</p>\n\n';
+  content += '<h2>Заключение</h2>\n<p>' + paragraphs[5] + '</p>';
+  content += commentNote;
+
+  return content;
 }
 
 // --- Экран прогресса (отдельная страница) ---
@@ -998,22 +1164,163 @@ function loadProgressScreen(generationId) {
 
     // Загрузить тексты
     google.script.run.withSuccessHandler(function(texts) {
-      var tbody = document.getElementById('prog-texts-table');
-      var sLabels = { pending: 'Ожидает', processing: 'Обработка', completed: 'Готово', failed: 'Ошибка' };
-      var sClasses = { pending: '', processing: 'badge-warning', completed: 'badge-success', failed: 'badge-danger' };
-      var html = '';
-      (texts || []).forEach(function(t, i) {
-        html += '<tr>' +
-          '<td>' + (i + 1) + '</td>' +
-          '<td>' + escapeHtml(t.source_data ? t.source_data.topic : '') + '</td>' +
-          '<td><span class="badge ' + (sClasses[t.status] || '') + '">' + (sLabels[t.status] || t.status) + '</span></td>' +
-          '<td>' + (t.uniqueness_score != null ? t.uniqueness_score + '%' : '—') + '</td>' +
-          '<td>' + (t.gdoc_url ? '<a href="' + t.gdoc_url + '" target="_blank">Открыть</a>' : '—') + '</td>' +
-        '</tr>';
-      });
-      tbody.innerHTML = html || '<tr><td colspan="5" class="text-center text-secondary">Нет текстов</td></tr>';
+      state.progressTexts = texts || [];
+      renderProgressTextsTable();
     }).getGeneratedTexts(generationId);
 
   }).getGeneration(generationId);
+}
+
+// --- Рендер таблицы текстов на странице прогресса ---
+function renderProgressTextsTable() {
+  var tbody = document.getElementById('prog-texts-table');
+  if (!tbody) return;
+  var texts = state.progressTexts || [];
+  if (!texts.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-secondary">Нет текстов</td></tr>';
+    return;
+  }
+
+  var sLabels = { pending: 'Ожидает', processing: 'Обработка', completed: 'Готово', failed: 'Ошибка' };
+  var sClasses = { pending: '', processing: 'badge-warning', completed: 'badge-success', failed: 'badge-danger' };
+  var html = '';
+
+  texts.forEach(function(t, i) {
+    var isExpanded = state.expandedProgressTextId === t.id;
+    var expandClass = isExpanded ? ' expanded' : '';
+    var regenBadge = t.regeneration_count ? '<span class="regeneration-badge">x' + t.regeneration_count + '</span>' : '';
+    var commentIndicator = t.comment ? '<span class="result-comment-saved"><span class="comment-indicator"></span></span>' : '';
+
+    html += '<tr class="result-row" onclick="toggleProgressTextPreview(\'' + t.id + '\')">' +
+      '<td><span class="result-expand-icon' + expandClass + '">&#9654;</span></td>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td>' + escapeHtml(t.source_data ? t.source_data.topic : '') + regenBadge + commentIndicator + '</td>' +
+      '<td><span class="badge ' + (sClasses[t.status] || '') + '">' + (sLabels[t.status] || t.status) + '</span></td>' +
+      '<td>' + (t.uniqueness_score != null ? t.uniqueness_score + '%' : '—') + '</td>' +
+      '<td>' + (t.ai_score != null ? t.ai_score + '%' : '—') + '</td>' +
+      '<td>' + (t.gdoc_url ? '<a href="' + t.gdoc_url + '" target="_blank" onclick="event.stopPropagation();">Открыть</a>' : '—') + '</td>' +
+      '<td>' + (t.status === 'completed' || t.status === 'failed' ? '<button class="btn btn-sm btn-regenerate" onclick="event.stopPropagation(); regenerateProgressText(\'' + t.id + '\')">Перегенерировать</button>' : '') + '</td>' +
+    '</tr>';
+
+    html += '<tr class="result-detail-row" id="prog-detail-' + t.id + '" style="display:' + (isExpanded ? 'table-row' : 'none') + ';">' +
+      '<td colspan="8">' +
+        '<div class="result-detail-content">' +
+          (t.error_message ? '<div class="result-error-box">Ошибка: ' + escapeHtml(t.error_message) + '</div>' : '') +
+          '<div class="result-text-preview">' +
+            (t.content ? t.content : '<span class="text-secondary">Текст не сгенерирован</span>') +
+          '</div>' +
+          '<div class="result-actions-bar">' +
+            '<div class="result-comment-area">' +
+              '<div class="result-comment-label">Комментарий к правкам</div>' +
+              '<textarea id="prog-comment-' + t.id + '" placeholder="Укажите, что нужно изменить при перегенерации..." onchange="saveProgressTextComment(\'' + t.id + '\')" onclick="event.stopPropagation();">' + escapeHtml(t.comment || '') + '</textarea>' +
+            '</div>' +
+            '<div class="result-action-buttons">' +
+              '<button class="btn btn-sm btn-regenerate" id="prog-regen-btn-' + t.id + '" onclick="event.stopPropagation(); regenerateProgressText(\'' + t.id + '\')">Перегенерировать</button>' +
+              (t.gdoc_url ? '<a href="' + t.gdoc_url + '" target="_blank" class="btn btn-sm" onclick="event.stopPropagation();">Открыть документ</a>' : '') +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</td>' +
+    '</tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+function toggleProgressTextPreview(textId) {
+  var detailRow = document.getElementById('prog-detail-' + textId);
+  if (!detailRow) return;
+
+  if (state.expandedProgressTextId === textId) {
+    detailRow.style.display = 'none';
+    state.expandedProgressTextId = null;
+  } else {
+    if (state.expandedProgressTextId) {
+      var prev = document.getElementById('prog-detail-' + state.expandedProgressTextId);
+      if (prev) prev.style.display = 'none';
+    }
+    detailRow.style.display = 'table-row';
+    state.expandedProgressTextId = textId;
+  }
+
+  var icons = document.querySelectorAll('#prog-texts-table .result-expand-icon');
+  for (var i = 0; i < icons.length; i++) {
+    icons[i].classList.remove('expanded');
+  }
+  if (state.expandedProgressTextId) {
+    var row = detailRow.previousElementSibling;
+    if (row) {
+      var icon = row.querySelector('.result-expand-icon');
+      if (icon) icon.classList.add('expanded');
+    }
+  }
+}
+
+function saveProgressTextComment(textId) {
+  var textarea = document.getElementById('prog-comment-' + textId);
+  if (!textarea) return;
+  var comment = textarea.value.trim();
+
+  var text = (state.progressTexts || []).find(function(t) { return t.id === textId; });
+  if (text) {
+    text.comment = comment;
+    // Сохранить на сервере
+    google.script.run.updateGeneratedText(textId, { comment: comment });
+    showToast('Комментарий сохранен', 'success');
+  }
+}
+
+function regenerateProgressText(textId) {
+  var text = (state.progressTexts || []).find(function(t) { return t.id === textId; });
+  if (!text) return;
+
+  var commentEl = document.getElementById('prog-comment-' + textId);
+  if (commentEl) text.comment = commentEl.value.trim();
+
+  text.status = 'processing';
+  text.regeneration_count = (text.regeneration_count || 0) + 1;
+  renderProgressTextsTable();
+
+  state.expandedProgressTextId = textId;
+  var dr = document.getElementById('prog-detail-' + textId);
+  if (dr) dr.style.display = 'table-row';
+
+  showToast('Перегенерация запущена' + (text.comment ? ' (с учетом комментария)' : ''), 'info');
+
+  setTimeout(function() {
+    var success = Math.random() > 0.1;
+    if (success) {
+      text.status = 'completed';
+      text.uniqueness_score = Math.floor(Math.random() * 15 + 85);
+      text.ai_score = Math.floor(Math.random() * 25 + 5);
+      text.content = generateFakeContent(text.source_data ? text.source_data.topic : 'Текст', text.comment);
+      text.error_message = null;
+      showToast('Текст перегенерирован', 'success');
+    } else {
+      text.status = 'failed';
+      text.error_message = 'API timeout при перегенерации (симуляция)';
+      showToast('Ошибка перегенерации', 'error');
+    }
+
+    // Обновить на сервере
+    google.script.run.updateGeneratedText(textId, {
+      status: text.status,
+      uniqueness_score: text.uniqueness_score,
+      ai_score: text.ai_score,
+      content: text.content,
+      error_message: text.error_message,
+      regeneration_count: text.regeneration_count,
+      comment: text.comment
+    });
+
+    renderProgressTextsTable();
+    state.expandedProgressTextId = textId;
+    var dr2 = document.getElementById('prog-detail-' + textId);
+    if (dr2) dr2.style.display = 'table-row';
+    var r2 = dr2 ? dr2.previousElementSibling : null;
+    if (r2) {
+      var ic = r2.querySelector('.result-expand-icon');
+      if (ic) ic.classList.add('expanded');
+    }
+  }, 2000 + Math.random() * 2000);
 }
 </script>

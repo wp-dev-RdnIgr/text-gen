@@ -352,6 +352,12 @@ function seedData() {
     'Лучшие фитнес-браслеты 2026'
   ];
 
+  // Примеры контента для демо
+  var sampleContents = [
+    '<h1>Как выбрать 4K телевизор в 2026 году</h1>\n\n<h2>Введение</h2>\n<p>Рынок 4K телевизоров в 2026 году предлагает огромный выбор моделей на любой бюджет. В этой статье мы разберем ключевые характеристики, на которые стоит обращать внимание при выборе нового телевизора.</p>\n\n<h2>Размер экрана и разрешение</h2>\n<p>Оптимальный размер экрана зависит от расстояния просмотра. Для гостиной подойдут модели от 55 дюймов. Разрешение 4K (3840x2160) уже стало стандартом, но обратите внимание на поддержку HDR10+ и Dolby Vision.</p>\n\n<h2>Тип матрицы</h2>\n<p>OLED обеспечивает идеальный черный цвет и широкие углы обзора. QLED от Samsung предлагает высокую яркость. Mini-LED — золотая середина между ценой и качеством.</p>\n\n<h2>Заключение</h2>\n<p>При выборе 4K телевизора ориентируйтесь на размер комнаты, бюджет и основные сценарии использования. Не переплачивайте за функции, которые вам не нужны.</p>',
+    '<h1>ТОП-10 ноутбуков для работы и учебы</h1>\n\n<h2>Введение</h2>\n<p>Выбор ноутбука для работы и учебы — ответственная задача. Нужно найти баланс между производительностью, автономностью и ценой. Мы составили рейтинг лучших моделей 2026 года.</p>\n\n<h2>На что обратить внимание</h2>\n<p>Процессор — сердце ноутбука. Для офисных задач хватит Intel Core i5 или AMD Ryzen 5. Оперативная память — минимум 16 ГБ. SSD на 512 ГБ обеспечит быструю работу системы.</p>\n\n<h2>Автономность</h2>\n<p>Для мобильной работы важна автономность от 8 часов. Обращайте внимание на реальные тесты, а не заявления производителей. Модели с процессорами Apple M3 и Qualcomm Snapdragon X лидируют по энергоэффективности.</p>\n\n<h2>Заключение</h2>\n<p>Лучший ноутбук — тот, который решает ваши задачи. Не гонитесь за топовыми характеристиками, если ваша работа не требует высокой производительности.</p>'
+  ];
+
   // Тексты для генерации g1 (completed)
   for (var i = 0; i < 10; i++) {
     generated_texts.push({
@@ -366,9 +372,12 @@ function seedData() {
       },
       status: 'completed',
       uniqueness_score: 88 + Math.floor(Math.random() * 12),
-      ai_score: null,
+      ai_score: Math.floor(Math.random() * 25 + 5),
       gdoc_url: 'https://docs.google.com/document/d/fake-g1-' + (i + 1),
-      error_message: null
+      error_message: null,
+      content: sampleContents[i] || '<h1>' + topics_g1[i] + '</h1>\n\n<h2>Введение</h2>\n<p>В данной статье мы подробно рассмотрим тему «' + topics_g1[i] + '». Эта информация будет полезна для принятия взвешенного решения.</p>\n\n<h2>Основные критерии выбора</h2>\n<p>Современный рынок предлагает множество вариантов. Важно определиться с приоритетами: бюджет, функциональность, надежность. Рассмотрим каждый аспект подробнее.</p>\n\n<h2>Рекомендации экспертов</h2>\n<p>Специалисты рекомендуют обращать внимание на отзывы реальных пользователей и сравнивать характеристики нескольких моделей перед покупкой.</p>\n\n<h2>Заключение</h2>\n<p>Надеемся, эта статья помогла вам разобраться в вопросе. Делайте выбор осознанно и не переплачивайте за ненужные функции.</p>',
+      comment: '',
+      regeneration_count: 0
     });
   }
 
@@ -406,9 +415,12 @@ function seedData() {
       },
       status: status,
       uniqueness_score: score,
-      ai_score: null,
+      ai_score: status === 'completed' ? Math.floor(Math.random() * 25 + 5) : null,
       gdoc_url: gdoc,
-      error_message: error
+      error_message: error,
+      content: status === 'completed' ? '<h1>' + topics_g2[i] + '</h1>\n\n<h2>Введение</h2>\n<p>Разбираемся в теме «' + topics_g2[i] + '» — на что обратить внимание, какие есть нюансы и как сделать правильный выбор.</p>\n\n<h2>Ключевые моменты</h2>\n<p>Рынок предлагает разнообразные решения. Мы отобрали наиболее важные критерии для сравнения.</p>\n\n<h2>Заключение</h2>\n<p>Используйте наши рекомендации для принятия оптимального решения.</p>' : null,
+      comment: '',
+      regeneration_count: 0
     });
   }
 
@@ -434,9 +446,12 @@ function seedData() {
       },
       status: g3_statuses[i],
       uniqueness_score: g3_statuses[i] === 'completed' ? 94 + Math.floor(Math.random() * 5) : null,
-      ai_score: null,
+      ai_score: g3_statuses[i] === 'completed' ? Math.floor(Math.random() * 20 + 5) : null,
       gdoc_url: g3_statuses[i] === 'completed' ? 'https://docs.google.com/document/d/fake-g3-' + (i + 1) : null,
-      error_message: null
+      error_message: null,
+      content: g3_statuses[i] === 'completed' ? '<h1>' + topics_g3[i] + '</h1>\n\n<p>Подробный разбор темы «' + topics_g3[i] + '» с учетом актуального законодательства Украины.</p>\n\n<h2>Основные положения</h2>\n<p>Рассматриваем ключевые правовые аспекты и практические рекомендации для предпринимателей.</p>' : null,
+      comment: '',
+      regeneration_count: 0
     });
   }
 
@@ -460,9 +475,12 @@ function seedData() {
       },
       status: g4_statuses[i],
       uniqueness_score: g4_statuses[i] === 'completed' ? 86 : null,
-      ai_score: null,
+      ai_score: g4_statuses[i] === 'completed' ? 12 : null,
       gdoc_url: g4_statuses[i] === 'completed' ? 'https://docs.google.com/document/d/fake-g4-1' : null,
-      error_message: g4_statuses[i] === 'failed' ? 'Rate limit exceeded' : null
+      error_message: g4_statuses[i] === 'failed' ? 'Rate limit exceeded' : null,
+      content: g4_statuses[i] === 'completed' ? '<h1>' + topics_g4[i] + '</h1>\n\n<p>Описание товара с ключевыми характеристиками и преимуществами.</p>\n\n<h2>Характеристики</h2>\n<p>Высокое качество материалов, совместимость с популярными моделями устройств.</p>' : null,
+      comment: '',
+      regeneration_count: 0
     });
   }
 
@@ -488,7 +506,10 @@ function seedData() {
       uniqueness_score: null,
       ai_score: null,
       gdoc_url: null,
-      error_message: null
+      error_message: null,
+      content: null,
+      comment: '',
+      regeneration_count: 0
     });
   }
 
