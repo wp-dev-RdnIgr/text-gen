@@ -18,7 +18,8 @@ function onOpen() {
  * Открывает sidebar
  */
 function openSidebar() {
-  var html = HtmlService.createHtmlOutputFromFile('webapp')
+  var html = HtmlService.createTemplateFromFile('webapp')
+    .evaluate()
     .setTitle('SEO-тексты')
     .setWidth(400);
   SpreadsheetApp.getUi().showSidebar(html);
