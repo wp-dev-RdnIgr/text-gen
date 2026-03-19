@@ -1,0 +1,1019 @@
+<script>
+// ===========================================
+// scripts.html - Клиентская логика (SPA)
+// ===========================================
+
+// --- Глобальный стейт ---
+var state = {
+  clients: [],
+  projects: [],
+  templates: [],
+  generations: [],
+  texts: [],
+  selectedClientId: null,
+  selectedTemplateId: null,
+  expandedClientId: null,
+  currentGeneration: null,
+  genDataRows: [],
+  genSimulationTimer: null
+};
+
+// --- Инициализация ---
+document.addEventListener('DOMContentLoaded', function() {
+  loadInitialData();
+  handleHashRoute();
+  window.addEventListener('hashchange', handleHashRoute);
+});
+
+function loadInitialData() {
+  google.script.run.withSuccessHandler(function(clients) {
+    state.clients = clients || [];
+    renderClientList();
+    renderClientsTable();
+  }).getClients();
+
+  google.script.run.withSuccessHandler(function(templates) {
+    state.templates = templates || [];
+    renderTemplateList();
+  }).getTemplates();
+}
+
+// --- Роутер ---
+function handleHashRoute() {
+  var hash = window.location.hash || '#dashboard';
+  var parts = hash.split('/');
+  var screen = parts[0];
+
+  hideAllScreens();
+  updateActiveNav(screen);
+
+  switch (screen) {
+    case '#dashboard':
+      showScreen('screen-dashboard');
+      break;
+    case '#clients':
+      showScreen('screen-clients');
+      renderClientsTable();
+      break;
+    case '#templates':
+      showScreen('screen-templates');
+      renderTemplateList();
+      break;
+    case '#generation':
+      showScreen('screen-generation');
+      if (parts[1]) loadGenerationScreen(parts[1]);
+      break;
+    case '#progress':
+      showScreen('screen-progress');
+      if (parts[1]) loadProgressScreen(parts[1]);
+      break;
+    default:
+      showScreen('screen-dashboard');
+  }
+}
+
+function navigateTo(hash) {
+  window.location.hash = hash;
+}
+
+function hideAllScreens() {
+  var screens = document.querySelectorAll('.screen');
+  for (var i = 0; i < screens.length; i++) {
+    screens[i].style.display = 'none';
+  }
+}
+
+function showScreen(id) {
+  var el = document.getElementById(id);
+  if (el) el.style.display = 'block';
+}
+
+function updateActiveNav(hash) {
+  var links = document.querySelectorAll('.nav-link');
+  for (var i = 0; i < links.length; i++) {
+    links[i].classList.remove('active');
+    if (links[i].getAttribute('href') === hash) {
+      links[i].classList.add('active');
+    }
+  }
+}
+
+// --- Toast уведомления ---
+function showToast(message, type) {
+  type = type || 'info';
+  var container = document.getElementById('toast-container');
+  var toast = document.createElement('div');
+  toast.className = 'toast toast-' + type;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(function() { toast.classList.add('toast-visible'); }, 10);
+  setTimeout(function() {
+    toast.classList.remove('toast-visible');
+    setTimeout(function() { container.removeChild(toast); }, 300);
+  }, 3000);
+}
+
+// --- Модалки ---
+function openModal(id) {
+  document.getElementById(id).style.display = 'flex';
+}
+
+function closeModal(id) {
+  document.getElementById(id).style.display = 'none';
+}
+
+// --- Модалка клиента ---
+function openClientModal(clientId) {
+  var titleEl = document.getElementById('modal-client-title');
+  document.getElementById('mc-id').value = '';
+  document.getElementById('mc-name').value = '';
+  document.getElementById('mc-domain').value = '';
+  document.getElementById('mc-niche').value = '';
+  document.getElementById('mc-description').value = '';
+
+  if (clientId) {
+    titleEl.textContent = 'Редактировать клиента';
+    var client = state.clients.find(function(c) { return c.id === clientId; });
+    if (client) {
+      document.getElementById('mc-id').value = client.id;
+      document.getElementById('mc-name').value = client.name || '';
+      document.getElementById('mc-domain').value = client.domain || '';
+      document.getElementById('mc-niche').value = client.niche || '';
+      document.getElementById('mc-description').value = client.description || '';
+    }
+  } else {
+    titleEl.textContent = 'Новый клиент';
+  }
+  openModal('modal-client');
+}
+
+function saveClientFromModal() {
+  var data = {
+    name: document.getElementById('mc-name').value.trim(),
+    domain: document.getElementById('mc-domain').value.trim(),
+    niche: document.getElementById('mc-niche').value.trim(),
+    description: document.getElementById('mc-description').value.trim()
+  };
+  if (!data.name) { showToast('Укажите название клиента', 'error'); return; }
+
+  var id = document.getElementById('mc-id').value;
+  if (id) data.id = id;
+
+  google.script.run
+    .withSuccessHandler(function(saved) {
+      closeModal('modal-client');
+      showToast(id ? 'Клиент обновлен' : 'Клиент создан', 'success');
+      loadInitialData();
+      if (state.selectedClientId) selectClient(state.selectedClientId);
+    })
+    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
+    .saveClient(data);
+}
+
+// --- Модалка проекта ---
+function openProjectModal(clientId, projectId) {
+  var titleEl = document.getElementById('modal-project-title');
+  document.getElementById('mp-id').value = '';
+  document.getElementById('mp-client-id').value = clientId || '';
+  document.getElementById('mp-name').value = '';
+  document.getElementById('mp-content-type').value = 'blog';
+  document.getElementById('mp-sheet-url').value = '';
+  document.getElementById('mp-drive-folder').value = '';
+
+  if (projectId) {
+    titleEl.textContent = 'Редактировать проект';
+    google.script.run.withSuccessHandler(function(project) {
+      if (project) {
+        document.getElementById('mp-id').value = project.id;
+        document.getElementById('mp-client-id').value = project.client_id;
+        document.getElementById('mp-name').value = project.name || '';
+        document.getElementById('mp-content-type').value = project.content_type || 'blog';
+        document.getElementById('mp-sheet-url').value = project.sheet_url || '';
+        document.getElementById('mp-drive-folder').value = project.drive_folder || '';
+      }
+    }).getProject(projectId);
+  } else {
+    titleEl.textContent = 'Новый проект';
+  }
+  openModal('modal-project');
+}
+
+function saveProjectFromModal() {
+  var data = {
+    name: document.getElementById('mp-name').value.trim(),
+    client_id: document.getElementById('mp-client-id').value,
+    content_type: document.getElementById('mp-content-type').value,
+    sheet_url: document.getElementById('mp-sheet-url').value.trim(),
+    drive_folder: document.getElementById('mp-drive-folder').value.trim()
+  };
+  if (!data.name) { showToast('Укажите название проекта', 'error'); return; }
+
+  var id = document.getElementById('mp-id').value;
+  if (id) data.id = id;
+
+  google.script.run
+    .withSuccessHandler(function(saved) {
+      closeModal('modal-project');
+      showToast(id ? 'Проект обновлен' : 'Проект создан', 'success');
+      if (state.selectedClientId) selectClient(state.selectedClientId);
+    })
+    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
+    .saveProject(data);
+}
+
+// --- Демо-данные ---
+function seedDemoData() {
+  showToast('Загрузка демо-данных...', 'info');
+  google.script.run
+    .withSuccessHandler(function() {
+      showToast('Демо-данные загружены!', 'success');
+      loadInitialData();
+    })
+    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
+    .seedData();
+}
+
+// ===========================================
+// ЭТАП 2: Рендеринг дашборда, клиентов, проектов
+// ===========================================
+
+// --- Список клиентов в сайдбаре дашборда ---
+function renderClientList() {
+  var container = document.getElementById('client-list');
+  if (!container) return;
+  if (!state.clients.length) {
+    container.innerHTML = '<div class="placeholder-message"><p>Нет клиентов</p></div>';
+    return;
+  }
+  var html = '';
+  state.clients.forEach(function(c) {
+    var active = c.id === state.selectedClientId ? ' active' : '';
+    html += '<div class="client-item' + active + '" onclick="selectClient(\'' + c.id + '\')">' +
+      '<div class="client-item-name">' + escapeHtml(c.name) + '</div>' +
+      '<div class="client-item-domain">' + escapeHtml(c.domain || '') + '</div>' +
+    '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function filterClients(query) {
+  var items = document.querySelectorAll('.client-item');
+  query = query.toLowerCase();
+  for (var i = 0; i < items.length; i++) {
+    var name = items[i].querySelector('.client-item-name').textContent.toLowerCase();
+    items[i].style.display = name.indexOf(query) !== -1 ? '' : 'none';
+  }
+}
+
+// --- Выбор клиента в дашборде ---
+function selectClient(clientId) {
+  state.selectedClientId = clientId;
+  renderClientList();
+
+  document.getElementById('dashboard-placeholder').style.display = 'none';
+  document.getElementById('dashboard-client-content').style.display = 'block';
+
+  google.script.run.withSuccessHandler(function(data) {
+    var client = data.client;
+    state.projects = data.projects || [];
+    state.generations = data.generations || [];
+
+    document.getElementById('dashboard-client-name').textContent = client ? client.name : '';
+    document.getElementById('dashboard-client-desc').textContent = client ? (client.niche || '') + (client.domain ? ' — ' + client.domain : '') : '';
+
+    renderProjectsGrid();
+    renderGenerationsTable();
+  }).getAllDataForDashboard(clientId);
+}
+
+// --- Карточки проектов ---
+function renderProjectsGrid() {
+  var container = document.getElementById('projects-grid');
+  if (!container) return;
+  var html = '';
+
+  state.projects.forEach(function(p) {
+    var typeLabels = { blog: 'Блог', product_card: 'Товары', category: 'Категории', service: 'Услуги' };
+    var typeLabel = typeLabels[p.content_type] || p.content_type;
+    html += '<div class="project-card" onclick="navigateTo(\'#generation/' + p.id + '\')">' +
+      '<div class="project-card-header">' +
+        '<h4 class="project-card-title">' + escapeHtml(p.name) + '</h4>' +
+        '<span class="badge badge-info">' + escapeHtml(typeLabel) + '</span>' +
+      '</div>' +
+      '<div class="project-card-stats">' +
+        '<span>Текстов: ' + (p.total_texts || 0) + '</span>' +
+        '<span>Уник.: ' + (p.avg_uniqueness ? p.avg_uniqueness + '%' : '—') + '</span>' +
+      '</div>' +
+      '<div class="project-card-actions">' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation(); openProjectModal(\'' + p.client_id + '\', \'' + p.id + '\')">Настройки</button>' +
+        '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); deleteProjectConfirm(\'' + p.id + '\')">Удалить</button>' +
+      '</div>' +
+    '</div>';
+  });
+
+  // Карточка добавления
+  html += '<div class="project-card project-card-add" onclick="openProjectModal(\'' + state.selectedClientId + '\')">' +
+    '<div class="project-card-add-icon">+</div>' +
+    '<div>Новый проект</div>' +
+  '</div>';
+
+  container.innerHTML = html;
+}
+
+function deleteProjectConfirm(projectId) {
+  if (!confirm('Удалить проект и все связанные данные?')) return;
+  google.script.run
+    .withSuccessHandler(function() {
+      showToast('Проект удален', 'success');
+      selectClient(state.selectedClientId);
+    })
+    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
+    .deleteProject(projectId);
+}
+
+// --- Таблица генераций в дашборде ---
+function renderGenerationsTable() {
+  var tbody = document.getElementById('generations-table-body');
+  if (!tbody) return;
+  if (!state.generations.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет генераций</td></tr>';
+    return;
+  }
+
+  var html = '';
+  var sorted = state.generations.slice().sort(function(a, b) {
+    return new Date(b.created_at) - new Date(a.created_at);
+  });
+
+  sorted.forEach(function(g) {
+    var project = state.projects.find(function(p) { return p.id === g.project_id; });
+    var statusClass = { completed: 'badge-success', running: 'badge-warning', pending: 'badge-info', failed: 'badge-danger' };
+    var statusLabel = { completed: 'Завершена', running: 'В процессе', pending: 'Ожидает', failed: 'Ошибка' };
+
+    html += '<tr onclick="navigateTo(\'#progress/' + g.id + '\')" style="cursor:pointer;">' +
+      '<td>' + escapeHtml(project ? project.name : '—') + '</td>' +
+      '<td>' + formatDate(g.created_at) + '</td>' +
+      '<td>' + g.completed_texts + '/' + g.total_texts + '</td>' +
+      '<td>' + escapeHtml(g.llm_model || '') + '</td>' +
+      '<td><span class="badge ' + (statusClass[g.status] || '') + '">' + (statusLabel[g.status] || g.status) + '</span></td>' +
+    '</tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+// --- Таблица клиентов (страница "Клиенты") ---
+function renderClientsTable() {
+  var tbody = document.getElementById('clients-table-body');
+  if (!tbody) return;
+  if (!state.clients.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет клиентов</td></tr>';
+    return;
+  }
+  var html = '';
+  state.clients.forEach(function(c) {
+    html += '<tr>' +
+      '<td><strong>' + escapeHtml(c.name) + '</strong></td>' +
+      '<td>' + escapeHtml(c.domain || '—') + '</td>' +
+      '<td>' + escapeHtml(c.niche || '—') + '</td>' +
+      '<td id="client-projects-count-' + c.id + '">—</td>' +
+      '<td>' +
+        '<button class="btn btn-sm" onclick="toggleClientProjects(\'' + c.id + '\')">Проекты</button> ' +
+        '<button class="btn btn-sm" onclick="openClientModal(\'' + c.id + '\')">Ред.</button> ' +
+        '<button class="btn btn-sm btn-danger" onclick="deleteClientConfirm(\'' + c.id + '\')">Уд.</button>' +
+      '</td>' +
+    '</tr>';
+  });
+  tbody.innerHTML = html;
+
+  // Загрузить количество проектов для каждого клиента
+  state.clients.forEach(function(c) {
+    google.script.run.withSuccessHandler(function(projects) {
+      var el = document.getElementById('client-projects-count-' + c.id);
+      if (el) el.textContent = projects.length;
+    }).getProjects(c.id);
+  });
+}
+
+function deleteClientConfirm(clientId) {
+  if (!confirm('Удалить клиента и все связанные проекты?')) return;
+  google.script.run
+    .withSuccessHandler(function() {
+      showToast('Клиент удален', 'success');
+      state.selectedClientId = null;
+      loadInitialData();
+    })
+    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
+    .deleteClient(clientId);
+}
+
+function toggleClientProjects(clientId) {
+  var expanded = document.getElementById('client-projects-expanded');
+  if (state.expandedClientId === clientId) {
+    expanded.style.display = 'none';
+    state.expandedClientId = null;
+    return;
+  }
+  state.expandedClientId = clientId;
+  var client = state.clients.find(function(c) { return c.id === clientId; });
+  document.getElementById('expanded-client-name').textContent = client ? client.name : '';
+
+  google.script.run.withSuccessHandler(function(projects) {
+    var tbody = document.getElementById('client-projects-table');
+    if (!projects.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет проектов</td></tr>';
+    } else {
+      var html = '';
+      var typeLabels = { blog: 'Блог', product_card: 'Товары', category: 'Категории', service: 'Услуги' };
+      projects.forEach(function(p) {
+        html += '<tr>' +
+          '<td>' + escapeHtml(p.name) + '</td>' +
+          '<td>' + escapeHtml(typeLabels[p.content_type] || p.content_type) + '</td>' +
+          '<td>' + (p.total_texts || 0) + '</td>' +
+          '<td>' + (p.avg_uniqueness ? p.avg_uniqueness + '%' : '—') + '</td>' +
+          '<td>' +
+            '<button class="btn btn-sm" onclick="navigateTo(\'#generation/' + p.id + '\')">Генерация</button> ' +
+            '<button class="btn btn-sm btn-danger" onclick="deleteProjectConfirm(\'' + p.id + '\')">Удалить</button>' +
+          '</td>' +
+        '</tr>';
+      });
+      tbody.innerHTML = html;
+    }
+    expanded.style.display = 'block';
+  }).getProjects(clientId);
+}
+
+// --- Утилиты ---
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '—';
+  var d = new Date(dateStr);
+  var day = ('0' + d.getDate()).slice(-2);
+  var month = ('0' + (d.getMonth() + 1)).slice(-2);
+  return day + '.' + month + '.' + d.getFullYear();
+}
+
+// ===========================================
+// ЭТАП 3: Шаблоны — список, фильтры, редактор
+// ===========================================
+
+function renderTemplateList() {
+  var container = document.getElementById('template-list');
+  if (!container) return;
+  if (!state.templates.length) {
+    container.innerHTML = '<div class="placeholder-message"><p>Нет шаблонов</p></div>';
+    return;
+  }
+  var categoryLabels = { blog: 'Блог', product_card: 'Товары', category: 'Категории', service: 'Услуги', custom: 'Произвольный', system_humanizer: 'Системный' };
+  var html = '';
+  state.templates.forEach(function(t) {
+    var active = t.id === state.selectedTemplateId ? ' active' : '';
+    html += '<div class="template-item' + active + '" onclick="selectTemplate(\'' + t.id + '\')">' +
+      '<div class="template-item-name">' + escapeHtml(t.name) + '</div>' +
+      '<div class="template-item-meta">' +
+        '<span class="badge badge-sm">' + escapeHtml(categoryLabels[t.category] || t.category) + '</span>' +
+        '<span class="text-secondary">v' + (t.version || 1) + '</span>' +
+      '</div>' +
+    '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function filterTemplates(query) {
+  var items = document.querySelectorAll('.template-item');
+  query = query.toLowerCase();
+  for (var i = 0; i < items.length; i++) {
+    var name = items[i].querySelector('.template-item-name').textContent.toLowerCase();
+    items[i].style.display = name.indexOf(query) !== -1 ? '' : 'none';
+  }
+}
+
+function filterTemplatesByCategory(category) {
+  // Обновить кнопки фильтров
+  var buttons = document.querySelectorAll('#template-category-filters .tag-btn');
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].classList.remove('active');
+    if (buttons[i].getAttribute('data-category') === category) {
+      buttons[i].classList.add('active');
+    }
+  }
+  // Фильтровать список
+  if (category === 'all') {
+    renderTemplateList();
+    return;
+  }
+  var filtered = state.templates.filter(function(t) { return t.category === category; });
+  var container = document.getElementById('template-list');
+  var categoryLabels = { blog: 'Блог', product_card: 'Товары', category: 'Категории', service: 'Услуги', custom: 'Произвольный', system_humanizer: 'Системный' };
+  var html = '';
+  filtered.forEach(function(t) {
+    var active = t.id === state.selectedTemplateId ? ' active' : '';
+    html += '<div class="template-item' + active + '" onclick="selectTemplate(\'' + t.id + '\')">' +
+      '<div class="template-item-name">' + escapeHtml(t.name) + '</div>' +
+      '<div class="template-item-meta">' +
+        '<span class="badge badge-sm">' + escapeHtml(categoryLabels[t.category] || t.category) + '</span>' +
+        '<span class="text-secondary">v' + (t.version || 1) + '</span>' +
+      '</div>' +
+    '</div>';
+  });
+  container.innerHTML = html || '<div class="placeholder-message"><p>Нет шаблонов</p></div>';
+}
+
+function selectTemplate(templateId) {
+  state.selectedTemplateId = templateId;
+  renderTemplateList();
+
+  document.getElementById('template-placeholder').style.display = 'none';
+  document.getElementById('template-editor-content').style.display = 'block';
+
+  var tpl = state.templates.find(function(t) { return t.id === templateId; });
+  if (!tpl) return;
+
+  document.getElementById('tpl-name').value = tpl.name || '';
+  document.getElementById('tpl-category').value = tpl.category || 'blog';
+  document.getElementById('tpl-system-prompt').value = tpl.system_prompt || '';
+  document.getElementById('tpl-user-prompt').value = tpl.user_prompt || '';
+  document.getElementById('tpl-version-badge').textContent = 'v' + (tpl.version || 1);
+  document.getElementById('tpl-stat-version').textContent = tpl.version || 1;
+  document.getElementById('tpl-stat-usage').textContent = tpl.usage_count || 0;
+  document.getElementById('tpl-stat-uniqueness').textContent = tpl.avg_uniqueness ? tpl.avg_uniqueness + '%' : '—';
+
+  // Переменные
+  var varsContainer = document.getElementById('tpl-variables');
+  var vars = extractVariables(tpl.user_prompt || '');
+  if (vars.length) {
+    varsContainer.innerHTML = vars.map(function(v) {
+      return '<span class="variable-tag">{{' + escapeHtml(v) + '}}</span>';
+    }).join(' ');
+  } else {
+    varsContainer.innerHTML = '<span class="text-secondary">Нет переменных</span>';
+  }
+}
+
+function extractVariables(text) {
+  var matches = text.match(/\{\{(\w+)\}\}/g);
+  if (!matches) return [];
+  var unique = [];
+  matches.forEach(function(m) {
+    var name = m.replace(/\{\{|\}\}/g, '');
+    if (unique.indexOf(name) === -1) unique.push(name);
+  });
+  return unique;
+}
+
+function createNewTemplate() {
+  state.selectedTemplateId = null;
+  document.getElementById('template-placeholder').style.display = 'none';
+  document.getElementById('template-editor-content').style.display = 'block';
+  document.getElementById('tpl-name').value = '';
+  document.getElementById('tpl-category').value = 'blog';
+  document.getElementById('tpl-system-prompt').value = '';
+  document.getElementById('tpl-user-prompt').value = '';
+  document.getElementById('tpl-version-badge').textContent = 'v1';
+  document.getElementById('tpl-stat-version').textContent = '1';
+  document.getElementById('tpl-stat-usage').textContent = '0';
+  document.getElementById('tpl-stat-uniqueness').textContent = '—';
+  document.getElementById('tpl-variables').innerHTML = '<span class="text-secondary">Нет переменных</span>';
+}
+
+function saveCurrentTemplate() {
+  var data = {
+    name: document.getElementById('tpl-name').value.trim(),
+    category: document.getElementById('tpl-category').value,
+    system_prompt: document.getElementById('tpl-system-prompt').value,
+    user_prompt: document.getElementById('tpl-user-prompt').value
+  };
+  if (!data.name) { showToast('Укажите название шаблона', 'error'); return; }
+  if (state.selectedTemplateId) data.id = state.selectedTemplateId;
+
+  google.script.run
+    .withSuccessHandler(function(saved) {
+      showToast('Шаблон сохранен', 'success');
+      state.selectedTemplateId = saved.id;
+      google.script.run.withSuccessHandler(function(templates) {
+        state.templates = templates || [];
+        renderTemplateList();
+        selectTemplate(saved.id);
+      }).getTemplates();
+    })
+    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
+    .saveTemplate(data);
+}
+
+function deleteCurrentTemplate() {
+  if (!state.selectedTemplateId) return;
+  if (!confirm('Удалить шаблон?')) return;
+  google.script.run
+    .withSuccessHandler(function() {
+      showToast('Шаблон удален', 'success');
+      state.selectedTemplateId = null;
+      document.getElementById('template-editor-content').style.display = 'none';
+      document.getElementById('template-placeholder').style.display = 'block';
+      google.script.run.withSuccessHandler(function(templates) {
+        state.templates = templates || [];
+        renderTemplateList();
+      }).getTemplates();
+    })
+    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
+    .deleteTemplate(state.selectedTemplateId);
+}
+
+function duplicateTemplate() {
+  if (!state.selectedTemplateId) return;
+  var tpl = state.templates.find(function(t) { return t.id === state.selectedTemplateId; });
+  if (!tpl) return;
+  var copy = {
+    name: tpl.name + ' (копия)',
+    category: tpl.category,
+    system_prompt: tpl.system_prompt,
+    user_prompt: tpl.user_prompt
+  };
+  google.script.run
+    .withSuccessHandler(function(saved) {
+      showToast('Шаблон скопирован', 'success');
+      state.selectedTemplateId = saved.id;
+      google.script.run.withSuccessHandler(function(templates) {
+        state.templates = templates || [];
+        renderTemplateList();
+        selectTemplate(saved.id);
+      }).getTemplates();
+    })
+    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
+    .saveTemplate(copy);
+}
+
+// ===========================================
+// ЭТАП 4: Генерация — загрузка, таблица, запуск, симуляция, прогресс
+// ===========================================
+
+// --- Загрузка экрана генерации ---
+function loadGenerationScreen(projectId) {
+  google.script.run.withSuccessHandler(function(project) {
+    if (!project) { showToast('Проект не найден', 'error'); return; }
+    state.currentProject = project;
+
+    document.getElementById('gen-project-name').textContent = project.name;
+    document.getElementById('gen-breadcrumb-project').textContent = project.name;
+
+    // Загрузить имя клиента
+    google.script.run.withSuccessHandler(function(clients) {
+      var client = (clients || []).find(function(c) { return c.id === project.client_id; });
+      document.getElementById('gen-breadcrumb-client').textContent = client ? client.name : '';
+    }).getClients();
+
+    // Инициализировать пустые строки данных если нет
+    if (!state.genDataRows.length) {
+      state.genDataRows = [
+        { url: '', keywords: '', topic: '', brief: '' },
+        { url: '', keywords: '', topic: '', brief: '' },
+        { url: '', keywords: '', topic: '', brief: '' }
+      ];
+    }
+    renderDataTable();
+    populateTemplateSelect();
+    updateCostEstimate();
+    switchGenTab('data');
+  }).getProject(projectId);
+}
+
+// --- Таблица данных для генерации ---
+function renderDataTable() {
+  var tbody = document.getElementById('gen-data-table');
+  if (!tbody) return;
+  var html = '';
+  state.genDataRows.forEach(function(row, i) {
+    html += '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td><input type="text" class="input-field input-sm" value="' + escapeHtml(row.url) + '" onchange="updateDataRow(' + i + ', \'url\', this.value)"></td>' +
+      '<td><input type="text" class="input-field input-sm" value="' + escapeHtml(row.keywords) + '" onchange="updateDataRow(' + i + ', \'keywords\', this.value)"></td>' +
+      '<td><input type="text" class="input-field input-sm" value="' + escapeHtml(row.topic) + '" onchange="updateDataRow(' + i + ', \'topic\', this.value)"></td>' +
+      '<td><input type="text" class="input-field input-sm" value="' + escapeHtml(row.brief) + '" onchange="updateDataRow(' + i + ', \'brief\', this.value)"></td>' +
+      '<td><button class="btn btn-sm btn-danger" onclick="removeDataRow(' + i + ')">x</button></td>' +
+    '</tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+function updateDataRow(index, field, value) {
+  if (state.genDataRows[index]) state.genDataRows[index][field] = value;
+  updateCostEstimate();
+}
+
+function addDataRow() {
+  state.genDataRows.push({ url: '', keywords: '', topic: '', brief: '' });
+  renderDataTable();
+  updateCostEstimate();
+}
+
+function removeDataRow(index) {
+  state.genDataRows.splice(index, 1);
+  renderDataTable();
+  updateCostEstimate();
+}
+
+// --- Вкладки генерации ---
+function switchGenTab(tab) {
+  var tabs = document.querySelectorAll('#screen-generation .tab');
+  for (var i = 0; i < tabs.length; i++) {
+    tabs[i].classList.remove('active');
+    if (tabs[i].getAttribute('data-tab') === tab) tabs[i].classList.add('active');
+  }
+  var contents = document.querySelectorAll('#screen-generation .tab-content');
+  for (var j = 0; j < contents.length; j++) {
+    contents[j].style.display = 'none';
+  }
+  var target = document.getElementById('gen-tab-' + tab);
+  if (target) target.style.display = 'block';
+}
+
+// --- Выбор шаблона ---
+function populateTemplateSelect() {
+  var select = document.getElementById('gen-template-select');
+  if (!select) return;
+  var html = '<option value="">— Выберите шаблон —</option>';
+  state.templates.forEach(function(t) {
+    html += '<option value="' + t.id + '">' + escapeHtml(t.name) + '</option>';
+  });
+  select.innerHTML = html;
+}
+
+function onTemplateChange() {
+  var select = document.getElementById('gen-template-select');
+  var preview = document.getElementById('gen-template-preview');
+  var tpl = state.templates.find(function(t) { return t.id === select.value; });
+  if (tpl) {
+    var text = (tpl.user_prompt || '').substring(0, 200);
+    preview.textContent = text + (tpl.user_prompt && tpl.user_prompt.length > 200 ? '...' : '');
+    preview.style.display = 'block';
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+// --- Оценка стоимости ---
+function updateCostEstimate() {
+  var select = document.getElementById('gen-llm-select');
+  var costEl = document.getElementById('cost-text');
+  if (!select || !costEl) return;
+
+  var model = select.options[select.selectedIndex].text;
+  var rowCount = state.genDataRows.filter(function(r) {
+    return r.url || r.keywords || r.topic;
+  }).length;
+
+  var prices = { 'ChatGPT (GPT-4o)': 0.03, 'ChatGPT (GPT-4o-mini)': 0.005, 'Claude Sonnet': 0.015, 'Claude Opus': 0.075, 'Perplexity Online': 0.02 };
+  var price = prices[model] || 0.02;
+  var total = (rowCount * price).toFixed(2);
+  costEl.textContent = rowCount + ' текстов x ' + model + ' ~ $' + total;
+}
+
+// --- Загрузка из Sheets (заглушка) ---
+function loadFromSheets() {
+  showToast('Загрузка из Google Sheets будет доступна в полной версии. Заполняю демо-данными.', 'info');
+  state.genDataRows = [
+    { url: '/blog/seo-tips', keywords: 'SEO советы, продвижение', topic: '10 советов по SEO для начинающих', brief: 'Статья для блога, 2000 слов' },
+    { url: '/blog/content-marketing', keywords: 'контент-маркетинг, стратегия', topic: 'Контент-маркетинг в 2025 году', brief: 'Обзорная статья, 2500 слов' },
+    { url: '/blog/link-building', keywords: 'линкбилдинг, обратные ссылки', topic: 'Как строить ссылочный профиль', brief: 'Гайд, 3000 слов' },
+    { url: '/services/seo-audit', keywords: 'SEO аудит, анализ сайта', topic: 'SEO-аудит вашего сайта', brief: 'Страница услуги, 1500 слов' },
+    { url: '/services/copywriting', keywords: 'копирайтинг, тексты для сайта', topic: 'Профессиональный копирайтинг', brief: 'Страница услуги, 1500 слов' }
+  ];
+  renderDataTable();
+  updateCostEstimate();
+}
+
+// --- Запуск генерации (симуляция) ---
+function startGeneration() {
+  var filledRows = state.genDataRows.filter(function(r) { return r.topic; });
+  if (!filledRows.length) { showToast('Добавьте хотя бы одну строку с темой', 'error'); return; }
+
+  var templateId = document.getElementById('gen-template-select').value;
+  var llmValue = document.getElementById('gen-llm-select').value;
+  var parts = llmValue.split('|');
+
+  var genData = {
+    project_id: state.currentProject ? state.currentProject.id : '',
+    template_id: templateId,
+    llm_provider: parts[0],
+    llm_model: parts[1],
+    rows: filledRows,
+    options: {
+      humanize: document.getElementById('opt-humanize').checked,
+      uniqueness: document.getElementById('opt-uniqueness').checked,
+      factcheck: document.getElementById('opt-factcheck').checked,
+      ai_detector: document.getElementById('opt-ai-detector').checked,
+      drive_folder: document.getElementById('gen-drive-folder').value
+    }
+  };
+
+  showToast('Запуск генерации...', 'info');
+  document.getElementById('gen-stop-btn').style.display = 'inline-block';
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      state.currentGeneration = result.generation;
+      state.texts = result.texts;
+      showToast('Генерация запущена!', 'success');
+      switchGenTab('progress');
+      simulateGeneration();
+    })
+    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
+    .createGeneration(genData);
+}
+
+// --- Симуляция генерации ---
+function simulateGeneration() {
+  if (!state.currentGeneration || !state.texts.length) return;
+
+  var pendingTexts = state.texts.filter(function(t) { return t.status === 'pending'; });
+  if (!pendingTexts.length) {
+    finishGeneration();
+    return;
+  }
+
+  // Обработать следующий текст
+  var next = pendingTexts[0];
+  next.status = 'processing';
+  renderProgressTab();
+
+  state.genSimulationTimer = setTimeout(function() {
+    // Симулировать результат (80% успех, 20% ошибка)
+    var success = Math.random() > 0.2;
+    if (success) {
+      next.status = 'completed';
+      next.uniqueness_score = Math.floor(Math.random() * 20 + 80);
+      next.ai_score = Math.floor(Math.random() * 30 + 5);
+      next.gdoc_url = '#doc-' + next.id;
+      state.currentGeneration.completed_texts++;
+    } else {
+      next.status = 'failed';
+      next.error_message = 'API timeout (симуляция)';
+      state.currentGeneration.failed_texts++;
+    }
+
+    renderProgressTab();
+    simulateGeneration();
+  }, 1500 + Math.random() * 2000);
+}
+
+function stopGeneration() {
+  if (state.genSimulationTimer) {
+    clearTimeout(state.genSimulationTimer);
+    state.genSimulationTimer = null;
+  }
+  if (state.currentGeneration) {
+    state.currentGeneration.status = 'stopped';
+  }
+  document.getElementById('gen-stop-btn').style.display = 'none';
+  showToast('Генерация остановлена', 'info');
+  renderProgressTab();
+}
+
+function finishGeneration() {
+  if (state.currentGeneration) {
+    state.currentGeneration.status = 'completed';
+    state.currentGeneration.completed_at = new Date().toISOString();
+  }
+  document.getElementById('gen-stop-btn').style.display = 'none';
+  showToast('Генерация завершена!', 'success');
+  renderProgressTab();
+  renderResultsTab();
+}
+
+// --- Рендер вкладки прогресса ---
+function renderProgressTab() {
+  if (!state.currentGeneration || !state.texts.length) return;
+
+  var total = state.texts.length;
+  var completed = state.texts.filter(function(t) { return t.status === 'completed'; }).length;
+  var processing = state.texts.filter(function(t) { return t.status === 'processing'; }).length;
+  var pending = state.texts.filter(function(t) { return t.status === 'pending'; }).length;
+  var pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  document.getElementById('progress-text').textContent = completed + ' из ' + total;
+  document.getElementById('progress-bar-fill').style.width = pct + '%';
+  document.getElementById('stat-completed').textContent = completed;
+  document.getElementById('stat-processing').textContent = processing;
+  document.getElementById('stat-pending').textContent = pending;
+
+  // Средняя уникальность
+  var withScore = state.texts.filter(function(t) { return t.uniqueness_score != null; });
+  if (withScore.length) {
+    var avg = Math.round(withScore.reduce(function(s, t) { return s + t.uniqueness_score; }, 0) / withScore.length);
+    document.getElementById('stat-uniqueness').textContent = avg + '%';
+  } else {
+    document.getElementById('stat-uniqueness').textContent = '—';
+  }
+
+  // Таблица текстов
+  var tbody = document.getElementById('progress-texts-table');
+  var statusLabels = { pending: 'Ожидает', processing: 'Обработка...', completed: 'Готово', failed: 'Ошибка' };
+  var statusClasses = { pending: '', processing: 'badge-warning', completed: 'badge-success', failed: 'badge-danger' };
+  var html = '';
+  state.texts.forEach(function(t, i) {
+    html += '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td>' + escapeHtml(t.source_data ? t.source_data.topic : '') + '</td>' +
+      '<td><span class="badge ' + (statusClasses[t.status] || '') + '">' + (statusLabels[t.status] || t.status) + '</span></td>' +
+      '<td>' + (t.uniqueness_score != null ? t.uniqueness_score + '%' : '—') + '</td>' +
+      '<td>' + (t.gdoc_url ? '<a href="' + t.gdoc_url + '" target="_blank">Открыть</a>' : '—') + '</td>' +
+    '</tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+// --- Рендер вкладки результатов ---
+function renderResultsTab() {
+  if (!state.currentGeneration) return;
+
+  var completed = state.texts.filter(function(t) { return t.status === 'completed'; }).length;
+  var failed = state.texts.filter(function(t) { return t.status === 'failed'; }).length;
+
+  document.getElementById('results-not-ready').style.display = 'none';
+  document.getElementById('results-content').style.display = 'block';
+  document.getElementById('res-total').textContent = state.texts.length;
+  document.getElementById('res-completed').textContent = completed;
+  document.getElementById('res-failed').textContent = failed;
+
+  var withScore = state.texts.filter(function(t) { return t.uniqueness_score != null; });
+  if (withScore.length) {
+    var avg = Math.round(withScore.reduce(function(s, t) { return s + t.uniqueness_score; }, 0) / withScore.length);
+    document.getElementById('res-uniqueness').textContent = avg + '%';
+  }
+
+  var tbody = document.getElementById('results-texts-table');
+  var statusLabels = { completed: 'Готово', failed: 'Ошибка' };
+  var statusClasses = { completed: 'badge-success', failed: 'badge-danger' };
+  var html = '';
+  state.texts.forEach(function(t, i) {
+    html += '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td>' + escapeHtml(t.source_data ? t.source_data.topic : '') + '</td>' +
+      '<td><span class="badge ' + (statusClasses[t.status] || '') + '">' + (statusLabels[t.status] || t.status) + '</span></td>' +
+      '<td>' + (t.uniqueness_score != null ? t.uniqueness_score + '%' : '—') + '</td>' +
+      '<td>' + (t.ai_score != null ? t.ai_score + '%' : '—') + '</td>' +
+      '<td>' + (t.gdoc_url ? '<a href="' + t.gdoc_url + '" target="_blank">Открыть</a>' : '—') + '</td>' +
+      '<td>' + (t.error_message ? '<span class="text-danger">' + escapeHtml(t.error_message) + '</span>' : '') + '</td>' +
+    '</tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+// --- Экран прогресса (отдельная страница) ---
+function loadProgressScreen(generationId) {
+  google.script.run.withSuccessHandler(function(gen) {
+    if (!gen) { showToast('Генерация не найдена', 'error'); return; }
+
+    var statusLabels = { completed: 'Завершена', running: 'В процессе', pending: 'Ожидает', failed: 'Ошибка', stopped: 'Остановлена' };
+    var statusClasses = { completed: 'badge-success', running: 'badge-warning', pending: 'badge-info', failed: 'badge-danger', stopped: 'badge-danger' };
+
+    document.getElementById('prog-status-badge').textContent = statusLabels[gen.status] || gen.status;
+    document.getElementById('prog-status-badge').className = 'badge ' + (statusClasses[gen.status] || '');
+    document.getElementById('prog-llm').textContent = gen.llm_model || '';
+    document.getElementById('prog-created').textContent = formatDate(gen.created_at);
+
+    var pct = gen.total_texts > 0 ? Math.round((gen.completed_texts / gen.total_texts) * 100) : 0;
+    document.getElementById('prog-progress-text').textContent = gen.completed_texts + ' из ' + gen.total_texts;
+    document.getElementById('prog-progress-fill').style.width = pct + '%';
+    document.getElementById('prog-stat-completed').textContent = gen.completed_texts || 0;
+    document.getElementById('prog-stat-failed').textContent = gen.failed_texts || 0;
+    document.getElementById('prog-stat-pending').textContent = Math.max(0, gen.total_texts - gen.completed_texts - gen.failed_texts);
+    document.getElementById('prog-stat-processing').textContent = gen.status === 'running' ? 1 : 0;
+
+    // Загрузить шаблон
+    if (gen.template_id) {
+      google.script.run.withSuccessHandler(function(tpl) {
+        document.getElementById('prog-template').textContent = tpl ? tpl.name : '—';
+      }).getTemplate(gen.template_id);
+    }
+
+    // Загрузить проект для breadcrumb
+    if (gen.project_id) {
+      google.script.run.withSuccessHandler(function(project) {
+        document.getElementById('prog-breadcrumb-project').textContent = project ? project.name : '';
+      }).getProject(gen.project_id);
+    }
+
+    // Загрузить тексты
+    google.script.run.withSuccessHandler(function(texts) {
+      var tbody = document.getElementById('prog-texts-table');
+      var sLabels = { pending: 'Ожидает', processing: 'Обработка', completed: 'Готово', failed: 'Ошибка' };
+      var sClasses = { pending: '', processing: 'badge-warning', completed: 'badge-success', failed: 'badge-danger' };
+      var html = '';
+      (texts || []).forEach(function(t, i) {
+        html += '<tr>' +
+          '<td>' + (i + 1) + '</td>' +
+          '<td>' + escapeHtml(t.source_data ? t.source_data.topic : '') + '</td>' +
+          '<td><span class="badge ' + (sClasses[t.status] || '') + '">' + (sLabels[t.status] || t.status) + '</span></td>' +
+          '<td>' + (t.uniqueness_score != null ? t.uniqueness_score + '%' : '—') + '</td>' +
+          '<td>' + (t.gdoc_url ? '<a href="' + t.gdoc_url + '" target="_blank">Открыть</a>' : '—') + '</td>' +
+        '</tr>';
+      });
+      tbody.innerHTML = html || '<tr><td colspan="5" class="text-center text-secondary">Нет текстов</td></tr>';
+    }).getGeneratedTexts(generationId);
+
+  }).getGeneration(generationId);
+}
+</script>
