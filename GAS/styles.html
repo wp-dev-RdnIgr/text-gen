@@ -1120,4 +1120,81 @@ textarea.input-field {
   color: #DC2626;
   margin-bottom: 16px;
 }
+
+/* --- История версий шаблонов --- */
+.versions-table .version-row {
+  cursor: pointer;
+}
+.versions-table .version-row:hover {
+  background: #F0F0EC;
+}
+.versions-table .version-row.active {
+  background: #EBF5FF;
+}
+
+.version-expand-icon {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  font-size: 10px;
+  color: #888;
+  background: #F0F0EC;
+  border-radius: 4px;
+  transition: transform 0.2s;
+  user-select: none;
+}
+.version-expand-icon.expanded {
+  transform: rotate(90deg);
+}
+
+.version-viewer {
+  margin-top: 24px;
+  background: #FAFAF8;
+  border: 1px solid #E5E5E0;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.version-viewer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.version-viewer-header h4 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.version-viewer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.version-prompt-preview {
+  background: #FFFFFF;
+  border: 1px solid #E5E5E0;
+  border-radius: 7px;
+  padding: 12px 16px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #1A1A1A;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.version-badge-current {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  background: #ECFDF5;
+  color: #16A34A;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 6px;
+}
 </style>

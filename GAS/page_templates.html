@@ -93,6 +93,59 @@
             <div class="stat-label">Ср. уникальность</div>
           </div>
         </div>
+
+        <!-- История версий -->
+        <div class="section" id="tpl-versions-section" style="display:none;">
+          <div class="section-header-row">
+            <div class="section-title">История версий</div>
+          </div>
+          <div class="table-container">
+            <table class="data-table versions-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Версия</th>
+                  <th>Дата</th>
+                  <th>Использований</th>
+                  <th>Ср. уникальность</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tpl-versions-table">
+                <!-- Заполняется динамически -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Просмотр версии (read-only) -->
+        <div id="tpl-version-viewer" class="version-viewer" style="display:none;">
+          <div class="version-viewer-header">
+            <h4>Версия <span id="version-viewer-num"></span></h4>
+            <div class="version-viewer-actions">
+              <button class="btn" onclick="closeVersionViewer()">Закрыть</button>
+              <button class="btn btn-primary" id="version-restore-btn" onclick="restoreVersion()">Восстановить эту версию</button>
+            </div>
+          </div>
+          <div class="field-group">
+            <label class="field-label">Системный промт</label>
+            <div class="version-prompt-preview" id="version-viewer-system"></div>
+          </div>
+          <div class="field-group">
+            <label class="field-label">Пользовательский промт</label>
+            <div class="version-prompt-preview" id="version-viewer-user"></div>
+          </div>
+          <div class="stats-cards stats-cards-sm" style="grid-template-columns: repeat(2, 1fr);">
+            <div class="stat-card">
+              <div class="stat-value stat-value-sm" id="version-viewer-usage">0</div>
+              <div class="stat-label">Использований</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value stat-value-sm" id="version-viewer-uniqueness">—</div>
+              <div class="stat-label">Ср. уникальность</div>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   </div>
