@@ -95,11 +95,11 @@ function showScreen(id) {
 }
 
 function updateActiveNav(hash) {
-  var links = document.querySelectorAll('.nav-link');
-  for (var i = 0; i < links.length; i++) {
-    links[i].classList.remove('active');
-    if (links[i].getAttribute('data-hash') === hash) {
-      links[i].classList.add('active');
+  var tabs = document.querySelectorAll('.nav-tab');
+  for (var i = 0; i < tabs.length; i++) {
+    tabs[i].classList.remove('active');
+    if (tabs[i].getAttribute('data-hash') === hash) {
+      tabs[i].classList.add('active');
     }
   }
 }
