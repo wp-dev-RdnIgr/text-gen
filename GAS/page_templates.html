@@ -1,0 +1,99 @@
+<!-- Экран: Библиотека шаблонов -->
+<div id="screen-templates" class="screen" style="display:none;">
+  <div class="templates-layout">
+    <!-- Левая панель: список шаблонов -->
+    <aside class="templates-sidebar">
+      <h2 class="sidebar-title">Библиотека промтов</h2>
+      <input type="text" id="template-search" class="input-field" placeholder="Поиск шаблона..." oninput="filterTemplates(this.value)">
+
+      <!-- Фильтр по категориям -->
+      <div class="tag-filters" id="template-category-filters">
+        <button class="tag-btn active" data-category="all" onclick="filterTemplatesByCategory('all')">Все</button>
+        <button class="tag-btn" data-category="blog" onclick="filterTemplatesByCategory('blog')">Блог</button>
+        <button class="tag-btn" data-category="product_card" onclick="filterTemplatesByCategory('product_card')">Товары</button>
+        <button class="tag-btn" data-category="category" onclick="filterTemplatesByCategory('category')">Категории</button>
+        <button class="tag-btn" data-category="service" onclick="filterTemplatesByCategory('service')">Услуги</button>
+        <button class="tag-btn" data-category="system_humanizer" onclick="filterTemplatesByCategory('system_humanizer')">Системные</button>
+      </div>
+
+      <div id="template-list" class="template-list">
+        <!-- Заполняется динамически -->
+      </div>
+
+      <div class="sidebar-footer">
+        <button class="btn btn-block" onclick="createNewTemplate()">+ Новый шаблон</button>
+      </div>
+    </aside>
+
+    <!-- Правая часть: редактор -->
+    <main class="templates-editor">
+      <div id="template-placeholder" class="placeholder-message">
+        <p>Выберите шаблон из списка слева</p>
+      </div>
+
+      <div id="template-editor-content" style="display:none;">
+        <!-- Хедер -->
+        <div class="content-header">
+          <div class="content-header-info">
+            <input type="text" id="tpl-name" class="input-title" placeholder="Название шаблона">
+            <span id="tpl-version-badge" class="badge badge-info">v1</span>
+          </div>
+          <div class="content-header-actions">
+            <button class="btn" onclick="duplicateTemplate()">Дублировать</button>
+            <button class="btn btn-danger" onclick="deleteCurrentTemplate()">Удалить</button>
+            <button class="btn btn-primary" onclick="saveCurrentTemplate()">Сохранить</button>
+          </div>
+        </div>
+
+        <!-- Категория -->
+        <div class="field-group">
+          <label class="field-label">Категория</label>
+          <select id="tpl-category" class="input-field">
+            <option value="blog">Блог</option>
+            <option value="product_card">Карточка товара</option>
+            <option value="category">Категория</option>
+            <option value="service">Услуга</option>
+            <option value="custom">Произвольный</option>
+            <option value="system_humanizer">Системный (гуманизатор)</option>
+          </select>
+        </div>
+
+        <!-- Переменные -->
+        <div class="field-group">
+          <label class="field-label">Переменные</label>
+          <div id="tpl-variables" class="variables-row">
+            <!-- Заполняется динамически -->
+          </div>
+        </div>
+
+        <!-- Системный промт -->
+        <div class="field-group">
+          <label class="field-label">Системный промт</label>
+          <textarea id="tpl-system-prompt" class="input-field textarea-mono" rows="6" placeholder="Системный промт..."></textarea>
+        </div>
+
+        <!-- Пользовательский промт -->
+        <div class="field-group">
+          <label class="field-label">Пользовательский промт</label>
+          <textarea id="tpl-user-prompt" class="input-field textarea-mono" rows="6" placeholder="Пользовательский промт..."></textarea>
+        </div>
+
+        <!-- Статистика -->
+        <div class="stats-cards stats-cards-sm">
+          <div class="stat-card">
+            <div class="stat-value stat-value-sm" id="tpl-stat-version">1</div>
+            <div class="stat-label">Версия</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value stat-value-sm" id="tpl-stat-usage">0</div>
+            <div class="stat-label">Использований</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value stat-value-sm" id="tpl-stat-uniqueness">-</div>
+            <div class="stat-label">Ср. уникальность</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
