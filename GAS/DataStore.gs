@@ -3,13 +3,8 @@
 // Хранилище: PropertiesService (ScriptProperties)
 // ===========================================
 
-var STORE_KEYS = {
-  CLIENTS: 'clients',
-  PROJECTS: 'projects',
-  TEMPLATES: 'prompt_templates',
-  GENERATIONS: 'generations',
-  TEXTS: 'generated_texts'
-};
+// Ключи хранилища (используются как строковые литералы во всех файлах):
+// 'clients', 'projects', 'prompt_templates', 'generations', 'generated_texts'
 
 // --- Базовые операции ---
 

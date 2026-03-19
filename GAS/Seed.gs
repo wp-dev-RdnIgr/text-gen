@@ -493,11 +493,11 @@ function seedData() {
   }
 
   // Сохраняем все данные
-  props.setProperty(STORE_KEYS.CLIENTS, JSON.stringify(clients));
-  props.setProperty(STORE_KEYS.PROJECTS, JSON.stringify(projects));
-  props.setProperty(STORE_KEYS.TEMPLATES, JSON.stringify(templates));
-  props.setProperty(STORE_KEYS.GENERATIONS, JSON.stringify(generations));
-  props.setProperty(STORE_KEYS.TEXTS, JSON.stringify(generated_texts));
+  props.setProperty('clients', JSON.stringify(clients));
+  props.setProperty('projects', JSON.stringify(projects));
+  props.setProperty('prompt_templates', JSON.stringify(templates));
+  props.setProperty('generations', JSON.stringify(generations));
+  props.setProperty('generated_texts', JSON.stringify(generated_texts));
 
   Logger.log('Демо-данные успешно загружены!');
   Logger.log('Клиентов: ' + clients.length);
