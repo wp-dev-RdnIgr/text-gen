@@ -95,7 +95,7 @@ function updateActiveNav(hash) {
   var links = document.querySelectorAll('.nav-link');
   for (var i = 0; i < links.length; i++) {
     links[i].classList.remove('active');
-    if (links[i].getAttribute('href') === hash) {
+    if (links[i].getAttribute('data-hash') === hash) {
       links[i].classList.add('active');
     }
   }
