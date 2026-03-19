@@ -1,0 +1,68 @@
+<!-- Экран: Дашборд -->
+<div id="screen-dashboard" class="screen" style="display:none;">
+  <div class="dashboard-layout">
+    <!-- Сайдбар со списком клиентов -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2 class="sidebar-title">Клиенты</h2>
+        <input type="text" id="client-search" class="input-field" placeholder="Поиск..." oninput="filterClients(this.value)">
+      </div>
+      <div id="client-list" class="client-list">
+        <!-- Заполняется динамически -->
+      </div>
+      <div class="sidebar-footer">
+        <button class="btn btn-block" onclick="openClientModal()">+ Добавить клиента</button>
+      </div>
+    </aside>
+
+    <!-- Контент выбранного клиента -->
+    <main class="dashboard-content">
+      <div id="dashboard-placeholder" class="placeholder-message">
+        <p>Выберите клиента из списка слева</p>
+      </div>
+
+      <div id="dashboard-client-content" style="display:none;">
+        <!-- Хедер клиента -->
+        <div class="content-header">
+          <div class="content-header-info">
+            <h1 id="dashboard-client-name" class="page-title"></h1>
+            <p id="dashboard-client-desc" class="text-secondary"></p>
+          </div>
+          <div class="content-header-actions">
+            <button class="btn" onclick="navigateTo('#templates')">Шаблоны</button>
+            <button class="btn" onclick="openClientModal(state.selectedClientId)">Настройки клиента</button>
+          </div>
+        </div>
+
+        <!-- Проекты -->
+        <div class="section">
+          <h3 class="section-title">Проекты</h3>
+          <div id="projects-grid" class="projects-grid">
+            <!-- Заполняется динамически -->
+          </div>
+        </div>
+
+        <!-- Последние генерации -->
+        <div class="section">
+          <h3 class="section-title">Последние генерации</h3>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Проект</th>
+                  <th>Дата</th>
+                  <th>Текстов</th>
+                  <th>LLM</th>
+                  <th>Статус</th>
+                </tr>
+              </thead>
+              <tbody id="generations-table-body">
+                <!-- Заполняется динамически -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>

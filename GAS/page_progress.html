@@ -1,0 +1,73 @@
+<!-- Экран: Прогресс генерации (отдельная страница по ссылке из дашборда) -->
+<div id="screen-progress" class="screen" style="display:none;">
+  <div class="content-header">
+    <div class="content-header-info">
+      <div class="breadcrumbs">
+        <a href="#" onclick="navigateTo('#dashboard'); return false;">Дашборд</a>
+        <span class="breadcrumb-sep">/</span>
+        <span id="prog-breadcrumb-project"></span>
+        <span class="breadcrumb-sep">/</span>
+        <span>Генерация</span>
+      </div>
+      <h1 id="prog-title" class="page-title">Прогресс генерации</h1>
+    </div>
+    <div class="content-header-actions">
+      <span id="prog-status-badge" class="badge"></span>
+    </div>
+  </div>
+
+  <!-- Прогресс-бар -->
+  <div class="progress-bar-container">
+    <div class="progress-bar-label">
+      <span id="prog-progress-text">0 из 0</span>
+    </div>
+    <div class="progress-bar-track">
+      <div id="prog-progress-fill" class="progress-bar-fill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <!-- Карточки статистики -->
+  <div class="stats-cards">
+    <div class="stat-card stat-success">
+      <div class="stat-value" id="prog-stat-completed">0</div>
+      <div class="stat-label">Готово</div>
+    </div>
+    <div class="stat-card stat-info">
+      <div class="stat-value" id="prog-stat-processing">0</div>
+      <div class="stat-label">В обработке</div>
+    </div>
+    <div class="stat-card stat-neutral">
+      <div class="stat-value" id="prog-stat-pending">0</div>
+      <div class="stat-label">Ожидает</div>
+    </div>
+    <div class="stat-card stat-danger">
+      <div class="stat-value" id="prog-stat-failed">0</div>
+      <div class="stat-label">Ошибки</div>
+    </div>
+  </div>
+
+  <!-- Информация о генерации -->
+  <div class="gen-info-row">
+    <span class="gen-info-item">LLM: <strong id="prog-llm"></strong></span>
+    <span class="gen-info-item">Шаблон: <strong id="prog-template"></strong></span>
+    <span class="gen-info-item">Создано: <strong id="prog-created"></strong></span>
+  </div>
+
+  <!-- Таблица текстов -->
+  <div class="table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width:40px">#</th>
+          <th>Тема</th>
+          <th>Статус</th>
+          <th>Уникальность</th>
+          <th>Документ</th>
+        </tr>
+      </thead>
+      <tbody id="prog-texts-table">
+        <!-- Заполняется динамически -->
+      </tbody>
+    </table>
+  </div>
+</div>
