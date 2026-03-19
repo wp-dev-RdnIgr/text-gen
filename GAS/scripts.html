@@ -20,7 +20,8 @@ var state = {
   expandedProgressTextId: null,
   progressTexts: [],
   templateVersions: [],
-  viewingVersionId: null
+  viewingVersionId: null,
+  genTemplateVersions: []
 };
 
 // --- Инициализация ---
@@ -898,14 +899,58 @@ function populateTemplateSelect() {
 
 function onTemplateChange() {
   var select = document.getElementById('gen-template-select');
+  var versionGroup = document.getElementById('gen-version-group');
+  var versionSelect = document.getElementById('gen-version-select');
   var preview = document.getElementById('gen-template-preview');
   var tpl = state.templates.find(function(t) { return t.id === select.value; });
+
   if (tpl) {
+    // Показать версию и загрузить список версий
+    versionGroup.style.display = 'block';
+    versionSelect.innerHTML = '<option value="current">v' + (tpl.version || 1) + ' (текущая)</option>';
+
+    // Показать превью текущей версии
     var text = (tpl.user_prompt || '').substring(0, 200);
     preview.textContent = text + (tpl.user_prompt && tpl.user_prompt.length > 200 ? '...' : '');
     preview.style.display = 'block';
+
+    // Загрузить историю версий
+    google.script.run.withSuccessHandler(function(versions) {
+      state.genTemplateVersions = versions || [];
+      versions.forEach(function(v) {
+        var opt = document.createElement('option');
+        opt.value = v.id;
+        opt.textContent = 'v' + v.version + ' (' + formatDateTime(v.saved_at) + ')';
+        versionSelect.appendChild(opt);
+      });
+    }).getTemplateVersions(tpl.id);
   } else {
+    versionGroup.style.display = 'none';
     preview.style.display = 'none';
+    state.genTemplateVersions = [];
+  }
+}
+
+function onVersionChange() {
+  var versionSelect = document.getElementById('gen-version-select');
+  var preview = document.getElementById('gen-template-preview');
+  var templateSelect = document.getElementById('gen-template-select');
+  var val = versionSelect.value;
+
+  if (val === 'current') {
+    var tpl = state.templates.find(function(t) { return t.id === templateSelect.value; });
+    if (tpl) {
+      var text = (tpl.user_prompt || '').substring(0, 200);
+      preview.textContent = text + (tpl.user_prompt && tpl.user_prompt.length > 200 ? '...' : '');
+      preview.style.display = 'block';
+    }
+  } else {
+    var version = (state.genTemplateVersions || []).find(function(v) { return v.id === val; });
+    if (version) {
+      var text = (version.user_prompt || '').substring(0, 200);
+      preview.textContent = text + (version.user_prompt && version.user_prompt.length > 200 ? '...' : '');
+      preview.style.display = 'block';
+    }
   }
 }
 
@@ -946,12 +991,15 @@ function startGeneration() {
   if (!filledRows.length) { showToast('Добавьте хотя бы одну строку с темой', 'error'); return; }
 
   var templateId = document.getElementById('gen-template-select').value;
+  var versionSelect = document.getElementById('gen-version-select');
+  var selectedVersion = versionSelect ? versionSelect.value : 'current';
   var llmValue = document.getElementById('gen-llm-select').value;
   var parts = llmValue.split('|');
 
   var genData = {
     project_id: state.currentProject ? state.currentProject.id : '',
     template_id: templateId,
+    template_version_id: selectedVersion !== 'current' ? selectedVersion : null,
     llm_provider: parts[0],
     llm_model: parts[1],
     rows: filledRows,

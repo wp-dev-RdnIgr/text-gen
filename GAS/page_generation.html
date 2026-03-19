@@ -172,7 +172,14 @@
         <select id="gen-template-select" class="input-field" onchange="onTemplateChange()">
           <!-- Заполняется динамически -->
         </select>
-        <div id="gen-template-preview" class="template-preview"></div>
+      </div>
+
+      <!-- Версия шаблона -->
+      <div id="gen-version-group" class="field-group" style="display:none;">
+        <label class="field-label">Версия шаблона</label>
+        <select id="gen-version-select" class="input-field" onchange="onVersionChange()">
+        </select>
+        <div id="gen-template-preview" class="template-preview" style="display:none;"></div>
       </div>
 
       <!-- LLM -->
