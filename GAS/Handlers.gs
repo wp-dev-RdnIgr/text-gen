@@ -103,6 +103,26 @@ function saveTemplate(templateData) {
     if (templateData.id) {
       var existing = _findById('prompt_templates', templateData.id);
       if (existing) {
+        // Сохранить текущую версию в историю перед перезаписью
+        var versionSnapshot = {
+          id: 'tv_' + existing.id + '_v' + (existing.version || 1),
+          template_id: existing.id,
+          version: existing.version || 1,
+          name: existing.name,
+          category: existing.category,
+          system_prompt: existing.system_prompt,
+          user_prompt: existing.user_prompt,
+          usage_count: existing.usage_count || 0,
+          avg_uniqueness: existing.avg_uniqueness || 0,
+          saved_at: new Date().toISOString()
+        };
+        var versions = _getAll('template_versions');
+        // Не дублировать, если такая версия уже есть
+        var exists = versions.some(function(v) { return v.id === versionSnapshot.id; });
+        if (!exists) {
+          versions.push(versionSnapshot);
+          _saveAll('template_versions', versions);
+        }
         templateData.version = (existing.version || 1) + 1;
       }
     } else {
@@ -118,9 +138,60 @@ function saveTemplate(templateData) {
 
 function deleteTemplate(templateId) {
   try {
+    // Удалить историю версий шаблона
+    var versions = _getAll('template_versions');
+    versions = versions.filter(function(v) { return v.template_id !== templateId; });
+    _saveAll('template_versions', versions);
     return _deleteItem('prompt_templates', templateId);
   } catch (e) {
     throw new Error('Ошибка удаления шаблона: ' + e.message);
+  }
+}
+
+function getTemplateVersions(templateId) {
+  try {
+    var versions = _filterBy('template_versions', 'template_id', templateId);
+    versions.sort(function(a, b) { return (b.version || 0) - (a.version || 0); });
+    return versions;
+  } catch (e) {
+    throw new Error('Ошибка загрузки версий шаблона: ' + e.message);
+  }
+}
+
+function restoreTemplateVersion(templateId, versionId) {
+  try {
+    var version = _findById('template_versions', versionId);
+    if (!version) throw new Error('Версия не найдена');
+    var current = _findById('prompt_templates', templateId);
+    if (!current) throw new Error('Шаблон не найден');
+
+    // Сохранить текущую версию в историю
+    var snapshot = {
+      id: 'tv_' + current.id + '_v' + (current.version || 1),
+      template_id: current.id,
+      version: current.version || 1,
+      name: current.name,
+      category: current.category,
+      system_prompt: current.system_prompt,
+      user_prompt: current.user_prompt,
+      usage_count: current.usage_count || 0,
+      avg_uniqueness: current.avg_uniqueness || 0,
+      saved_at: new Date().toISOString()
+    };
+    var versions = _getAll('template_versions');
+    var exists = versions.some(function(v) { return v.id === snapshot.id; });
+    if (!exists) {
+      versions.push(snapshot);
+      _saveAll('template_versions', versions);
+    }
+
+    // Восстановить содержимое из выбранной версии, увеличить номер
+    current.system_prompt = version.system_prompt;
+    current.user_prompt = version.user_prompt;
+    current.version = (current.version || 1) + 1;
+    return _saveItem('prompt_templates', current, 't');
+  } catch (e) {
+    throw new Error('Ошибка восстановления версии: ' + e.message);
   }
 }
 

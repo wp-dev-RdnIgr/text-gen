@@ -18,7 +18,9 @@ var state = {
   genSimulationTimer: null,
   expandedTextId: null,
   expandedProgressTextId: null,
-  progressTexts: []
+  progressTexts: [],
+  templateVersions: [],
+  viewingVersionId: null
 };
 
 // --- Инициализация ---
@@ -527,6 +529,7 @@ function filterTemplatesByCategory(category) {
 
 function selectTemplate(templateId) {
   state.selectedTemplateId = templateId;
+  state.viewingVersionId = null;
   renderTemplateList();
 
   document.getElementById('template-placeholder').style.display = 'none';
@@ -554,6 +557,10 @@ function selectTemplate(templateId) {
   } else {
     varsContainer.innerHTML = '<span class="text-secondary">Нет переменных</span>';
   }
+
+  // Загрузить историю версий
+  closeVersionViewer();
+  loadTemplateVersions(templateId);
 }
 
 function extractVariables(text) {
@@ -569,6 +576,8 @@ function extractVariables(text) {
 
 function createNewTemplate() {
   state.selectedTemplateId = null;
+  state.templateVersions = [];
+  state.viewingVersionId = null;
   document.getElementById('template-placeholder').style.display = 'none';
   document.getElementById('template-editor-content').style.display = 'block';
   document.getElementById('tpl-name').value = '';
@@ -580,6 +589,8 @@ function createNewTemplate() {
   document.getElementById('tpl-stat-usage').textContent = '0';
   document.getElementById('tpl-stat-uniqueness').textContent = '—';
   document.getElementById('tpl-variables').innerHTML = '<span class="text-secondary">Нет переменных</span>';
+  document.getElementById('tpl-versions-section').style.display = 'none';
+  closeVersionViewer();
 }
 
 function saveCurrentTemplate() {
@@ -646,6 +657,148 @@ function duplicateTemplate() {
     })
     .withFailureHandler(function(e) { showToast(e.message, 'error'); })
     .saveTemplate(copy);
+}
+
+// ===========================================
+// ЭТАП 3.5: Версионность шаблонов
+// ===========================================
+
+function loadTemplateVersions(templateId) {
+  google.script.run.withSuccessHandler(function(versions) {
+    state.templateVersions = versions || [];
+    renderTemplateVersions();
+  }).getTemplateVersions(templateId);
+}
+
+function renderTemplateVersions() {
+  var section = document.getElementById('tpl-versions-section');
+  var tbody = document.getElementById('tpl-versions-table');
+  if (!tbody || !section) return;
+
+  var versions = state.templateVersions || [];
+  // Добавить текущую версию в начало списка для отображения
+  var tpl = state.templates.find(function(t) { return t.id === state.selectedTemplateId; });
+  var allRows = [];
+
+  if (tpl) {
+    allRows.push({
+      id: '__current__',
+      version: tpl.version || 1,
+      saved_at: null,
+      usage_count: tpl.usage_count || 0,
+      avg_uniqueness: tpl.avg_uniqueness || 0,
+      isCurrent: true
+    });
+  }
+
+  versions.forEach(function(v) {
+    allRows.push({
+      id: v.id,
+      version: v.version,
+      saved_at: v.saved_at,
+      usage_count: v.usage_count || 0,
+      avg_uniqueness: v.avg_uniqueness || 0,
+      isCurrent: false
+    });
+  });
+
+  if (allRows.length <= 1) {
+    // Только текущая версия, нет истории
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  var html = '';
+
+  allRows.forEach(function(row) {
+    var isViewing = state.viewingVersionId === row.id;
+    var activeClass = isViewing ? ' active' : '';
+    var expandClass = isViewing ? ' expanded' : '';
+    var currentBadge = row.isCurrent ? '<span class="version-badge-current">текущая</span>' : '';
+
+    if (row.isCurrent) {
+      html += '<tr class="version-row' + activeClass + '">' +
+        '<td><span class="version-expand-icon' + expandClass + '">&#9654;</span></td>' +
+        '<td><strong>v' + row.version + '</strong>' + currentBadge + '</td>' +
+        '<td>—</td>' +
+        '<td>' + row.usage_count + '</td>' +
+        '<td>' + (row.avg_uniqueness ? row.avg_uniqueness + '%' : '—') + '</td>' +
+        '<td></td>' +
+      '</tr>';
+    } else {
+      html += '<tr class="version-row' + activeClass + '" onclick="viewVersion(\'' + row.id + '\')">' +
+        '<td><span class="version-expand-icon' + expandClass + '">&#9654;</span></td>' +
+        '<td>v' + row.version + '</td>' +
+        '<td>' + formatDateTime(row.saved_at) + '</td>' +
+        '<td>' + row.usage_count + '</td>' +
+        '<td>' + (row.avg_uniqueness ? row.avg_uniqueness + '%' : '—') + '</td>' +
+        '<td><button class="btn btn-sm" onclick="event.stopPropagation(); viewVersion(\'' + row.id + '\')">Просмотр</button></td>' +
+      '</tr>';
+    }
+  });
+
+  tbody.innerHTML = html;
+}
+
+function viewVersion(versionId) {
+  if (state.viewingVersionId === versionId) {
+    closeVersionViewer();
+    return;
+  }
+
+  var version = state.templateVersions.find(function(v) { return v.id === versionId; });
+  if (!version) return;
+
+  state.viewingVersionId = versionId;
+
+  document.getElementById('version-viewer-num').textContent = 'v' + version.version;
+  document.getElementById('version-viewer-system').textContent = version.system_prompt || '(пусто)';
+  document.getElementById('version-viewer-user').textContent = version.user_prompt || '(пусто)';
+  document.getElementById('version-viewer-usage').textContent = version.usage_count || 0;
+  document.getElementById('version-viewer-uniqueness').textContent = version.avg_uniqueness ? version.avg_uniqueness + '%' : '—';
+  document.getElementById('tpl-version-viewer').style.display = 'block';
+
+  // Обновить выделение строк
+  renderTemplateVersions();
+
+  // Прокрутить к просмотру
+  document.getElementById('tpl-version-viewer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeVersionViewer() {
+  state.viewingVersionId = null;
+  var viewer = document.getElementById('tpl-version-viewer');
+  if (viewer) viewer.style.display = 'none';
+}
+
+function restoreVersion() {
+  if (!state.viewingVersionId || !state.selectedTemplateId) return;
+  if (!confirm('Восстановить эту версию? Текущее содержимое будет сохранено в истории.')) return;
+
+  google.script.run
+    .withSuccessHandler(function(saved) {
+      showToast('Версия восстановлена', 'success');
+      closeVersionViewer();
+      // Перезагрузить шаблоны
+      google.script.run.withSuccessHandler(function(templates) {
+        state.templates = templates || [];
+        renderTemplateList();
+        selectTemplate(saved.id);
+      }).getTemplates();
+    })
+    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
+    .restoreTemplateVersion(state.selectedTemplateId, state.viewingVersionId);
+}
+
+function formatDateTime(dateStr) {
+  if (!dateStr) return '—';
+  var d = new Date(dateStr);
+  var day = ('0' + d.getDate()).slice(-2);
+  var month = ('0' + (d.getMonth() + 1)).slice(-2);
+  var hours = ('0' + d.getHours()).slice(-2);
+  var mins = ('0' + d.getMinutes()).slice(-2);
+  return day + '.' + month + '.' + d.getFullYear() + ' ' + hours + ':' + mins;
 }
 
 // ===========================================

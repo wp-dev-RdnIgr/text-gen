@@ -263,6 +263,64 @@ function seedData() {
     }
   ];
 
+  // --- История версий шаблонов ---
+  var template_versions = [
+    // Статья для блога — 2 предыдущих версии
+    {
+      id: 'tv_t1_v1',
+      template_id: 't1',
+      version: 1,
+      name: 'Статья для блога',
+      category: 'blog',
+      system_prompt: 'Ты - SEO-копирайтер. Пишешь статьи для блогов. Текст должен быть информативным и уникальным.',
+      user_prompt: 'Напиши статью на тему: {тема}\n\nURL: {url}\nКлючевые слова: {ключи}',
+      usage_count: 32,
+      avg_uniqueness: 87,
+      saved_at: '2026-01-15T10:00:00'
+    },
+    {
+      id: 'tv_t1_v2',
+      template_id: 't1',
+      version: 2,
+      name: 'Статья для блога',
+      category: 'blog',
+      system_prompt: 'Ты - опытный SEO-копирайтер. Пишешь экспертные статьи для блогов. Текст должен быть информативным, структурированным и уникальным. Используешь подзаголовки H2-H3, маркированные списки.',
+      user_prompt: 'Напиши статью на тему: {тема}\n\nURL: {url}\nКлючевые слова: {ключи}\nДополнительное ТЗ: {тз}\n\nТребования:\n- Уникальность не менее 90%\n- Структура: H1, H2 (3-5 шт)',
+      usage_count: 78,
+      avg_uniqueness: 91,
+      saved_at: '2026-02-20T14:30:00'
+    },
+    // Категория с фильтром — 1 предыдущая версия
+    {
+      id: 'tv_t2_v1',
+      template_id: 't2',
+      version: 1,
+      name: 'Категория с фильтром',
+      category: 'category',
+      system_prompt: 'Ты - SEO-специалист, создающий тексты для категорий интернет-магазинов. Включай описание категории и советы по выбору.',
+      user_prompt: 'Напиши SEO-текст для категории.\n\nURL: {url}\nКлючевые слова: {ключи}\nКатегория: {тема}',
+      usage_count: 20,
+      avg_uniqueness: 92,
+      saved_at: '2026-02-10T09:15:00'
+    },
+    // Лендинг — 1 предыдущая версия
+    {
+      id: 'tv_t5_v1',
+      template_id: 't5',
+      version: 1,
+      name: 'Лендинг',
+      category: 'custom',
+      system_prompt: 'Ты - копирайтер. Создаешь тексты для лендингов. Текст должен быть убедительным.',
+      user_prompt: 'Напиши текст для лендинга.\n\nURL: {url}\nТема: {тема}\n\nСтруктура:\n1. Заголовок\n2. Проблема\n3. Решение\n4. CTA',
+      usage_count: 5,
+      avg_uniqueness: 93,
+      saved_at: '2026-03-01T11:00:00'
+    }
+  ];
+
+  // Update template versions to match (t5 should be v2 since it has history)
+  templates[4].version = 2; // Лендинг
+
   // --- Генерации ---
   var generations = [
     {
@@ -517,6 +575,7 @@ function seedData() {
   props.setProperty('clients', JSON.stringify(clients));
   props.setProperty('projects', JSON.stringify(projects));
   props.setProperty('prompt_templates', JSON.stringify(templates));
+  props.setProperty('template_versions', JSON.stringify(template_versions));
   props.setProperty('generations', JSON.stringify(generations));
   props.setProperty('generated_texts', JSON.stringify(generated_texts));
 
@@ -524,10 +583,11 @@ function seedData() {
   Logger.log('Клиентов: ' + clients.length);
   Logger.log('Проектов: ' + projects.length);
   Logger.log('Шаблонов: ' + templates.length);
+  Logger.log('Версий шаблонов: ' + template_versions.length);
   Logger.log('Генераций: ' + generations.length);
   Logger.log('Текстов: ' + generated_texts.length);
 
-  return 'Данные загружены: ' + clients.length + ' клиентов, ' + projects.length + ' проектов, ' + templates.length + ' шаблонов, ' + generations.length + ' генераций, ' + generated_texts.length + ' текстов';
+  return 'Данные загружены: ' + clients.length + ' клиентов, ' + projects.length + ' проектов, ' + templates.length + ' шаблонов, ' + template_versions.length + ' версий, ' + generations.length + ' генераций, ' + generated_texts.length + ' текстов';
 }
 
 /**
