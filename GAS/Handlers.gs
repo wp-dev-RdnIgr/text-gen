@@ -23,10 +23,9 @@ function saveClient(clientData) {
 
 function deleteClient(clientId) {
   try {
-    // Удалить связанные проекты
-    var projects = _filterBy('projects', 'client_id', clientId);
-    projects.forEach(function(p) {
-      deleteProject(p.id);
+    var tasks = _filterBy('tasks', 'client_id', clientId);
+    tasks.forEach(function(t) {
+      deleteTask(t.id);
     });
     return _deleteItem('clients', clientId);
   } catch (e) {
@@ -34,45 +33,106 @@ function deleteClient(clientId) {
   }
 }
 
-// --- Проекты ---
+// --- Задачи (Tasks) ---
 
-function getProjects(clientId) {
+function getTasks(clientId) {
   try {
     if (clientId) {
-      return _filterBy('projects', 'client_id', clientId);
+      return _filterBy('tasks', 'client_id', clientId);
     }
-    return _getAll('projects');
+    return _getAll('tasks');
   } catch (e) {
-    throw new Error('Ошибка загрузки проектов: ' + e.message);
+    throw new Error('Ошибка загрузки задач: ' + e.message);
   }
 }
 
-function getProject(projectId) {
+function getTask(taskId) {
   try {
-    return _findById('projects', projectId);
+    return _findById('tasks', taskId);
   } catch (e) {
-    throw new Error('Ошибка загрузки проекта: ' + e.message);
+    throw new Error('Ошибка загрузки задачи: ' + e.message);
   }
 }
 
-function saveProject(projectData) {
+function saveTask(taskData) {
   try {
-    return _saveItem('projects', projectData, 'p');
+    if (!taskData.columns) {
+      taskData.columns = [
+        { key: 'url', label: 'URL', type: 'short' },
+        { key: 'keywords', label: 'Ключевые слова', type: 'short' },
+        { key: 'topic', label: 'Тема', type: 'short' },
+        { key: 'brief', label: 'ТЗ', type: 'long' }
+      ];
+    }
+    if (!taskData.rows) {
+      taskData.rows = [];
+    }
+    if (!taskData.status) {
+      taskData.status = 'draft';
+    }
+    if (!taskData.created_at) {
+      taskData.created_at = new Date().toISOString();
+    }
+    return _saveItem('tasks', taskData, 'task_');
   } catch (e) {
-    throw new Error('Ошибка сохранения проекта: ' + e.message);
+    throw new Error('Ошибка сохранения задачи: ' + e.message);
   }
 }
 
-function deleteProject(projectId) {
+function deleteTask(taskId) {
   try {
-    // Удалить связанные генерации и тексты
-    var generations = _filterBy('generations', 'project_id', projectId);
-    generations.forEach(function(g) {
-      deleteGenerationData(g.id);
+    var texts = _getAll('generated_texts');
+    texts = texts.filter(function(t) { return t.task_id !== taskId; });
+    _saveAll('generated_texts', texts);
+    return _deleteItem('tasks', taskId);
+  } catch (e) {
+    throw new Error('Ошибка удаления задачи: ' + e.message);
+  }
+}
+
+function startTask(taskId) {
+  try {
+    var task = _findById('tasks', taskId);
+    if (!task) throw new Error('Задача не найдена');
+
+    var filledRows = (task.rows || []).filter(function(r) {
+      for (var k in r) { if (r[k]) return true; }
+      return false;
     });
-    return _deleteItem('projects', projectId);
+    if (!filledRows.length) throw new Error('Нет данных для генерации');
+
+    task.status = 'running';
+    task.total_texts = filledRows.length;
+    task.completed_texts = 0;
+    task.failed_texts = 0;
+    task.started_at = new Date().toISOString();
+    task.completed_at = null;
+    _saveItem('tasks', task, 'task_');
+
+    var texts = _getAll('generated_texts');
+    var newTexts = [];
+    for (var i = 0; i < filledRows.length; i++) {
+      var text = {
+        id: 'gt' + Date.now() + '_' + i,
+        task_id: taskId,
+        row_number: i + 1,
+        source_data: filledRows[i],
+        status: 'pending',
+        uniqueness_score: null,
+        ai_score: null,
+        gdoc_url: null,
+        error_message: null,
+        comment: '',
+        regeneration_count: 0
+      };
+      newTexts.push(text);
+    }
+    texts = texts.concat(newTexts);
+    _saveAll('generated_texts', texts);
+
+    return { task: task, texts: newTexts };
   } catch (e) {
-    throw new Error('Ошибка удаления проекта: ' + e.message);
+    throw new Error('Ошибка запуска задачи: ' + e.message);
   }
 }
 
@@ -99,11 +159,9 @@ function getTemplate(templateId) {
 
 function saveTemplate(templateData) {
   try {
-    // Увеличить версию при обновлении
     if (templateData.id) {
       var existing = _findById('prompt_templates', templateData.id);
       if (existing) {
-        // Сохранить текущую версию в историю перед перезаписью
         var versionSnapshot = {
           id: 'tv_' + existing.id + '_v' + (existing.version || 1),
           template_id: existing.id,
@@ -117,7 +175,6 @@ function saveTemplate(templateData) {
           saved_at: new Date().toISOString()
         };
         var versions = _getAll('template_versions');
-        // Не дублировать, если такая версия уже есть
         var exists = versions.some(function(v) { return v.id === versionSnapshot.id; });
         if (!exists) {
           versions.push(versionSnapshot);
@@ -138,7 +195,6 @@ function saveTemplate(templateData) {
 
 function deleteTemplate(templateId) {
   try {
-    // Удалить историю версий шаблона
     var versions = _getAll('template_versions');
     versions = versions.filter(function(v) { return v.template_id !== templateId; });
     _saveAll('template_versions', versions);
@@ -165,7 +221,6 @@ function restoreTemplateVersion(templateId, versionId) {
     var current = _findById('prompt_templates', templateId);
     if (!current) throw new Error('Шаблон не найден');
 
-    // Сохранить текущую версию в историю
     var snapshot = {
       id: 'tv_' + current.id + '_v' + (current.version || 1),
       template_id: current.id,
@@ -185,7 +240,6 @@ function restoreTemplateVersion(templateId, versionId) {
       _saveAll('template_versions', versions);
     }
 
-    // Восстановить содержимое из выбранной версии, увеличить номер
     current.system_prompt = version.system_prompt;
     current.user_prompt = version.user_prompt;
     current.version = (current.version || 1) + 1;
@@ -195,73 +249,11 @@ function restoreTemplateVersion(templateId, versionId) {
   }
 }
 
-// --- Генерации ---
+// --- Тексты ---
 
-function getGenerations(projectId) {
+function getGeneratedTexts(taskId) {
   try {
-    if (projectId) {
-      return _filterBy('generations', 'project_id', projectId);
-    }
-    return _getAll('generations');
-  } catch (e) {
-    throw new Error('Ошибка загрузки генераций: ' + e.message);
-  }
-}
-
-function getGeneration(generationId) {
-  try {
-    return _findById('generations', generationId);
-  } catch (e) {
-    throw new Error('Ошибка загрузки генерации: ' + e.message);
-  }
-}
-
-function createGeneration(data) {
-  try {
-    var generation = {
-      project_id: data.project_id,
-      template_id: data.template_id,
-      llm_provider: data.llm_provider,
-      llm_model: data.llm_model,
-      status: 'pending',
-      total_texts: data.rows.length,
-      completed_texts: 0,
-      failed_texts: 0,
-      options: data.options || {},
-      created_at: new Date().toISOString(),
-      completed_at: null
-    };
-    generation = _saveItem('generations', generation, 'g');
-
-    // Создать generated_texts для каждой строки
-    var texts = _getAll('generated_texts');
-    var newTexts = [];
-    for (var i = 0; i < data.rows.length; i++) {
-      var text = {
-        id: 'gt' + Date.now() + '_' + i,
-        generation_id: generation.id,
-        row_number: i + 1,
-        source_data: data.rows[i],
-        status: 'pending',
-        uniqueness_score: null,
-        ai_score: null,
-        gdoc_url: null,
-        error_message: null
-      };
-      newTexts.push(text);
-    }
-    texts = texts.concat(newTexts);
-    _saveAll('generated_texts', texts);
-
-    return { generation: generation, texts: newTexts };
-  } catch (e) {
-    throw new Error('Ошибка создания генерации: ' + e.message);
-  }
-}
-
-function getGeneratedTexts(generationId) {
-  try {
-    return _filterBy('generated_texts', 'generation_id', generationId);
+    return _filterBy('generated_texts', 'task_id', taskId);
   } catch (e) {
     throw new Error('Ошибка загрузки текстов: ' + e.message);
   }
@@ -275,20 +267,12 @@ function updateGeneratedText(textId, updates) {
   }
 }
 
-function updateGeneration(genId, updates) {
+function updateTask(taskId, updates) {
   try {
-    return _updateItem('generations', genId, updates);
+    return _updateItem('tasks', taskId, updates);
   } catch (e) {
-    throw new Error('Ошибка обновления генерации: ' + e.message);
+    throw new Error('Ошибка обновления задачи: ' + e.message);
   }
-}
-
-// Удалить данные генерации (тексты)
-function deleteGenerationData(generationId) {
-  var texts = _getAll('generated_texts');
-  texts = texts.filter(function(t) { return t.generation_id !== generationId; });
-  _saveAll('generated_texts', texts);
-  _deleteItem('generations', generationId);
 }
 
 // --- Утилиты ---
@@ -296,19 +280,10 @@ function deleteGenerationData(generationId) {
 function getAllDataForDashboard(clientId) {
   try {
     var client = clientId ? _findById('clients', clientId) : null;
-    var projects = clientId ? _filterBy('projects', 'client_id', clientId) : [];
-    var allGenerations = _getAll('generations');
-    var generations = [];
-    if (clientId) {
-      var projectIds = projects.map(function(p) { return p.id; });
-      generations = allGenerations.filter(function(g) {
-        return projectIds.indexOf(g.project_id) !== -1;
-      });
-    }
+    var tasks = clientId ? _filterBy('tasks', 'client_id', clientId) : [];
     return {
       client: client,
-      projects: projects,
-      generations: generations
+      tasks: tasks
     };
   } catch (e) {
     throw new Error('Ошибка загрузки данных дашборда: ' + e.message);

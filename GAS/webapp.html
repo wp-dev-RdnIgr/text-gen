@@ -388,6 +388,44 @@ textarea.input-field { resize: vertical; }
   display: inline-block; font-size: 9px; font-weight: 600; background: #ECFDF5;
   color: #16A34A; padding: 2px 8px; border-radius: 4px; margin-left: 6px;
 }
+
+/* --- Бар колонок --- */
+.column-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
+.column-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
+  background: #EBF5FF; color: #1A5FB4; border-radius: 6px; font-size: 12px; font-weight: 500;
+}
+.column-chip-label { cursor: default; }
+.column-chip-delete {
+  background: none; border: none; color: #1A5FB4; font-size: 14px; cursor: pointer;
+  padding: 0 2px; line-height: 1; opacity: 0.6;
+}
+.column-chip-delete:hover { opacity: 1; color: #DC2626; }
+.column-add-btn {
+  padding: 4px 12px; border: 1px dashed #1A5FB4; border-radius: 6px;
+  background: none; color: #1A5FB4; font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
+}
+.column-add-btn:hover { background: #EBF5FF; }
+
+/* --- Подсказки переменных --- */
+.variable-hints { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 14px; }
+
+/* --- Длинный текст в таблице --- */
+.cell-long { cursor: pointer; position: relative; }
+.cell-long:hover { background: #F0F0EC; }
+.cell-long-preview {
+  max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 12px; color: #555; padding: 4px 0;
+}
+.cell-long-preview .text-secondary { font-style: italic; }
+
+/* --- Строка инфо в модалке длинного текста --- */
+.longtext-row-info { font-size: 11px; color: #888; margin-bottom: 8px; }
+
+/* --- Кликабельные строки таблицы --- */
+.data-table tbody tr.clickable { cursor: pointer; }
+.data-table tbody tr.clickable:hover { background: #EBF5FF; }
   </style>
 </head>
 <body>
@@ -408,7 +446,7 @@ textarea.input-field { resize: vertical; }
   <!-- Контейнер экранов -->
   <div class="app-container">
     <?!= include('page_dashboard'); ?>
-    <?!= include('page_generation'); ?>
+    <?!= include('page_task'); ?>
     <?!= include('page_progress'); ?>
     <?!= include('page_templates'); ?>
     <?!= include('page_clients'); ?>
@@ -443,45 +481,6 @@ textarea.input-field { resize: vertical; }
       <div class="modal-footer">
         <button class="btn" onclick="closeModal('modal-client')">Отмена</button>
         <button class="btn btn-primary" onclick="saveClientFromModal()">Сохранить</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Модалка: Проект -->
-  <div id="modal-project" class="modal-overlay" style="display:none;">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3 id="modal-project-title">Новый проект</h3>
-        <button class="modal-close" onclick="closeModal('modal-project')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="mp-id">
-        <input type="hidden" id="mp-client-id">
-        <div class="field-group">
-          <label class="field-label">Название</label>
-          <input type="text" id="mp-name" class="input-field" placeholder="Название проекта">
-        </div>
-        <div class="field-group">
-          <label class="field-label">Тип контента</label>
-          <select id="mp-content-type" class="input-field">
-            <option value="blog">Блог-статьи</option>
-            <option value="product_card">Карточки товаров</option>
-            <option value="category">Категории</option>
-            <option value="service">Страницы услуг</option>
-          </select>
-        </div>
-        <div class="field-group">
-          <label class="field-label">Google Sheet URL</label>
-          <input type="text" id="mp-sheet-url" class="input-field" placeholder="URL таблицы с данными">
-        </div>
-        <div class="field-group">
-          <label class="field-label">Google Drive папка</label>
-          <input type="text" id="mp-drive-folder" class="input-field" placeholder="ID папки для документов">
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn" onclick="closeModal('modal-project')">Отмена</button>
-        <button class="btn btn-primary" onclick="saveProjectFromModal()">Сохранить</button>
       </div>
     </div>
   </div>
