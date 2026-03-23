@@ -389,27 +389,57 @@ textarea.input-field { resize: vertical; }
   color: #16A34A; padding: 2px 8px; border-radius: 4px; margin-left: 6px;
 }
 
-/* --- Бар колонок --- */
-.column-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
-.column-chip {
-  display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
-  background: #EBF5FF; color: #1A5FB4; border-radius: 6px; font-size: 12px; font-weight: 500;
+/* --- Блок колонок + переменных --- */
+.columns-variables-block {
+  background: #FAFAF8; border: 1px solid #E5E5E0; border-radius: 10px;
+  padding: 14px 16px; margin-bottom: 16px;
 }
-.column-chip-label { cursor: default; }
-.column-chip-delete {
-  background: none; border: none; color: #1A5FB4; font-size: 14px; cursor: pointer;
-  padding: 0 2px; line-height: 1; opacity: 0.6;
+.columns-variables-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
 }
-.column-chip-delete:hover { opacity: 1; color: #DC2626; }
+.columns-variables-title { font-size: 12px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+.columns-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.column-card {
+  display: flex; flex-direction: column; gap: 4px;
+  background: #fff; border: 1px solid #E5E5E0; border-radius: 8px;
+  padding: 8px 12px; min-width: 120px; position: relative;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.column-card:hover { border-color: #1A5FB4; box-shadow: 0 1px 4px rgba(26,95,180,0.1); }
+.column-card-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.column-card-name {
+  font-size: 13px; font-weight: 600; color: #333; cursor: default;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;
+}
+.column-card-type {
+  font-size: 10px; color: #888; background: #F0F0EC; padding: 1px 6px;
+  border-radius: 4px; white-space: nowrap;
+}
+.column-card-variable { display: flex; align-items: center; gap: 4px; }
+.column-card-var-tag {
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px;
+  color: #1A5FB4; background: #EBF5FF; padding: 2px 8px; border-radius: 4px;
+  cursor: pointer; transition: background 0.15s; user-select: all;
+}
+.column-card-var-tag:hover { background: #D0E7FF; }
+.column-card-delete {
+  position: absolute; top: 4px; right: 4px;
+  background: none; border: none; color: #CCC; font-size: 14px;
+  cursor: pointer; padding: 2px 4px; line-height: 1; border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.column-card-delete:hover { color: #DC2626; background: #FEF2F2; }
 .column-add-btn {
-  padding: 4px 12px; border: 1px dashed #1A5FB4; border-radius: 6px;
+  padding: 8px 16px; border: 1px dashed #1A5FB4; border-radius: 8px;
   background: none; color: #1A5FB4; font-size: 12px; font-weight: 500;
-  cursor: pointer; transition: all 0.15s;
+  cursor: pointer; transition: all 0.15s; display: flex; align-items: center;
+  justify-content: center; min-height: 52px;
 }
 .column-add-btn:hover { background: #EBF5FF; }
 
-/* --- Подсказки переменных --- */
-.variable-hints { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 14px; }
+/* --- Локальный промт в задаче --- */
+.local-prompt-header { display: flex; justify-content: space-between; align-items: center; }
+.local-prompt-hint { font-size: 11px; color: #888; margin: 2px 0 6px; font-style: italic; }
 
 /* --- Длинный текст в таблице --- */
 .cell-long { cursor: pointer; position: relative; }

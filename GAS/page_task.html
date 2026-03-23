@@ -38,14 +38,15 @@
             <button class="btn btn-sm" onclick="loadFromSheets()">Загрузить из Google Sheets</button>
           </div>
 
-          <!-- Бар колонок -->
-          <div id="column-bar" class="column-bar">
-            <!-- Заполняется динамически -->
-          </div>
-
-          <!-- Подсказка переменных -->
-          <div id="variable-hints" class="variable-hints">
-            <!-- Заполняется динамически -->
+          <!-- Колонки и переменные — единый блок -->
+          <div id="columns-variables-block" class="columns-variables-block">
+            <div class="columns-variables-header">
+              <span class="columns-variables-title">Колонки данных</span>
+              <button class="column-add-btn" onclick="openModal('modal-addcolumn')">+ Колонка</button>
+            </div>
+            <div id="columns-grid" class="columns-grid">
+              <!-- Заполняется динамически: карточки колонок -->
+            </div>
           </div>
 
           <!-- Таблица данных -->
@@ -173,7 +174,17 @@
         <label class="field-label">Версия шаблона</label>
         <select id="gen-version-select" class="input-field" onchange="onVersionChange()">
         </select>
-        <div id="gen-template-preview" class="template-preview" style="display:none;"></div>
+      </div>
+
+      <!-- Локальная копия промта (редактируемая, не меняет оригинал) -->
+      <div id="gen-local-prompt-group" class="field-group" style="display:none;">
+        <div class="local-prompt-header">
+          <label class="field-label">Промт для этой задачи</label>
+          <button class="btn btn-sm" onclick="resetLocalPrompt()" title="Сбросить к оригиналу шаблона">Сбросить</button>
+        </div>
+        <div class="local-prompt-hint">Изменения здесь не влияют на оригинальный шаблон</div>
+        <textarea id="gen-local-system-prompt" class="input-field textarea-mono" rows="3" placeholder="Системный промт..." onchange="saveLocalPrompt()"></textarea>
+        <textarea id="gen-local-user-prompt" class="input-field textarea-mono" rows="5" placeholder="Пользовательский промт..." onchange="saveLocalPrompt()" style="margin-top:6px;"></textarea>
       </div>
 
       <!-- LLM -->
