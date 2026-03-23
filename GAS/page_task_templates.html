@@ -39,11 +39,18 @@
           <textarea id="tt-description" class="input-field" rows="2" placeholder="Краткое описание шаблона..."></textarea>
         </div>
 
-        <!-- Привязка к клиентам -->
+        <!-- Привязка к клиентам — мультиселект с поиском -->
         <div class="field-group">
           <label class="field-label">Привязка к клиентам</label>
-          <div class="tt-client-tags" id="tt-client-tags">
-            <!-- Заполняется динамически: теги клиентов -->
+          <div class="multiselect-box" id="tt-client-ms" onclick="toggleMultiselect('tt-client-ms')">
+            <span class="multiselect-placeholder" id="tt-client-ms-label">Выберите клиентов...</span>
+            <span class="multiselect-arrow">&#9662;</span>
+          </div>
+          <div class="multiselect-dropdown" id="tt-client-ms-dropdown" style="display:none;">
+            <input type="text" class="multiselect-search" placeholder="Поиск клиента..." oninput="filterMultiselectOptions('tt-client-ms-dropdown', this.value)">
+            <div class="multiselect-options" id="tt-client-ms-options">
+              <!-- Заполняется динамически -->
+            </div>
           </div>
         </div>
 

@@ -87,6 +87,31 @@ function showToast(msg, type) {
 function openModal(id) { document.getElementById(id).style.display = 'flex'; }
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
+// --- Мультиселект ---
+function toggleMultiselect(boxId) {
+  var dd = document.getElementById(boxId + '-dropdown');
+  if (!dd) return;
+  dd.style.display = dd.style.display === 'none' ? 'flex' : 'none';
+}
+function filterMultiselectOptions(dropdownId, q) {
+  var opts = document.querySelectorAll('#' + dropdownId + ' .multiselect-option');
+  q = q.toLowerCase();
+  for (var i = 0; i < opts.length; i++) {
+    opts[i].classList.toggle('hidden', opts[i].textContent.toLowerCase().indexOf(q) === -1);
+  }
+}
+// Close dropdowns on outside click
+document.addEventListener('click', function(e) {
+  var dds = document.querySelectorAll('.multiselect-dropdown');
+  for (var i = 0; i < dds.length; i++) {
+    var boxId = dds[i].id.replace('-dropdown', '');
+    var box = document.getElementById(boxId);
+    if (box && !box.contains(e.target) && !dds[i].contains(e.target)) {
+      dds[i].style.display = 'none';
+    }
+  }
+});
+
 // --- Утилиты ---
 function escapeHtml(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function formatDate(d) { if (!d) return '—'; var x=new Date(d); return ('0'+x.getDate()).slice(-2)+'.'+('0'+(x.getMonth()+1)).slice(-2)+'.'+x.getFullYear(); }
@@ -192,7 +217,7 @@ function createNewTask(){
 }
 function createTaskFromScratch(){
   closeModal('modal-task-template');
-  var task={client_id:state.selectedClientId,name:'Новая задача',columns:[{key:'url',label:'URL',type:'short'},{key:'keywords',label:'Ключевые слова',type:'short'},{key:'topic',label:'Тема',type:'short'},{key:'brief',label:'ТЗ',type:'long'}],rows:[{url:'',keywords:'',topic:'',brief:''}],status:'draft'};
+  var task={client_id:state.selectedClientId,name:'Новая задача',columns:[],rows:[{}],status:'draft'};
   google.script.run.withSuccessHandler(function(s){showToast('Задача создана','success');navigateTo('#task/'+s.id);}).withFailureHandler(function(e){showToast(e.message,'error');}).saveTask(task);
 }
 function createTaskFromTemplate(ttId){
@@ -219,8 +244,18 @@ function createTaskFromTemplate(ttId){
 }
 function renderTaskTemplateList(){
   var c=document.getElementById('task-template-list');if(!c)return;
+  // Build client multiselect options
+  populateTaskTplClientMultiselect();
+  // Get selected client IDs from multiselect
+  var selectedClients=getMultiselectSelected('task-tpl-client-ms-options');
   var tts=state.taskTemplates||[];
-  if(!tts.length){c.innerHTML='<div class="placeholder-message" style="height:100px;grid-column:1/-1;"><p>Нет сохранённых шаблонов задач</p></div>';return;}
+  if(selectedClients.length>0){
+    tts=tts.filter(function(tt){
+      var ids=tt.client_ids||[];
+      return selectedClients.some(function(cid){return ids.indexOf(cid)!==-1;});
+    });
+  }
+  if(!tts.length){c.innerHTML='<div class="placeholder-message" style="height:100px;grid-column:1/-1;"><p>'+(selectedClients.length?'Нет шаблонов для выбранных клиентов':'Нет сохранённых шаблонов задач')+'</p></div>';return;}
   var h='';
   tts.forEach(function(tt){
     var colTags=(tt.columns||[]).map(function(col){return '<span class="task-template-card-tag">'+escapeHtml(col.label)+'</span>';}).join('');
@@ -233,12 +268,32 @@ function renderTaskTemplateList(){
         '<span class="task-template-card-tag">'+escapeHtml(tt.llm_model||'—')+'</span>' +
         colTags +
       '</div>' +
-      '<div class="task-template-card-actions">' +
-        '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteTaskTemplate(\''+tt.id+'\')">Уд.</button>' +
-      '</div>' +
     '</div>';
   });
   c.innerHTML=h;
+}
+function populateTaskTplClientMultiselect(){
+  var opts=document.getElementById('task-tpl-client-ms-options');if(!opts)return;
+  if(opts.children.length>0)return; // already populated
+  var h='';
+  (state.clients||[]).forEach(function(cl){
+    h+='<label class="multiselect-option"><input type="checkbox" value="'+cl.id+'" onchange="onTaskTplClientFilterChange()">'+escapeHtml(cl.name)+'</label>';
+  });
+  opts.innerHTML=h||'<div style="padding:8px 12px;color:#888;font-size:12px;">Нет клиентов</div>';
+}
+function onTaskTplClientFilterChange(){
+  var selected=getMultiselectSelected('task-tpl-client-ms-options');
+  var label=document.getElementById('task-tpl-client-ms-label');
+  if(selected.length===0){label.textContent='Все клиенты';label.className='multiselect-placeholder';}
+  else{
+    var names=selected.map(function(id){var cl=(state.clients||[]).find(function(c){return c.id===id;});return cl?cl.name:'';}).join(', ');
+    label.textContent=names;label.className='multiselect-placeholder has-selection';
+  }
+  renderTaskTemplateList();
+}
+function getMultiselectSelected(optionsId){
+  var opts=document.querySelectorAll('#'+optionsId+' input[type="checkbox"]:checked');
+  var r=[];for(var i=0;i<opts.length;i++)r.push(opts[i].value);return r;
 }
 function deleteTaskConfirm(tid){
   if(!confirm('Удалить задачу?'))return;
@@ -1008,27 +1063,39 @@ function deleteCurrentTaskTemplate() {
   }).withFailureHandler(function(e) { showToast(e.message, 'error'); }).deleteTaskTemplate(state.selectedTaskTemplateId);
 }
 
-// --- Client tags for task template ---
+// --- Client multiselect for task template editor ---
 function renderTTClientTags() {
-  var c = document.getElementById('tt-client-tags'); if (!c) return;
+  var opts = document.getElementById('tt-client-ms-options'); if (!opts) return;
   var et = state.editingTaskTemplate || {};
   var linked = et.client_ids || [];
   var h = '';
   (state.clients || []).forEach(function(cl) {
-    var isLinked = linked.indexOf(cl.id) !== -1;
-    h += '<span class="tt-client-tag' + (isLinked ? ' active' : '') + '" onclick="toggleTTClient(\'' + cl.id + '\')">' + escapeHtml(cl.name) + '</span>';
+    var checked = linked.indexOf(cl.id) !== -1 ? ' checked' : '';
+    h += '<label class="multiselect-option"><input type="checkbox" value="' + cl.id + '"' + checked + ' onchange="onTTClientMsChange()">' + escapeHtml(cl.name) + '</label>';
   });
-  if (!state.clients.length) h = '<span class="text-secondary">Нет клиентов</span>';
-  c.innerHTML = h;
+  if (!state.clients.length) h = '<div style="padding:8px 12px;color:#888;font-size:12px;">Нет клиентов</div>';
+  opts.innerHTML = h;
+  updateTTClientMsLabel();
 }
 
-function toggleTTClient(clientId) {
+function onTTClientMsChange() {
   var et = state.editingTaskTemplate; if (!et) return;
-  if (!et.client_ids) et.client_ids = [];
-  var idx = et.client_ids.indexOf(clientId);
-  if (idx === -1) { et.client_ids.push(clientId); }
-  else { et.client_ids.splice(idx, 1); }
-  renderTTClientTags();
+  et.client_ids = getMultiselectSelected('tt-client-ms-options');
+  updateTTClientMsLabel();
+}
+
+function updateTTClientMsLabel() {
+  var label = document.getElementById('tt-client-ms-label'); if (!label) return;
+  var et = state.editingTaskTemplate || {};
+  var linked = et.client_ids || [];
+  if (linked.length === 0) {
+    label.textContent = 'Выберите клиентов...';
+    label.className = 'multiselect-placeholder';
+  } else {
+    var names = linked.map(function(id) { var cl = (state.clients || []).find(function(c) { return c.id === id; }); return cl ? cl.name : ''; }).join(', ');
+    label.textContent = names;
+    label.className = 'multiselect-placeholder has-selection';
+  }
 }
 
 // --- Columns for task template ---
@@ -1096,38 +1163,4 @@ function onTTTemplateChange() {
   }
 }
 
-// ===========================================
-// Модалка выбора шаблона при создании задачи — с фильтром по клиенту
-// ===========================================
-function renderTaskTemplateList() {
-  var c = document.getElementById('task-template-list'); if (!c) return;
-  var filterEl = document.getElementById('task-tpl-client-filter');
-  var filterOn = filterEl ? filterEl.checked : false;
-  var tts = state.taskTemplates || [];
-  if (filterOn && state.selectedClientId) {
-    tts = tts.filter(function(tt) {
-      return (tt.client_ids || []).indexOf(state.selectedClientId) !== -1;
-    });
-  }
-  if (!tts.length) {
-    c.innerHTML = '<div class="placeholder-message" style="height:100px;grid-column:1/-1;"><p>' + (filterOn ? 'Нет шаблонов для этого клиента' : 'Нет сохранённых шаблонов задач') + '</p></div>';
-    return;
-  }
-  var h = '';
-  tts.forEach(function(tt) {
-    var colTags = (tt.columns || []).map(function(col) { return '<span class="task-template-card-tag">' + escapeHtml(col.label) + '</span>'; }).join('');
-    var tplName = '—';
-    if (tt.template_id) { var tpl = state.templates.find(function(x) { return x.id === tt.template_id; }); if (tpl) tplName = tpl.name; }
-    h += '<div class="task-template-card" onclick="createTaskFromTemplate(\'' + tt.id + '\')">' +
-      '<div class="task-template-card-name">' + escapeHtml(tt.name) + '</div>' +
-      '<div class="task-template-card-desc">' + escapeHtml(tt.description || '') + '</div>' +
-      '<div class="task-template-card-meta">' +
-        '<span class="task-template-card-tag" style="background:#EBF5FF;color:#1A5FB4;">' + escapeHtml(tplName) + '</span>' +
-        '<span class="task-template-card-tag">' + escapeHtml(tt.llm_model || '—') + '</span>' +
-        colTags +
-      '</div>' +
-    '</div>';
-  });
-  c.innerHTML = h;
-}
 </script>
