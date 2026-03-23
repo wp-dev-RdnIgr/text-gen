@@ -332,12 +332,67 @@ function seedData() {
     }
   ];
 
+  // --- Шаблоны задач (Task Templates) ---
+  var taskTemplates = [
+    {
+      id: 'tt_1',
+      name: 'Статьи для блога',
+      description: 'Генерация SEO-статей для блога с ключевыми словами и ТЗ',
+      columns: [
+        { key: 'url', label: 'URL', type: 'short' },
+        { key: 'keywords', label: 'Ключевые слова', type: 'short' },
+        { key: 'topic', label: 'Тема', type: 'short' },
+        { key: 'brief', label: 'ТЗ', type: 'long' }
+      ],
+      template_id: 't1',
+      llm_provider: 'anthropic',
+      llm_model: 'Claude Sonnet',
+      options: { humanize: true, uniqueness: true, factcheck: false, ai_detector: true },
+      drive_folder: '',
+      created_at: '2025-03-10T10:00:00.000Z'
+    },
+    {
+      id: 'tt_2',
+      name: 'Карточки товаров',
+      description: 'Описания для карточек товаров интернет-магазина',
+      columns: [
+        { key: 'url', label: 'URL товара', type: 'short' },
+        { key: 'product_name', label: 'Название товара', type: 'short' },
+        { key: 'category', label: 'Категория', type: 'short' },
+        { key: 'specs', label: 'Характеристики', type: 'long' }
+      ],
+      template_id: 't3',
+      llm_provider: 'openai',
+      llm_model: 'ChatGPT (GPT-4o)',
+      options: { humanize: false, uniqueness: true, factcheck: true, ai_detector: false },
+      drive_folder: '',
+      created_at: '2025-03-12T12:00:00.000Z'
+    },
+    {
+      id: 'tt_3',
+      name: 'Описания категорий',
+      description: 'SEO-тексты для страниц категорий каталога',
+      columns: [
+        { key: 'url', label: 'URL категории', type: 'short' },
+        { key: 'category_name', label: 'Название категории', type: 'short' },
+        { key: 'keywords', label: 'Ключевые слова', type: 'short' }
+      ],
+      template_id: 't4',
+      llm_provider: 'anthropic',
+      llm_model: 'Claude Sonnet',
+      options: { humanize: true, uniqueness: true, factcheck: false, ai_detector: false },
+      drive_folder: '',
+      created_at: '2025-03-15T09:00:00.000Z'
+    }
+  ];
+
   // Сохранение
   props.setProperty('clients', JSON.stringify(clients));
   props.setProperty('tasks', JSON.stringify(tasks));
   props.setProperty('prompt_templates', JSON.stringify(templates));
   props.setProperty('template_versions', JSON.stringify(template_versions));
   props.setProperty('generated_texts', JSON.stringify(generated_texts));
+  props.setProperty('task_templates', JSON.stringify(taskTemplates));
 
   return 'Демо-данные загружены';
 }

@@ -275,6 +275,35 @@ function updateTask(taskId, updates) {
   }
 }
 
+// --- Шаблоны задач (Task Templates) ---
+
+function getTaskTemplates() {
+  try {
+    return _getAll('task_templates');
+  } catch (e) {
+    throw new Error('Ошибка загрузки шаблонов задач: ' + e.message);
+  }
+}
+
+function saveTaskTemplate(data) {
+  try {
+    if (!data.created_at) {
+      data.created_at = new Date().toISOString();
+    }
+    return _saveItem('task_templates', data, 'tt_');
+  } catch (e) {
+    throw new Error('Ошибка сохранения шаблона задачи: ' + e.message);
+  }
+}
+
+function deleteTaskTemplate(id) {
+  try {
+    return _deleteItem('task_templates', id);
+  } catch (e) {
+    throw new Error('Ошибка удаления шаблона задачи: ' + e.message);
+  }
+}
+
 // --- Утилиты ---
 
 function getAllDataForDashboard(clientId) {

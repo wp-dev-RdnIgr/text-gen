@@ -19,7 +19,8 @@ var state = {
   templateVersions: [],
   viewingVersionId: null,
   genTemplateVersions: [],
-  longTextEdit: { rowIndex: -1, colKey: '' }
+  longTextEdit: { rowIndex: -1, colKey: '' },
+  taskTemplates: []
 };
 
 // --- Инициализация ---
@@ -39,6 +40,9 @@ function loadInitialData() {
     state.templates = templates || [];
     renderTemplateList();
   }).getTemplates();
+  google.script.run.withSuccessHandler(function(tt) {
+    state.taskTemplates = tt || [];
+  }).getTaskTemplates();
 }
 
 // --- Роутер ---
@@ -180,8 +184,58 @@ function renderTasksTable() {
 }
 function createNewTask(){
   if(!state.selectedClientId){showToast('Сначала выберите клиента','error');return;}
+  renderTaskTemplateList();
+  openModal('modal-task-template');
+}
+function createTaskFromScratch(){
+  closeModal('modal-task-template');
   var task={client_id:state.selectedClientId,name:'Новая задача',columns:[{key:'url',label:'URL',type:'short'},{key:'keywords',label:'Ключевые слова',type:'short'},{key:'topic',label:'Тема',type:'short'},{key:'brief',label:'ТЗ',type:'long'}],rows:[{url:'',keywords:'',topic:'',brief:''}],status:'draft'};
   google.script.run.withSuccessHandler(function(s){showToast('Задача создана','success');navigateTo('#task/'+s.id);}).withFailureHandler(function(e){showToast(e.message,'error');}).saveTask(task);
+}
+function createTaskFromTemplate(ttId){
+  closeModal('modal-task-template');
+  var tt=(state.taskTemplates||[]).find(function(x){return x.id===ttId;});
+  if(!tt){createTaskFromScratch();return;}
+  var cols=(tt.columns||[]).map(function(c){return {key:c.key,label:c.label,type:c.type};});
+  var row={};cols.forEach(function(c){row[c.key]='';});
+  var task={
+    client_id:state.selectedClientId,
+    name:tt.name,
+    columns:cols,
+    rows:[row],
+    status:'draft',
+    template_id:tt.template_id||'',
+    llm_provider:tt.llm_provider||'',
+    llm_model:tt.llm_model||'',
+    options:tt.options||{},
+    drive_folder:tt.drive_folder||'',
+    local_system_prompt:tt.local_system_prompt||null,
+    local_user_prompt:tt.local_user_prompt||null
+  };
+  google.script.run.withSuccessHandler(function(s){showToast('Задача создана из шаблона','success');navigateTo('#task/'+s.id);}).withFailureHandler(function(e){showToast(e.message,'error');}).saveTask(task);
+}
+function renderTaskTemplateList(){
+  var c=document.getElementById('task-template-list');if(!c)return;
+  var tts=state.taskTemplates||[];
+  if(!tts.length){c.innerHTML='<div class="placeholder-message" style="height:100px;grid-column:1/-1;"><p>Нет сохранённых шаблонов задач</p></div>';return;}
+  var h='';
+  tts.forEach(function(tt){
+    var colTags=(tt.columns||[]).map(function(col){return '<span class="task-template-card-tag">'+escapeHtml(col.label)+'</span>';}).join('');
+    var tplName='—';if(tt.template_id){var tpl=state.templates.find(function(x){return x.id===tt.template_id;});if(tpl)tplName=tpl.name;}
+    h+='<div class="task-template-card" onclick="createTaskFromTemplate(\''+tt.id+'\')">' +
+      '<div class="task-template-card-name">'+escapeHtml(tt.name)+'</div>' +
+      '<div class="task-template-card-desc">'+escapeHtml(tt.description||'')+'</div>' +
+      '<div class="task-template-card-meta">' +
+        '<span class="task-template-card-tag" style="background:#EBF5FF;color:#1A5FB4;">'+escapeHtml(tplName)+'</span>' +
+        '<span class="task-template-card-tag">'+escapeHtml(tt.llm_model||'—')+'</span>' +
+        colTags +
+      '</div>' +
+      '<div class="task-template-card-actions">' +
+        '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteTaskTemplate(\''+tt.id+'\')">Уд.</button>' +
+      '</div>' +
+    '</div>';
+  });
+  c.innerHTML=h;
 }
 function deleteTaskConfirm(tid){
   if(!confirm('Удалить задачу?'))return;
@@ -210,6 +264,70 @@ function viewVersion(vid){if(state.viewingVersionId===vid){closeVersionViewer();
 function closeVersionViewer(){state.viewingVersionId=null;var v=document.getElementById('tpl-version-viewer');if(v)v.style.display='none';}
 function restoreVersion(){if(!state.viewingVersionId||!state.selectedTemplateId)return;if(!confirm('Восстановить?'))return;google.script.run.withSuccessHandler(function(s){showToast('Восстановлено','success');closeVersionViewer();google.script.run.withSuccessHandler(function(t){state.templates=t||[];renderTemplateList();selectTemplate(s.id);}).getTemplates();}).withFailureHandler(function(e){showToast(e.message,'error');}).restoreTemplateVersion(state.selectedTemplateId,state.viewingVersionId);}
 // ===========================================
+// Шаблоны задач (Task Templates)
+// ===========================================
+function saveAsTaskTemplate(){
+  if(!state.currentTask){showToast('Нет задачи','error');return;}
+  var t=state.currentTask;
+  document.getElementById('task-tpl-name').value=t.name||'';
+  document.getElementById('task-tpl-description').value='';
+  var sl=document.getElementById('task-tpl-summary-list');
+  var items=[];
+  items.push('Колонки: '+(t.columns||[]).map(function(c){return c.label;}).join(', '));
+  if(t.template_id){var tpl=state.templates.find(function(x){return x.id===t.template_id;});items.push('Шаблон промта: '+(tpl?tpl.name:'—'));}
+  if(t.llm_model)items.push('LLM: '+t.llm_model);
+  if(t.options){
+    var opts=[];
+    if(t.options.humanize)opts.push('Гуманизация');
+    if(t.options.uniqueness)opts.push('Проверка уникальности');
+    if(t.options.factcheck)opts.push('Фактчекинг');
+    if(t.options.ai_detector)opts.push('AI-детектор');
+    if(opts.length)items.push('Постобработка: '+opts.join(', '));
+  }
+  sl.innerHTML=items.map(function(x){return '<li>'+escapeHtml(x)+'</li>';}).join('');
+  openModal('modal-save-task-template');
+}
+function confirmSaveTaskTemplate(){
+  var name=document.getElementById('task-tpl-name').value.trim();
+  if(!name){showToast('Укажите название','error');return;}
+  var t=state.currentTask;
+  // Собираем настройки генерации из UI
+  var lSel=document.getElementById('gen-llm-select');
+  var parts=lSel.value.split('|');
+  var tSel=document.getElementById('gen-template-select');
+  var tt={
+    name:name,
+    description:document.getElementById('task-tpl-description').value.trim(),
+    columns:(t.columns||[]).map(function(c){return {key:c.key,label:c.label,type:c.type};}),
+    template_id:tSel.value||'',
+    llm_provider:parts[0]||'',
+    llm_model:parts[1]||'',
+    options:{
+      humanize:document.getElementById('opt-humanize').checked,
+      uniqueness:document.getElementById('opt-uniqueness').checked,
+      factcheck:document.getElementById('opt-factcheck').checked,
+      ai_detector:document.getElementById('opt-ai-detector').checked
+    },
+    drive_folder:document.getElementById('gen-drive-folder').value,
+    local_system_prompt:document.getElementById('gen-local-system-prompt').value||null,
+    local_user_prompt:document.getElementById('gen-local-user-prompt').value||null
+  };
+  google.script.run.withSuccessHandler(function(s){
+    closeModal('modal-save-task-template');
+    showToast('Шаблон задачи сохранён','success');
+    google.script.run.withSuccessHandler(function(list){state.taskTemplates=list||[];}).getTaskTemplates();
+  }).withFailureHandler(function(e){showToast(e.message,'error');}).saveTaskTemplate(tt);
+}
+function deleteTaskTemplate(ttId){
+  if(!confirm('Удалить шаблон задачи?'))return;
+  google.script.run.withSuccessHandler(function(){
+    showToast('Шаблон удалён','success');
+    state.taskTemplates=(state.taskTemplates||[]).filter(function(x){return x.id!==ttId;});
+    renderTaskTemplateList();
+  }).withFailureHandler(function(e){showToast(e.message,'error');}).deleteTaskTemplate(ttId);
+}
+
+// ===========================================
 // Экран задачи — загрузка, колонки, таблица данных
 // ===========================================
 function loadTaskScreen(taskId) {
@@ -232,7 +350,13 @@ function loadTaskScreen(taskId) {
     renderDynamicDataTable();
     populateTemplateSelect();
     // Восстановить настройки
-    if (task.template_id) { document.getElementById('gen-template-select').value = task.template_id; onTemplateChange(); }
+    if (task.template_id) {
+      document.getElementById('gen-template-select').value = task.template_id;
+      onTemplateChange();
+    } else {
+      document.getElementById('gen-no-template-hint').style.display = 'flex';
+      document.getElementById('gen-local-prompt-group').style.display = 'none';
+    }
     if (task.llm_provider && task.llm_model) { document.getElementById('gen-llm-select').value = task.llm_provider+'|'+task.llm_model; }
     if (task.options) {
       document.getElementById('opt-humanize').checked = !!task.options.humanize;
@@ -434,10 +558,12 @@ function onTemplateChange() {
   var vg = document.getElementById('gen-version-group');
   var vs = document.getElementById('gen-version-select');
   var lpg = document.getElementById('gen-local-prompt-group');
+  var hint = document.getElementById('gen-no-template-hint');
   var tpl = state.templates.find(function(t){return t.id===sel.value;});
   if (tpl) {
     vg.style.display = 'block';
     lpg.style.display = 'block';
+    if (hint) hint.style.display = 'none';
     vs.innerHTML = '<option value="current">v'+(tpl.version||1)+' (текущая)</option>';
     // Заполнить локальный промт: если уже есть сохранённый — использовать его, иначе взять из шаблона
     if (state.currentTask && state.currentTask.local_system_prompt != null) {
@@ -453,6 +579,7 @@ function onTemplateChange() {
     }).getTemplateVersions(tpl.id);
   } else {
     vg.style.display='none'; lpg.style.display='none'; state.genTemplateVersions=[];
+    if (hint) hint.style.display = 'flex';
   }
 }
 
