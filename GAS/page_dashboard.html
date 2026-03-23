@@ -26,37 +26,33 @@
         <div class="content-header">
           <div class="content-header-info">
             <h1 id="dashboard-client-name" class="page-title"></h1>
-            <p id="dashboard-client-desc" class="text-secondary"></p>
+            <span id="dashboard-client-niche" class="badge badge-info"></span>
           </div>
           <div class="content-header-actions">
-            <button class="btn" onclick="navigateTo('#templates')">Шаблоны</button>
             <button class="btn" onclick="openClientModal(state.selectedClientId)">Настройки клиента</button>
           </div>
         </div>
 
-        <!-- Проекты -->
+        <!-- Задачи -->
         <div class="section">
-          <h3 class="section-title">Проекты</h3>
-          <div id="projects-grid" class="projects-grid">
-            <!-- Заполняется динамически -->
+          <div class="section-header-row">
+            <h3 class="section-title">Задачи на генерацию</h3>
+            <button class="btn btn-primary" onclick="createNewTask()">+ Новая задача</button>
           </div>
-        </div>
-
-        <!-- Последние генерации -->
-        <div class="section">
-          <h3 class="section-title">Последние генерации</h3>
           <div class="table-container">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Проект</th>
-                  <th>Дата</th>
-                  <th>Текстов</th>
+                  <th>Название</th>
+                  <th>Шаблон</th>
                   <th>LLM</th>
+                  <th>Текстов</th>
+                  <th>Дата</th>
                   <th>Статус</th>
+                  <th style="width:100px;">Действия</th>
                 </tr>
               </thead>
-              <tbody id="generations-table-body">
+              <tbody id="tasks-table-body">
                 <!-- Заполняется динамически -->
               </tbody>
             </table>

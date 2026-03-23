@@ -6,22 +6,20 @@
 // --- Глобальный стейт ---
 var state = {
   clients: [],
-  projects: [],
+  tasks: [],
   templates: [],
-  generations: [],
   texts: [],
   selectedClientId: null,
   selectedTemplateId: null,
-  expandedClientId: null,
-  currentGeneration: null,
-  genDataRows: [],
+  currentTask: null,
   genSimulationTimer: null,
   expandedTextId: null,
   expandedProgressTextId: null,
   progressTexts: [],
   templateVersions: [],
   viewingVersionId: null,
-  genTemplateVersions: []
+  genTemplateVersions: [],
+  longTextEdit: { rowIndex: -1, colKey: '' }
 };
 
 // --- Инициализация ---
@@ -37,7 +35,6 @@ function loadInitialData() {
     renderClientList();
     renderClientsTable();
   }).getClients();
-
   google.script.run.withSuccessHandler(function(templates) {
     state.templates = templates || [];
     renderTemplateList();
@@ -49,1479 +46,667 @@ function handleHashRoute() {
   var hash = window.location.hash || '#dashboard';
   var parts = hash.split('/');
   var screen = parts[0];
-
   hideAllScreens();
   updateActiveNav(screen);
-
   switch (screen) {
-    case '#dashboard':
-      showScreen('screen-dashboard');
-      break;
-    case '#clients':
-      showScreen('screen-clients');
-      renderClientsTable();
-      break;
-    case '#templates':
-      showScreen('screen-templates');
-      renderTemplateList();
-      break;
-    case '#generation':
-      showScreen('screen-generation');
-      if (parts[1]) loadGenerationScreen(parts[1]);
-      break;
-    case '#progress':
-      showScreen('screen-progress');
-      if (parts[1]) loadProgressScreen(parts[1]);
-      break;
-    default:
-      showScreen('screen-dashboard');
+    case '#dashboard': showScreen('screen-dashboard'); break;
+    case '#clients': showScreen('screen-clients'); renderClientsTable(); break;
+    case '#templates': showScreen('screen-templates'); renderTemplateList(); break;
+    case '#task': showScreen('screen-task'); if (parts[1]) loadTaskScreen(parts[1]); break;
+    case '#progress': showScreen('screen-progress'); if (parts[1]) loadProgressScreen(parts[1]); break;
+    default: showScreen('screen-dashboard');
   }
 }
-
-function navigateTo(hash) {
-  window.location.hash = hash;
-}
-
-function hideAllScreens() {
-  var screens = document.querySelectorAll('.screen');
-  for (var i = 0; i < screens.length; i++) {
-    screens[i].style.display = 'none';
-  }
-}
-
-function showScreen(id) {
-  var el = document.getElementById(id);
-  if (el) el.style.display = 'block';
-}
-
+function navigateTo(hash) { window.location.hash = hash; }
+function hideAllScreens() { var s = document.querySelectorAll('.screen'); for (var i = 0; i < s.length; i++) s[i].style.display = 'none'; }
+function showScreen(id) { var el = document.getElementById(id); if (el) el.style.display = 'block'; }
 function updateActiveNav(hash) {
   var tabs = document.querySelectorAll('.nav-tab');
-  for (var i = 0; i < tabs.length; i++) {
-    tabs[i].classList.remove('active');
-    if (tabs[i].getAttribute('data-hash') === hash) {
-      tabs[i].classList.add('active');
-    }
-  }
+  for (var i = 0; i < tabs.length; i++) { tabs[i].classList.remove('active'); if (tabs[i].getAttribute('data-hash') === hash) tabs[i].classList.add('active'); }
 }
 
-// --- Toast уведомления ---
-function showToast(message, type) {
+// --- Toast ---
+function showToast(msg, type) {
   type = type || 'info';
-  var container = document.getElementById('toast-container');
-  var toast = document.createElement('div');
-  toast.className = 'toast toast-' + type;
-  toast.textContent = message;
-  container.appendChild(toast);
-  setTimeout(function() { toast.classList.add('toast-visible'); }, 10);
-  setTimeout(function() {
-    toast.classList.remove('toast-visible');
-    setTimeout(function() { container.removeChild(toast); }, 300);
-  }, 3000);
+  var c = document.getElementById('toast-container');
+  var t = document.createElement('div');
+  t.className = 'toast toast-' + type;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(function() { t.remove(); }, 3000);
 }
 
 // --- Модалки ---
-function openModal(id) {
-  document.getElementById(id).style.display = 'flex';
+function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+// --- Утилиты ---
+function escapeHtml(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function formatDate(d) { if (!d) return '—'; var x=new Date(d); return ('0'+x.getDate()).slice(-2)+'.'+('0'+(x.getMonth()+1)).slice(-2)+'.'+x.getFullYear(); }
+function formatDateTime(d) { if (!d) return '—'; var x=new Date(d); return ('0'+x.getDate()).slice(-2)+'.'+('0'+(x.getMonth()+1)).slice(-2)+'.'+x.getFullYear()+' '+('0'+x.getHours()).slice(-2)+':'+('0'+x.getMinutes()).slice(-2); }
+function extractVariables(text) {
+  var m = text.match(/\{\{(\w+)\}\}/g);
+  if (!m) return [];
+  var u = [];
+  m.forEach(function(x) { var n = x.replace(/\{\{|\}\}/g,''); if (u.indexOf(n)===-1) u.push(n); });
+  return u;
 }
-
-function closeModal(id) {
-  document.getElementById(id).style.display = 'none';
-}
-
-// --- Модалка клиента ---
-function openClientModal(clientId) {
-  var titleEl = document.getElementById('modal-client-title');
-  document.getElementById('mc-id').value = '';
-  document.getElementById('mc-name').value = '';
-  document.getElementById('mc-domain').value = '';
-  document.getElementById('mc-niche').value = '';
-  document.getElementById('mc-description').value = '';
-
-  if (clientId) {
-    titleEl.textContent = 'Редактировать клиента';
-    var client = state.clients.find(function(c) { return c.id === clientId; });
-    if (client) {
-      document.getElementById('mc-id').value = client.id;
-      document.getElementById('mc-name').value = client.name || '';
-      document.getElementById('mc-domain').value = client.domain || '';
-      document.getElementById('mc-niche').value = client.niche || '';
-      document.getElementById('mc-description').value = client.description || '';
-    }
-  } else {
-    titleEl.textContent = 'Новый клиент';
-  }
-  openModal('modal-client');
-}
-
-function saveClientFromModal() {
-  var data = {
-    name: document.getElementById('mc-name').value.trim(),
-    domain: document.getElementById('mc-domain').value.trim(),
-    niche: document.getElementById('mc-niche').value.trim(),
-    description: document.getElementById('mc-description').value.trim()
-  };
-  if (!data.name) { showToast('Укажите название клиента', 'error'); return; }
-
-  var id = document.getElementById('mc-id').value;
-  if (id) data.id = id;
-
-  google.script.run
-    .withSuccessHandler(function(saved) {
-      closeModal('modal-client');
-      showToast(id ? 'Клиент обновлен' : 'Клиент создан', 'success');
-      loadInitialData();
-      if (state.selectedClientId) selectClient(state.selectedClientId);
-    })
-    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
-    .saveClient(data);
-}
-
-// --- Модалка проекта ---
-function openProjectModal(clientId, projectId) {
-  var titleEl = document.getElementById('modal-project-title');
-  document.getElementById('mp-id').value = '';
-  document.getElementById('mp-client-id').value = clientId || '';
-  document.getElementById('mp-name').value = '';
-  document.getElementById('mp-content-type').value = 'blog';
-  document.getElementById('mp-sheet-url').value = '';
-  document.getElementById('mp-drive-folder').value = '';
-
-  if (projectId) {
-    titleEl.textContent = 'Редактировать проект';
-    google.script.run.withSuccessHandler(function(project) {
-      if (project) {
-        document.getElementById('mp-id').value = project.id;
-        document.getElementById('mp-client-id').value = project.client_id;
-        document.getElementById('mp-name').value = project.name || '';
-        document.getElementById('mp-content-type').value = project.content_type || 'blog';
-        document.getElementById('mp-sheet-url').value = project.sheet_url || '';
-        document.getElementById('mp-drive-folder').value = project.drive_folder || '';
-      }
-    }).getProject(projectId);
-  } else {
-    titleEl.textContent = 'Новый проект';
-  }
-  openModal('modal-project');
-}
-
-function saveProjectFromModal() {
-  var data = {
-    name: document.getElementById('mp-name').value.trim(),
-    client_id: document.getElementById('mp-client-id').value,
-    content_type: document.getElementById('mp-content-type').value,
-    sheet_url: document.getElementById('mp-sheet-url').value.trim(),
-    drive_folder: document.getElementById('mp-drive-folder').value.trim()
-  };
-  if (!data.name) { showToast('Укажите название проекта', 'error'); return; }
-
-  var id = document.getElementById('mp-id').value;
-  if (id) data.id = id;
-
-  google.script.run
-    .withSuccessHandler(function(saved) {
-      closeModal('modal-project');
-      showToast(id ? 'Проект обновлен' : 'Проект создан', 'success');
-      if (state.selectedClientId) selectClient(state.selectedClientId);
-    })
-    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
-    .saveProject(data);
-}
-
-// --- Демо-данные ---
-function seedDemoData() {
-  showToast('Загрузка демо-данных...', 'info');
-  google.script.run
-    .withSuccessHandler(function() {
-      showToast('Демо-данные загружены!', 'success');
-      loadInitialData();
-    })
-    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
-    .seedData();
+function generateColumnKey(label) {
+  var cyr = {'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'e','ж':'zh','з':'z','и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh','щ':'shch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya'};
+  var r = label.toLowerCase().trim(), out = '';
+  for (var i=0;i<r.length;i++){var c=r[i]; if(cyr[c])out+=cyr[c]; else if(/[a-z0-9]/.test(c))out+=c; else if(c===' '||c==='-'||c==='_')out+='_';}
+  out = out.replace(/_+/g,'_').replace(/^_|_$/g,'');
+  return out || ('col_'+Date.now());
 }
 
 // ===========================================
-// ЭТАП 2: Рендеринг дашборда, клиентов, проектов
+// Клиенты
 // ===========================================
-
-// --- Список клиентов в сайдбаре дашборда ---
 function renderClientList() {
-  var container = document.getElementById('client-list');
-  if (!container) return;
-  if (!state.clients.length) {
-    container.innerHTML = '<div class="placeholder-message"><p>Нет клиентов</p></div>';
-    return;
-  }
-  var html = '';
-  state.clients.forEach(function(c) {
-    var active = c.id === state.selectedClientId ? ' active' : '';
-    html += '<div class="client-item' + active + '" onclick="selectClient(\'' + c.id + '\')">' +
-      '<div class="client-item-name">' + escapeHtml(c.name) + '</div>' +
-      '<div class="client-item-domain">' + escapeHtml(c.domain || '') + '</div>' +
-    '</div>';
+  var c = document.getElementById('client-list'); if (!c) return;
+  if (!state.clients.length) { c.innerHTML = '<div class="placeholder-message" style="height:100px"><p>Нет клиентов</p></div>'; return; }
+  var h = '';
+  state.clients.forEach(function(cl) {
+    h += '<div class="client-item'+(cl.id===state.selectedClientId?' active':'')+'" onclick="selectClient(\''+cl.id+'\')">' +
+      '<div class="client-item-name">'+escapeHtml(cl.name)+'</div></div>';
   });
-  container.innerHTML = html;
+  c.innerHTML = h;
 }
-
-function filterClients(query) {
-  var items = document.querySelectorAll('.client-item');
-  query = query.toLowerCase();
-  for (var i = 0; i < items.length; i++) {
-    var name = items[i].querySelector('.client-item-name').textContent.toLowerCase();
-    items[i].style.display = name.indexOf(query) !== -1 ? '' : 'none';
-  }
+function filterClients(q) {
+  var items = document.querySelectorAll('.client-item'); q = q.toLowerCase();
+  for (var i=0;i<items.length;i++) { items[i].style.display = items[i].querySelector('.client-item-name').textContent.toLowerCase().indexOf(q)!==-1?'':'none'; }
 }
-
-// --- Выбор клиента в дашборде ---
 function selectClient(clientId) {
   state.selectedClientId = clientId;
   renderClientList();
-
   document.getElementById('dashboard-placeholder').style.display = 'none';
   document.getElementById('dashboard-client-content').style.display = 'block';
-
   google.script.run.withSuccessHandler(function(data) {
-    var client = data.client;
-    state.projects = data.projects || [];
-    state.generations = data.generations || [];
-
-    document.getElementById('dashboard-client-name').textContent = client ? client.name : '';
-    document.getElementById('dashboard-client-desc').textContent = client ? (client.niche || '') + (client.domain ? ' — ' + client.domain : '') : '';
-
-    renderProjectsGrid();
-    renderGenerationsTable();
+    state.tasks = data.tasks || [];
+    document.getElementById('dashboard-client-name').textContent = data.client ? data.client.name : '';
+    document.getElementById('dashboard-client-niche').textContent = data.client ? (data.client.niche||'') : '';
+    renderTasksTable();
   }).getAllDataForDashboard(clientId);
 }
-
-// --- Карточки проектов ---
-function renderProjectsGrid() {
-  var container = document.getElementById('projects-grid');
-  if (!container) return;
-  var html = '';
-
-  state.projects.forEach(function(p) {
-    var typeLabels = { blog: 'Блог', product_card: 'Товары', category: 'Категории', service: 'Услуги' };
-    var typeLabel = typeLabels[p.content_type] || p.content_type;
-    html += '<div class="project-card" onclick="navigateTo(\'#generation/' + p.id + '\')">' +
-      '<div class="project-card-header">' +
-        '<h4 class="project-card-title">' + escapeHtml(p.name) + '</h4>' +
-        '<span class="badge badge-info">' + escapeHtml(typeLabel) + '</span>' +
-      '</div>' +
-      '<div class="project-card-stats">' +
-        '<span>Текстов: ' + (p.total_texts || 0) + '</span>' +
-        '<span>Уник.: ' + (p.avg_uniqueness ? p.avg_uniqueness + '%' : '—') + '</span>' +
-      '</div>' +
-      '<div class="project-card-actions">' +
-        '<button class="btn btn-sm" onclick="event.stopPropagation(); openProjectModal(\'' + p.client_id + '\', \'' + p.id + '\')">Настройки</button>' +
-        '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); deleteProjectConfirm(\'' + p.id + '\')">Удалить</button>' +
-      '</div>' +
-    '</div>';
-  });
-
-  // Карточка добавления
-  html += '<div class="project-card project-card-add" onclick="openProjectModal(\'' + state.selectedClientId + '\')">' +
-    '<div class="project-card-add-icon">+</div>' +
-    '<div>Новый проект</div>' +
-  '</div>';
-
-  container.innerHTML = html;
+function openClientModal(clientId) {
+  var t = document.getElementById('modal-client-title');
+  document.getElementById('mc-id').value=''; document.getElementById('mc-name').value='';
+  document.getElementById('mc-domain').value=''; document.getElementById('mc-niche').value='';
+  document.getElementById('mc-description').value='';
+  if (clientId) {
+    t.textContent = 'Редактировать клиента';
+    var cl = state.clients.find(function(c){return c.id===clientId;});
+    if (cl) { document.getElementById('mc-id').value=cl.id; document.getElementById('mc-name').value=cl.name||''; document.getElementById('mc-domain').value=cl.website||cl.domain||''; document.getElementById('mc-niche').value=cl.niche||''; document.getElementById('mc-description').value=cl.notes||cl.description||''; }
+  } else { t.textContent = 'Новый клиент'; }
+  openModal('modal-client');
 }
-
-function deleteProjectConfirm(projectId) {
-  if (!confirm('Удалить проект и все связанные данные?')) return;
-  google.script.run
-    .withSuccessHandler(function() {
-      showToast('Проект удален', 'success');
-      selectClient(state.selectedClientId);
-    })
-    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
-    .deleteProject(projectId);
+function saveClientFromModal() {
+  var d = { name: document.getElementById('mc-name').value.trim(), website: document.getElementById('mc-domain').value.trim(), niche: document.getElementById('mc-niche').value.trim(), notes: document.getElementById('mc-description').value.trim() };
+  if (!d.name) { showToast('Укажите название','error'); return; }
+  var id = document.getElementById('mc-id').value; if (id) d.id = id;
+  google.script.run.withSuccessHandler(function(){closeModal('modal-client');showToast(id?'Клиент обновлён':'Клиент создан','success');loadInitialData();if(state.selectedClientId)selectClient(state.selectedClientId);}).withFailureHandler(function(e){showToast(e.message,'error');}).saveClient(d);
 }
-
-// --- Таблица генераций в дашборде ---
-function renderGenerationsTable() {
-  var tbody = document.getElementById('generations-table-body');
-  if (!tbody) return;
-  if (!state.generations.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет генераций</td></tr>';
-    return;
-  }
-
-  var html = '';
-  var sorted = state.generations.slice().sort(function(a, b) {
-    return new Date(b.created_at) - new Date(a.created_at);
-  });
-
-  sorted.forEach(function(g) {
-    var project = state.projects.find(function(p) { return p.id === g.project_id; });
-    var statusClass = { completed: 'badge-success', running: 'badge-warning', pending: 'badge-info', failed: 'badge-danger' };
-    var statusLabel = { completed: 'Завершена', running: 'В процессе', pending: 'Ожидает', failed: 'Ошибка' };
-
-    html += '<tr onclick="navigateTo(\'#progress/' + g.id + '\')" style="cursor:pointer;">' +
-      '<td>' + escapeHtml(project ? project.name : '—') + '</td>' +
-      '<td>' + formatDate(g.created_at) + '</td>' +
-      '<td>' + g.completed_texts + '/' + g.total_texts + '</td>' +
-      '<td>' + escapeHtml(g.llm_model || '') + '</td>' +
-      '<td><span class="badge ' + (statusClass[g.status] || '') + '">' + (statusLabel[g.status] || g.status) + '</span></td>' +
-    '</tr>';
-  });
-  tbody.innerHTML = html;
+function deleteClientConfirm(cid) {
+  if (!confirm('Удалить клиента?')) return;
+  google.script.run.withSuccessHandler(function(){showToast('Клиент удалён','success');state.selectedClientId=null;loadInitialData();}).withFailureHandler(function(e){showToast(e.message,'error');}).deleteClient(cid);
 }
-
-// --- Таблица клиентов (страница "Клиенты") ---
 function renderClientsTable() {
-  var tbody = document.getElementById('clients-table-body');
-  if (!tbody) return;
-  if (!state.clients.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет клиентов</td></tr>';
-    return;
-  }
-  var html = '';
-  state.clients.forEach(function(c) {
-    html += '<tr>' +
-      '<td><strong>' + escapeHtml(c.name) + '</strong></td>' +
-      '<td>' + escapeHtml(c.domain || '—') + '</td>' +
-      '<td>' + escapeHtml(c.niche || '—') + '</td>' +
-      '<td id="client-projects-count-' + c.id + '">—</td>' +
-      '<td>' +
-        '<button class="btn btn-sm" onclick="toggleClientProjects(\'' + c.id + '\')">Проекты</button> ' +
-        '<button class="btn btn-sm" onclick="openClientModal(\'' + c.id + '\')">Ред.</button> ' +
-        '<button class="btn btn-sm btn-danger" onclick="deleteClientConfirm(\'' + c.id + '\')">Уд.</button>' +
-      '</td>' +
-    '</tr>';
+  var tb = document.getElementById('clients-table-body'); if (!tb) return;
+  if (!state.clients.length) { tb.innerHTML='<tr><td colspan="5" class="text-center text-secondary">Нет клиентов</td></tr>'; return; }
+  var h='';
+  state.clients.forEach(function(c){
+    h+='<tr><td><strong>'+escapeHtml(c.name)+'</strong></td><td>'+escapeHtml(c.website||c.domain||'—')+'</td><td>'+escapeHtml(c.niche||'—')+'</td><td id="client-tc-'+c.id+'">—</td><td><button class="btn btn-sm" onclick="selectClient(\''+c.id+'\');navigateTo(\'#dashboard\')">Задачи</button> <button class="btn btn-sm" onclick="openClientModal(\''+c.id+'\')">Ред.</button> <button class="btn btn-sm btn-danger" onclick="deleteClientConfirm(\''+c.id+'\')">Уд.</button></td></tr>';
   });
-  tbody.innerHTML = html;
+  tb.innerHTML=h;
+  state.clients.forEach(function(c){ google.script.run.withSuccessHandler(function(tasks){var el=document.getElementById('client-tc-'+c.id);if(el)el.textContent=tasks.length;}).getTasks(c.id); });
+}
+function seedDemoData(){showToast('Загрузка...','info');google.script.run.withSuccessHandler(function(){showToast('Демо-данные загружены!','success');loadInitialData();}).withFailureHandler(function(e){showToast(e.message,'error');}).seedData();}
 
-  // Загрузить количество проектов для каждого клиента
-  state.clients.forEach(function(c) {
-    google.script.run.withSuccessHandler(function(projects) {
-      var el = document.getElementById('client-projects-count-' + c.id);
-      if (el) el.textContent = projects.length;
-    }).getProjects(c.id);
+// ===========================================
+// Дашборд — таблица задач
+// ===========================================
+function renderTasksTable() {
+  var tb = document.getElementById('tasks-table-body'); if (!tb) return;
+  if (!state.tasks.length) { tb.innerHTML='<tr><td colspan="7" class="text-center text-secondary">Нет задач. Создайте первую!</td></tr>'; return; }
+  var sL={draft:'Черновик',running:'В процессе',completed:'Завершена',failed:'Ошибка',stopped:'Остановлена'};
+  var sC={draft:'badge-neutral',running:'badge-warning',completed:'badge-success',failed:'badge-danger',stopped:'badge-danger'};
+  var sorted = state.tasks.slice().sort(function(a,b){return new Date(b.created_at)-new Date(a.created_at);});
+  var h='';
+  sorted.forEach(function(t){
+    var tn='—'; if(t.template_id){var tp=state.templates.find(function(x){return x.id===t.template_id;});if(tp)tn=tp.name;}
+    h+='<tr class="clickable" onclick="navigateTo(\'#task/'+t.id+'\')"><td><strong>'+escapeHtml(t.name)+'</strong></td><td>'+escapeHtml(tn)+'</td><td>'+escapeHtml(t.llm_model||'—')+'</td><td>'+(t.completed_texts||0)+'/'+(t.total_texts||t.rows.length)+'</td><td>'+formatDate(t.created_at)+'</td><td><span class="badge '+(sC[t.status]||'')+'">'+(sL[t.status]||t.status)+'</span></td><td><button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteTaskConfirm(\''+t.id+'\')">Уд.</button></td></tr>';
   });
+  tb.innerHTML=h;
 }
-
-function deleteClientConfirm(clientId) {
-  if (!confirm('Удалить клиента и все связанные проекты?')) return;
-  google.script.run
-    .withSuccessHandler(function() {
-      showToast('Клиент удален', 'success');
-      state.selectedClientId = null;
-      loadInitialData();
-    })
-    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
-    .deleteClient(clientId);
+function createNewTask(){
+  if(!state.selectedClientId){showToast('Сначала выберите клиента','error');return;}
+  var task={client_id:state.selectedClientId,name:'Новая задача',columns:[{key:'url',label:'URL',type:'short'},{key:'keywords',label:'Ключевые слова',type:'short'},{key:'topic',label:'Тема',type:'short'},{key:'brief',label:'ТЗ',type:'long'}],rows:[{url:'',keywords:'',topic:'',brief:''}],status:'draft'};
+  google.script.run.withSuccessHandler(function(s){showToast('Задача создана','success');navigateTo('#task/'+s.id);}).withFailureHandler(function(e){showToast(e.message,'error');}).saveTask(task);
 }
-
-function toggleClientProjects(clientId) {
-  var expanded = document.getElementById('client-projects-expanded');
-  if (state.expandedClientId === clientId) {
-    expanded.style.display = 'none';
-    state.expandedClientId = null;
-    return;
-  }
-  state.expandedClientId = clientId;
-  var client = state.clients.find(function(c) { return c.id === clientId; });
-  document.getElementById('expanded-client-name').textContent = client ? client.name : '';
-
-  google.script.run.withSuccessHandler(function(projects) {
-    var tbody = document.getElementById('client-projects-table');
-    if (!projects.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет проектов</td></tr>';
-    } else {
-      var html = '';
-      var typeLabels = { blog: 'Блог', product_card: 'Товары', category: 'Категории', service: 'Услуги' };
-      projects.forEach(function(p) {
-        html += '<tr>' +
-          '<td>' + escapeHtml(p.name) + '</td>' +
-          '<td>' + escapeHtml(typeLabels[p.content_type] || p.content_type) + '</td>' +
-          '<td>' + (p.total_texts || 0) + '</td>' +
-          '<td>' + (p.avg_uniqueness ? p.avg_uniqueness + '%' : '—') + '</td>' +
-          '<td>' +
-            '<button class="btn btn-sm" onclick="navigateTo(\'#generation/' + p.id + '\')">Генерация</button> ' +
-            '<button class="btn btn-sm btn-danger" onclick="deleteProjectConfirm(\'' + p.id + '\')">Удалить</button>' +
-          '</td>' +
-        '</tr>';
-      });
-      tbody.innerHTML = html;
-    }
-    expanded.style.display = 'block';
-  }).getProjects(clientId);
+function deleteTaskConfirm(tid){
+  if(!confirm('Удалить задачу?'))return;
+  google.script.run.withSuccessHandler(function(){showToast('Задача удалена','success');if(state.selectedClientId)selectClient(state.selectedClientId);}).withFailureHandler(function(e){showToast(e.message,'error');}).deleteTask(tid);
 }
-
-// --- Утилиты ---
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function formatDate(dateStr) {
-  if (!dateStr) return '—';
-  var d = new Date(dateStr);
-  var day = ('0' + d.getDate()).slice(-2);
-  var month = ('0' + (d.getMonth() + 1)).slice(-2);
-  return day + '.' + month + '.' + d.getFullYear();
+function deleteCurrentTask(){
+  if(!state.currentTask)return;
+  if(!confirm('Удалить задачу?'))return;
+  google.script.run.withSuccessHandler(function(){showToast('Задача удалена','success');navigateTo('#dashboard');}).withFailureHandler(function(e){showToast(e.message,'error');}).deleteTask(state.currentTask.id);
 }
 
 // ===========================================
-// ЭТАП 3: Шаблоны — список, фильтры, редактор
+// Шаблоны
 // ===========================================
-
-function renderTemplateList() {
-  var container = document.getElementById('template-list');
-  if (!container) return;
-  if (!state.templates.length) {
-    container.innerHTML = '<div class="placeholder-message"><p>Нет шаблонов</p></div>';
-    return;
-  }
-  var categoryLabels = { blog: 'Блог', product_card: 'Товары', category: 'Категории', service: 'Услуги', custom: 'Произвольный', system_humanizer: 'Системный' };
-  var html = '';
-  state.templates.forEach(function(t) {
-    var active = t.id === state.selectedTemplateId ? ' active' : '';
-    html += '<div class="template-item' + active + '" onclick="selectTemplate(\'' + t.id + '\')">' +
-      '<div class="template-item-name">' + escapeHtml(t.name) + '</div>' +
-      '<div class="template-item-meta">' +
-        '<span class="badge badge-sm">' + escapeHtml(categoryLabels[t.category] || t.category) + '</span>' +
-        '<span class="text-secondary">v' + (t.version || 1) + '</span>' +
-      '</div>' +
-    '</div>';
-  });
-  container.innerHTML = html;
-}
-
-function filterTemplates(query) {
-  var items = document.querySelectorAll('.template-item');
-  query = query.toLowerCase();
-  for (var i = 0; i < items.length; i++) {
-    var name = items[i].querySelector('.template-item-name').textContent.toLowerCase();
-    items[i].style.display = name.indexOf(query) !== -1 ? '' : 'none';
-  }
-}
-
-function filterTemplatesByCategory(category) {
-  // Обновить кнопки фильтров
-  var buttons = document.querySelectorAll('#template-category-filters .tag-btn');
-  for (var i = 0; i < buttons.length; i++) {
-    buttons[i].classList.remove('active');
-    if (buttons[i].getAttribute('data-category') === category) {
-      buttons[i].classList.add('active');
-    }
-  }
-  // Фильтровать список
-  if (category === 'all') {
-    renderTemplateList();
-    return;
-  }
-  var filtered = state.templates.filter(function(t) { return t.category === category; });
-  var container = document.getElementById('template-list');
-  var categoryLabels = { blog: 'Блог', product_card: 'Товары', category: 'Категории', service: 'Услуги', custom: 'Произвольный', system_humanizer: 'Системный' };
-  var html = '';
-  filtered.forEach(function(t) {
-    var active = t.id === state.selectedTemplateId ? ' active' : '';
-    html += '<div class="template-item' + active + '" onclick="selectTemplate(\'' + t.id + '\')">' +
-      '<div class="template-item-name">' + escapeHtml(t.name) + '</div>' +
-      '<div class="template-item-meta">' +
-        '<span class="badge badge-sm">' + escapeHtml(categoryLabels[t.category] || t.category) + '</span>' +
-        '<span class="text-secondary">v' + (t.version || 1) + '</span>' +
-      '</div>' +
-    '</div>';
-  });
-  container.innerHTML = html || '<div class="placeholder-message"><p>Нет шаблонов</p></div>';
-}
-
-function selectTemplate(templateId) {
-  state.selectedTemplateId = templateId;
-  state.viewingVersionId = null;
-  renderTemplateList();
-
-  document.getElementById('template-placeholder').style.display = 'none';
-  document.getElementById('template-editor-content').style.display = 'block';
-
-  var tpl = state.templates.find(function(t) { return t.id === templateId; });
-  if (!tpl) return;
-
-  document.getElementById('tpl-name').value = tpl.name || '';
-  document.getElementById('tpl-category').value = tpl.category || 'blog';
-  document.getElementById('tpl-system-prompt').value = tpl.system_prompt || '';
-  document.getElementById('tpl-user-prompt').value = tpl.user_prompt || '';
-  document.getElementById('tpl-version-badge').textContent = 'v' + (tpl.version || 1);
-  document.getElementById('tpl-stat-version').textContent = tpl.version || 1;
-  document.getElementById('tpl-stat-usage').textContent = tpl.usage_count || 0;
-  document.getElementById('tpl-stat-uniqueness').textContent = tpl.avg_uniqueness ? tpl.avg_uniqueness + '%' : '—';
-
-  // Переменные
-  var varsContainer = document.getElementById('tpl-variables');
-  var vars = extractVariables(tpl.user_prompt || '');
-  if (vars.length) {
-    varsContainer.innerHTML = vars.map(function(v) {
-      return '<span class="variable-tag">{{' + escapeHtml(v) + '}}</span>';
-    }).join(' ');
-  } else {
-    varsContainer.innerHTML = '<span class="text-secondary">Нет переменных</span>';
-  }
-
-  // Загрузить историю версий
-  closeVersionViewer();
-  loadTemplateVersions(templateId);
-}
-
-function extractVariables(text) {
-  var matches = text.match(/\{\{(\w+)\}\}/g);
-  if (!matches) return [];
-  var unique = [];
-  matches.forEach(function(m) {
-    var name = m.replace(/\{\{|\}\}/g, '');
-    if (unique.indexOf(name) === -1) unique.push(name);
-  });
-  return unique;
-}
-
-function createNewTemplate() {
-  state.selectedTemplateId = null;
-  state.templateVersions = [];
-  state.viewingVersionId = null;
-  document.getElementById('template-placeholder').style.display = 'none';
-  document.getElementById('template-editor-content').style.display = 'block';
-  document.getElementById('tpl-name').value = '';
-  document.getElementById('tpl-category').value = 'blog';
-  document.getElementById('tpl-system-prompt').value = '';
-  document.getElementById('tpl-user-prompt').value = '';
-  document.getElementById('tpl-version-badge').textContent = 'v1';
-  document.getElementById('tpl-stat-version').textContent = '1';
-  document.getElementById('tpl-stat-usage').textContent = '0';
-  document.getElementById('tpl-stat-uniqueness').textContent = '—';
-  document.getElementById('tpl-variables').innerHTML = '<span class="text-secondary">Нет переменных</span>';
-  document.getElementById('tpl-versions-section').style.display = 'none';
-  closeVersionViewer();
-}
-
-function saveCurrentTemplate() {
-  var data = {
-    name: document.getElementById('tpl-name').value.trim(),
-    category: document.getElementById('tpl-category').value,
-    system_prompt: document.getElementById('tpl-system-prompt').value,
-    user_prompt: document.getElementById('tpl-user-prompt').value
-  };
-  if (!data.name) { showToast('Укажите название шаблона', 'error'); return; }
-  if (state.selectedTemplateId) data.id = state.selectedTemplateId;
-
-  google.script.run
-    .withSuccessHandler(function(saved) {
-      showToast('Шаблон сохранен', 'success');
-      state.selectedTemplateId = saved.id;
-      google.script.run.withSuccessHandler(function(templates) {
-        state.templates = templates || [];
-        renderTemplateList();
-        selectTemplate(saved.id);
-      }).getTemplates();
-    })
-    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
-    .saveTemplate(data);
-}
-
-function deleteCurrentTemplate() {
-  if (!state.selectedTemplateId) return;
-  if (!confirm('Удалить шаблон?')) return;
-  google.script.run
-    .withSuccessHandler(function() {
-      showToast('Шаблон удален', 'success');
-      state.selectedTemplateId = null;
-      document.getElementById('template-editor-content').style.display = 'none';
-      document.getElementById('template-placeholder').style.display = 'block';
-      google.script.run.withSuccessHandler(function(templates) {
-        state.templates = templates || [];
-        renderTemplateList();
-      }).getTemplates();
-    })
-    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
-    .deleteTemplate(state.selectedTemplateId);
-}
-
-function duplicateTemplate() {
-  if (!state.selectedTemplateId) return;
-  var tpl = state.templates.find(function(t) { return t.id === state.selectedTemplateId; });
-  if (!tpl) return;
-  var copy = {
-    name: tpl.name + ' (копия)',
-    category: tpl.category,
-    system_prompt: tpl.system_prompt,
-    user_prompt: tpl.user_prompt
-  };
-  google.script.run
-    .withSuccessHandler(function(saved) {
-      showToast('Шаблон скопирован', 'success');
-      state.selectedTemplateId = saved.id;
-      google.script.run.withSuccessHandler(function(templates) {
-        state.templates = templates || [];
-        renderTemplateList();
-        selectTemplate(saved.id);
-      }).getTemplates();
-    })
-    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
-    .saveTemplate(copy);
-}
-
+function renderTemplateList(){var c=document.getElementById('template-list');if(!c)return;if(!state.templates.length){c.innerHTML='<div class="placeholder-message" style="height:100px"><p>Нет шаблонов</p></div>';return;}var cL={blog:'Блог',product_card:'Товары',category:'Категории',service:'Услуги',custom:'Произвольный',system_humanizer:'Системный'};var h='';state.templates.forEach(function(t){h+='<div class="template-item'+(t.id===state.selectedTemplateId?' active':'')+'" onclick="selectTemplate(\''+t.id+'\')"><div class="template-item-name">'+escapeHtml(t.name)+'</div><div class="template-item-meta"><span class="badge badge-sm">'+escapeHtml(cL[t.category]||t.category)+'</span> <span class="text-secondary">v'+(t.version||1)+'</span></div></div>';});c.innerHTML=h;}
+function filterTemplates(q){var items=document.querySelectorAll('.template-item');q=q.toLowerCase();for(var i=0;i<items.length;i++){items[i].style.display=items[i].querySelector('.template-item-name').textContent.toLowerCase().indexOf(q)!==-1?'':'none';}}
+function filterTemplatesByCategory(cat){var btns=document.querySelectorAll('#template-category-filters .tag-btn');for(var i=0;i<btns.length;i++){btns[i].classList.remove('active');if(btns[i].getAttribute('data-category')===cat)btns[i].classList.add('active');}if(cat==='all'){renderTemplateList();return;}var f=state.templates.filter(function(t){return t.category===cat;});var c=document.getElementById('template-list');var cL={blog:'Блог',product_card:'Товары',category:'Категории',service:'Услуги',custom:'Произвольный',system_humanizer:'Системный'};var h='';f.forEach(function(t){h+='<div class="template-item'+(t.id===state.selectedTemplateId?' active':'')+'" onclick="selectTemplate(\''+t.id+'\')"><div class="template-item-name">'+escapeHtml(t.name)+'</div><div class="template-item-meta"><span class="badge badge-sm">'+escapeHtml(cL[t.category]||t.category)+'</span> <span class="text-secondary">v'+(t.version||1)+'</span></div></div>';});c.innerHTML=h||'<div class="placeholder-message" style="height:100px"><p>Нет</p></div>';}
+function selectTemplate(tid){state.selectedTemplateId=tid;state.viewingVersionId=null;renderTemplateList();document.getElementById('template-placeholder').style.display='none';document.getElementById('template-editor-content').style.display='block';var t=state.templates.find(function(x){return x.id===tid;});if(!t)return;document.getElementById('tpl-name').value=t.name||'';document.getElementById('tpl-category').value=t.category||'blog';document.getElementById('tpl-system-prompt').value=t.system_prompt||'';document.getElementById('tpl-user-prompt').value=t.user_prompt||'';document.getElementById('tpl-version-badge').textContent='v'+(t.version||1);document.getElementById('tpl-stat-version').textContent=t.version||1;document.getElementById('tpl-stat-usage').textContent=t.usage_count||0;document.getElementById('tpl-stat-uniqueness').textContent=t.avg_uniqueness?t.avg_uniqueness+'%':'—';var vc=document.getElementById('tpl-variables');var vs=extractVariables(t.user_prompt||'');vc.innerHTML=vs.length?vs.map(function(v){return '<span class="variable-tag">{{'+escapeHtml(v)+'}}</span>';}).join(' '):'<span class="text-secondary">Нет переменных. Используйте {{имя}} в промпте.</span>';closeVersionViewer();loadTemplateVersions(tid);}
+function createNewTemplate(){state.selectedTemplateId=null;state.templateVersions=[];state.viewingVersionId=null;document.getElementById('template-placeholder').style.display='none';document.getElementById('template-editor-content').style.display='block';document.getElementById('tpl-name').value='';document.getElementById('tpl-category').value='blog';document.getElementById('tpl-system-prompt').value='';document.getElementById('tpl-user-prompt').value='';document.getElementById('tpl-version-badge').textContent='v1';document.getElementById('tpl-stat-version').textContent='1';document.getElementById('tpl-stat-usage').textContent='0';document.getElementById('tpl-stat-uniqueness').textContent='—';document.getElementById('tpl-variables').innerHTML='<span class="text-secondary">Нет переменных</span>';document.getElementById('tpl-versions-section').style.display='none';closeVersionViewer();}
+function saveCurrentTemplate(){var d={name:document.getElementById('tpl-name').value.trim(),category:document.getElementById('tpl-category').value,system_prompt:document.getElementById('tpl-system-prompt').value,user_prompt:document.getElementById('tpl-user-prompt').value};if(!d.name){showToast('Укажите название','error');return;}if(state.selectedTemplateId)d.id=state.selectedTemplateId;google.script.run.withSuccessHandler(function(s){showToast('Шаблон сохранён','success');state.selectedTemplateId=s.id;google.script.run.withSuccessHandler(function(t){state.templates=t||[];renderTemplateList();selectTemplate(s.id);}).getTemplates();}).withFailureHandler(function(e){showToast(e.message,'error');}).saveTemplate(d);}
+function deleteCurrentTemplate(){if(!state.selectedTemplateId)return;if(!confirm('Удалить?'))return;google.script.run.withSuccessHandler(function(){showToast('Удалён','success');state.selectedTemplateId=null;document.getElementById('template-editor-content').style.display='none';document.getElementById('template-placeholder').style.display='block';google.script.run.withSuccessHandler(function(t){state.templates=t||[];renderTemplateList();}).getTemplates();}).withFailureHandler(function(e){showToast(e.message,'error');}).deleteTemplate(state.selectedTemplateId);}
+function duplicateTemplate(){if(!state.selectedTemplateId)return;var t=state.templates.find(function(x){return x.id===state.selectedTemplateId;});if(!t)return;google.script.run.withSuccessHandler(function(s){showToast('Скопирован','success');google.script.run.withSuccessHandler(function(t){state.templates=t||[];renderTemplateList();selectTemplate(s.id);}).getTemplates();}).withFailureHandler(function(e){showToast(e.message,'error');}).saveTemplate({name:t.name+' (копия)',category:t.category,system_prompt:t.system_prompt,user_prompt:t.user_prompt});}
+function loadTemplateVersions(tid){google.script.run.withSuccessHandler(function(v){state.templateVersions=v||[];renderTemplateVersions();}).getTemplateVersions(tid);}
+function renderTemplateVersions(){var s=document.getElementById('tpl-versions-section'),tb=document.getElementById('tpl-versions-table');if(!tb||!s)return;var vs=state.templateVersions||[];var t=state.templates.find(function(x){return x.id===state.selectedTemplateId;});var all=[];if(t)all.push({id:'__current__',version:t.version||1,saved_at:null,usage_count:t.usage_count||0,avg_uniqueness:t.avg_uniqueness||0,isCurrent:true});vs.forEach(function(v){all.push({id:v.id,version:v.version,saved_at:v.saved_at,usage_count:v.usage_count||0,avg_uniqueness:v.avg_uniqueness||0,isCurrent:false});});if(all.length<=1){s.style.display='none';return;}s.style.display='block';var h='';all.forEach(function(r){var iv=state.viewingVersionId===r.id,ac=iv?' active':'',ec=iv?' expanded':'',cb=r.isCurrent?'<span class="version-badge-current">текущая</span>':'';if(r.isCurrent){h+='<tr class="version-row'+ac+'"><td><span class="version-expand-icon'+ec+'">&#9654;</span></td><td><strong>v'+r.version+'</strong>'+cb+'</td><td>—</td><td>'+r.usage_count+'</td><td>'+(r.avg_uniqueness?r.avg_uniqueness+'%':'—')+'</td><td></td></tr>';}else{h+='<tr class="version-row'+ac+'" onclick="viewVersion(\''+r.id+'\')"><td><span class="version-expand-icon'+ec+'">&#9654;</span></td><td>v'+r.version+'</td><td>'+formatDateTime(r.saved_at)+'</td><td>'+r.usage_count+'</td><td>'+(r.avg_uniqueness?r.avg_uniqueness+'%':'—')+'</td><td><button class="btn btn-sm" onclick="event.stopPropagation();viewVersion(\''+r.id+'\')">Просмотр</button></td></tr>';}});tb.innerHTML=h;}
+function viewVersion(vid){if(state.viewingVersionId===vid){closeVersionViewer();return;}var v=state.templateVersions.find(function(x){return x.id===vid;});if(!v)return;state.viewingVersionId=vid;document.getElementById('version-viewer-num').textContent='v'+v.version;document.getElementById('version-viewer-system').textContent=v.system_prompt||'(пусто)';document.getElementById('version-viewer-user').textContent=v.user_prompt||'(пусто)';document.getElementById('version-viewer-usage').textContent=v.usage_count||0;document.getElementById('version-viewer-uniqueness').textContent=v.avg_uniqueness?v.avg_uniqueness+'%':'—';document.getElementById('tpl-version-viewer').style.display='block';renderTemplateVersions();}
+function closeVersionViewer(){state.viewingVersionId=null;var v=document.getElementById('tpl-version-viewer');if(v)v.style.display='none';}
+function restoreVersion(){if(!state.viewingVersionId||!state.selectedTemplateId)return;if(!confirm('Восстановить?'))return;google.script.run.withSuccessHandler(function(s){showToast('Восстановлено','success');closeVersionViewer();google.script.run.withSuccessHandler(function(t){state.templates=t||[];renderTemplateList();selectTemplate(s.id);}).getTemplates();}).withFailureHandler(function(e){showToast(e.message,'error');}).restoreTemplateVersion(state.selectedTemplateId,state.viewingVersionId);}
 // ===========================================
-// ЭТАП 3.5: Версионность шаблонов
+// Экран задачи — загрузка, колонки, таблица данных
 // ===========================================
-
-function loadTemplateVersions(templateId) {
-  google.script.run.withSuccessHandler(function(versions) {
-    state.templateVersions = versions || [];
-    renderTemplateVersions();
-  }).getTemplateVersions(templateId);
-}
-
-function renderTemplateVersions() {
-  var section = document.getElementById('tpl-versions-section');
-  var tbody = document.getElementById('tpl-versions-table');
-  if (!tbody || !section) return;
-
-  var versions = state.templateVersions || [];
-  // Добавить текущую версию в начало списка для отображения
-  var tpl = state.templates.find(function(t) { return t.id === state.selectedTemplateId; });
-  var allRows = [];
-
-  if (tpl) {
-    allRows.push({
-      id: '__current__',
-      version: tpl.version || 1,
-      saved_at: null,
-      usage_count: tpl.usage_count || 0,
-      avg_uniqueness: tpl.avg_uniqueness || 0,
-      isCurrent: true
-    });
-  }
-
-  versions.forEach(function(v) {
-    allRows.push({
-      id: v.id,
-      version: v.version,
-      saved_at: v.saved_at,
-      usage_count: v.usage_count || 0,
-      avg_uniqueness: v.avg_uniqueness || 0,
-      isCurrent: false
-    });
-  });
-
-  if (allRows.length <= 1) {
-    // Только текущая версия, нет истории
-    section.style.display = 'none';
-    return;
-  }
-
-  section.style.display = 'block';
-  var html = '';
-
-  allRows.forEach(function(row) {
-    var isViewing = state.viewingVersionId === row.id;
-    var activeClass = isViewing ? ' active' : '';
-    var expandClass = isViewing ? ' expanded' : '';
-    var currentBadge = row.isCurrent ? '<span class="version-badge-current">текущая</span>' : '';
-
-    if (row.isCurrent) {
-      html += '<tr class="version-row' + activeClass + '">' +
-        '<td><span class="version-expand-icon' + expandClass + '">&#9654;</span></td>' +
-        '<td><strong>v' + row.version + '</strong>' + currentBadge + '</td>' +
-        '<td>—</td>' +
-        '<td>' + row.usage_count + '</td>' +
-        '<td>' + (row.avg_uniqueness ? row.avg_uniqueness + '%' : '—') + '</td>' +
-        '<td></td>' +
-      '</tr>';
-    } else {
-      html += '<tr class="version-row' + activeClass + '" onclick="viewVersion(\'' + row.id + '\')">' +
-        '<td><span class="version-expand-icon' + expandClass + '">&#9654;</span></td>' +
-        '<td>v' + row.version + '</td>' +
-        '<td>' + formatDateTime(row.saved_at) + '</td>' +
-        '<td>' + row.usage_count + '</td>' +
-        '<td>' + (row.avg_uniqueness ? row.avg_uniqueness + '%' : '—') + '</td>' +
-        '<td><button class="btn btn-sm" onclick="event.stopPropagation(); viewVersion(\'' + row.id + '\')">Просмотр</button></td>' +
-      '</tr>';
-    }
-  });
-
-  tbody.innerHTML = html;
-}
-
-function viewVersion(versionId) {
-  if (state.viewingVersionId === versionId) {
-    closeVersionViewer();
-    return;
-  }
-
-  var version = state.templateVersions.find(function(v) { return v.id === versionId; });
-  if (!version) return;
-
-  state.viewingVersionId = versionId;
-
-  document.getElementById('version-viewer-num').textContent = 'v' + version.version;
-  document.getElementById('version-viewer-system').textContent = version.system_prompt || '(пусто)';
-  document.getElementById('version-viewer-user').textContent = version.user_prompt || '(пусто)';
-  document.getElementById('version-viewer-usage').textContent = version.usage_count || 0;
-  document.getElementById('version-viewer-uniqueness').textContent = version.avg_uniqueness ? version.avg_uniqueness + '%' : '—';
-  document.getElementById('tpl-version-viewer').style.display = 'block';
-
-  // Обновить выделение строк
-  renderTemplateVersions();
-
-  // Прокрутить к просмотру
-  document.getElementById('tpl-version-viewer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-function closeVersionViewer() {
-  state.viewingVersionId = null;
-  var viewer = document.getElementById('tpl-version-viewer');
-  if (viewer) viewer.style.display = 'none';
-}
-
-function restoreVersion() {
-  if (!state.viewingVersionId || !state.selectedTemplateId) return;
-  if (!confirm('Восстановить эту версию? Текущее содержимое будет сохранено в истории.')) return;
-
-  google.script.run
-    .withSuccessHandler(function(saved) {
-      showToast('Версия восстановлена', 'success');
-      closeVersionViewer();
-      // Перезагрузить шаблоны
-      google.script.run.withSuccessHandler(function(templates) {
-        state.templates = templates || [];
-        renderTemplateList();
-        selectTemplate(saved.id);
-      }).getTemplates();
-    })
-    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
-    .restoreTemplateVersion(state.selectedTemplateId, state.viewingVersionId);
-}
-
-function formatDateTime(dateStr) {
-  if (!dateStr) return '—';
-  var d = new Date(dateStr);
-  var day = ('0' + d.getDate()).slice(-2);
-  var month = ('0' + (d.getMonth() + 1)).slice(-2);
-  var hours = ('0' + d.getHours()).slice(-2);
-  var mins = ('0' + d.getMinutes()).slice(-2);
-  return day + '.' + month + '.' + d.getFullYear() + ' ' + hours + ':' + mins;
-}
-
-// ===========================================
-// ЭТАП 4: Генерация — загрузка, таблица, запуск, симуляция, прогресс
-// ===========================================
-
-// --- Загрузка экрана генерации ---
-function loadGenerationScreen(projectId) {
-  google.script.run.withSuccessHandler(function(project) {
-    if (!project) { showToast('Проект не найден', 'error'); return; }
-    state.currentProject = project;
-
-    document.getElementById('gen-project-name').textContent = project.name;
-    document.getElementById('gen-breadcrumb-project').textContent = project.name;
-
-    // Загрузить имя клиента
+function loadTaskScreen(taskId) {
+  google.script.run.withSuccessHandler(function(task) {
+    if (!task) { showToast('Задача не найдена','error'); return; }
+    state.currentTask = task;
+    document.getElementById('task-name-input').value = task.name || '';
+    document.getElementById('task-breadcrumb-name').textContent = task.name || '';
+    var sL={draft:'Черновик',running:'В процессе',completed:'Завершена',failed:'Ошибка',stopped:'Остановлена'};
+    var sC={draft:'badge-neutral',running:'badge-warning',completed:'badge-success',failed:'badge-danger',stopped:'badge-danger'};
+    var badge = document.getElementById('task-status-badge');
+    badge.textContent = sL[task.status]||task.status;
+    badge.className = 'badge '+(sC[task.status]||'');
+    // Клиент
     google.script.run.withSuccessHandler(function(clients) {
-      var client = (clients || []).find(function(c) { return c.id === project.client_id; });
-      document.getElementById('gen-breadcrumb-client').textContent = client ? client.name : '';
+      var cl = (clients||[]).find(function(c){return c.id===task.client_id;});
+      document.getElementById('task-breadcrumb-client').textContent = cl?cl.name:'';
     }).getClients();
-
-    // Инициализировать пустые строки данных если нет
-    if (!state.genDataRows.length) {
-      state.genDataRows = [
-        { url: '', keywords: '', topic: '', brief: '' },
-        { url: '', keywords: '', topic: '', brief: '' },
-        { url: '', keywords: '', topic: '', brief: '' }
-      ];
-    }
-    renderDataTable();
+    renderColumnBar();
+    renderVariableHints();
+    renderDynamicDataTable();
     populateTemplateSelect();
+    // Восстановить настройки
+    if (task.template_id) { document.getElementById('gen-template-select').value = task.template_id; onTemplateChange(); }
+    if (task.llm_provider && task.llm_model) { document.getElementById('gen-llm-select').value = task.llm_provider+'|'+task.llm_model; }
+    if (task.options) {
+      document.getElementById('opt-humanize').checked = !!task.options.humanize;
+      document.getElementById('opt-uniqueness').checked = !!task.options.uniqueness;
+      document.getElementById('opt-factcheck').checked = !!task.options.factcheck;
+      document.getElementById('opt-ai-detector').checked = !!task.options.ai_detector;
+    }
+    if (task.drive_folder) document.getElementById('gen-drive-folder').value = task.drive_folder;
     updateCostEstimate();
-    switchGenTab('data');
-  }).getProject(projectId);
+    switchTaskTab('data');
+    // Загрузить тексты если есть
+    if (task.status !== 'draft') {
+      google.script.run.withSuccessHandler(function(texts) {
+        state.texts = texts || [];
+        if (state.texts.length) { renderProgressTab(); renderResultsTab(); }
+      }).getGeneratedTexts(taskId);
+    }
+  }).getTask(taskId);
 }
 
-// --- Таблица данных для генерации ---
-function renderDataTable() {
-  var tbody = document.getElementById('gen-data-table');
-  if (!tbody) return;
-  var html = '';
-  state.genDataRows.forEach(function(row, i) {
-    html += '<tr>' +
-      '<td>' + (i + 1) + '</td>' +
-      '<td><input type="text" class="input-field input-sm" value="' + escapeHtml(row.url) + '" onchange="updateDataRow(' + i + ', \'url\', this.value)"></td>' +
-      '<td><input type="text" class="input-field input-sm" value="' + escapeHtml(row.keywords) + '" onchange="updateDataRow(' + i + ', \'keywords\', this.value)"></td>' +
-      '<td><input type="text" class="input-field input-sm" value="' + escapeHtml(row.topic) + '" onchange="updateDataRow(' + i + ', \'topic\', this.value)"></td>' +
-      '<td><input type="text" class="input-field input-sm" value="' + escapeHtml(row.brief) + '" onchange="updateDataRow(' + i + ', \'brief\', this.value)"></td>' +
-      '<td><button class="btn btn-sm btn-danger" onclick="removeDataRow(' + i + ')">x</button></td>' +
-    '</tr>';
+function saveTaskName() {
+  if (!state.currentTask) return;
+  state.currentTask.name = document.getElementById('task-name-input').value.trim();
+  document.getElementById('task-breadcrumb-name').textContent = state.currentTask.name;
+  autoSaveTask();
+}
+
+function autoSaveTask() {
+  if (!state.currentTask) return;
+  google.script.run.withFailureHandler(function(e){showToast(e.message,'error');}).saveTask(state.currentTask);
+}
+
+// --- Вкладки задачи ---
+function switchTaskTab(tab) {
+  var tabs = document.querySelectorAll('#screen-task .tab');
+  for (var i=0;i<tabs.length;i++){tabs[i].classList.remove('active');if(tabs[i].getAttribute('data-tab')===tab)tabs[i].classList.add('active');}
+  var contents = document.querySelectorAll('#screen-task .tab-content');
+  for (var j=0;j<contents.length;j++) contents[j].style.display='none';
+  var target = document.getElementById('task-tab-'+tab);
+  if (target) target.style.display='block';
+}
+
+// --- Бар колонок ---
+function renderColumnBar() {
+  var bar = document.getElementById('column-bar'); if (!bar || !state.currentTask) return;
+  var cols = state.currentTask.columns || [];
+  var h = '';
+  cols.forEach(function(col) {
+    var typeIcon = col.type === 'long' ? ' (текст)' : '';
+    h += '<span class="column-chip" title="Переменная: {{'+col.key+'}}">' +
+      '<span class="column-chip-label" ondblclick="renameColumnPrompt(\''+col.key+'\')">'+escapeHtml(col.label)+typeIcon+'</span>' +
+      '<button class="column-chip-delete" onclick="removeColumn(\''+col.key+'\')">&times;</button>' +
+    '</span>';
   });
-  tbody.innerHTML = html;
+  h += '<button class="column-add-btn" onclick="openModal(\'modal-addcolumn\')">+ Колонка</button>';
+  bar.innerHTML = h;
 }
 
-function updateDataRow(index, field, value) {
-  if (state.genDataRows[index]) state.genDataRows[index][field] = value;
-  updateCostEstimate();
+function renderVariableHints() {
+  var el = document.getElementById('variable-hints'); if (!el || !state.currentTask) return;
+  var cols = state.currentTask.columns || [];
+  if (!cols.length) { el.innerHTML = ''; return; }
+  var h = '<span class="text-secondary" style="font-size:11px;margin-right:6px;">Переменные для промпта:</span>';
+  cols.forEach(function(col) {
+    h += '<span class="variable-tag" onclick="copyVariable(\''+col.key+'\')" title="Нажмите, чтобы скопировать">{{'+escapeHtml(col.key)+'}}</span> ';
+  });
+  el.innerHTML = h;
+}
+
+function copyVariable(key) {
+  var text = '{{'+key+'}}';
+  if (navigator.clipboard) { navigator.clipboard.writeText(text); }
+  showToast('Скопировано: '+text, 'info');
+}
+
+// --- Добавление/удаление колонок ---
+function confirmAddColumn() {
+  var label = document.getElementById('new-col-label').value.trim();
+  var type = document.getElementById('new-col-type').value;
+  if (!label) { showToast('Укажите название','error'); return; }
+  var key = generateColumnKey(label);
+  // Проверить уникальность ключа
+  var exists = (state.currentTask.columns||[]).some(function(c){return c.key===key;});
+  if (exists) key = key + '_' + Date.now();
+  state.currentTask.columns.push({ key: key, label: label, type: type });
+  // Добавить в каждую строку
+  (state.currentTask.rows||[]).forEach(function(row){ row[key] = ''; });
+  closeModal('modal-addcolumn');
+  document.getElementById('new-col-label').value = '';
+  renderColumnBar();
+  renderVariableHints();
+  renderDynamicDataTable();
+  autoSaveTask();
+}
+
+function removeColumn(key) {
+  if (!confirm('Удалить колонку?')) return;
+  state.currentTask.columns = state.currentTask.columns.filter(function(c){return c.key!==key;});
+  (state.currentTask.rows||[]).forEach(function(row){ delete row[key]; });
+  renderColumnBar();
+  renderVariableHints();
+  renderDynamicDataTable();
+  autoSaveTask();
+}
+
+function renameColumnPrompt(key) {
+  var col = state.currentTask.columns.find(function(c){return c.key===key;});
+  if (!col) return;
+  var newLabel = prompt('Новое название колонки:', col.label);
+  if (newLabel && newLabel.trim()) {
+    col.label = newLabel.trim();
+    renderColumnBar();
+    autoSaveTask();
+  }
+}
+
+// --- Динамическая таблица данных ---
+function renderDynamicDataTable() {
+  if (!state.currentTask) return;
+  var cols = state.currentTask.columns || [];
+  var rows = state.currentTask.rows || [];
+  // Заголовки
+  var thead = document.getElementById('task-data-thead');
+  var thHtml = '<tr><th style="width:40px">#</th>';
+  cols.forEach(function(col) { thHtml += '<th>'+escapeHtml(col.label)+'</th>'; });
+  thHtml += '<th style="width:40px"></th></tr>';
+  thead.innerHTML = thHtml;
+  // Строки
+  var tbody = document.getElementById('task-data-table');
+  var tbHtml = '';
+  rows.forEach(function(row, i) {
+    tbHtml += '<tr><td>'+(i+1)+'</td>';
+    cols.forEach(function(col) {
+      var val = row[col.key] || '';
+      if (col.type === 'long') {
+        var preview = val.length > 50 ? escapeHtml(val.substring(0,50))+'…' : escapeHtml(val);
+        tbHtml += '<td class="cell-long" onclick="openLongTextEditor('+i+',\''+col.key+'\')" title="Нажмите для редактирования">' +
+          '<div class="cell-long-preview">'+(preview||'<span class="text-secondary">Нажмите...</span>')+'</div></td>';
+      } else {
+        tbHtml += '<td><input type="text" class="input-field input-sm" value="'+escapeHtml(val)+'" onchange="updateDataRow('+i+',\''+col.key+'\',this.value)"></td>';
+      }
+    });
+    tbHtml += '<td><button class="btn btn-sm btn-danger" onclick="removeDataRow('+i+')">×</button></td></tr>';
+  });
+  tbody.innerHTML = tbHtml;
+}
+
+function updateDataRow(index, key, value) {
+  if (state.currentTask && state.currentTask.rows[index]) {
+    state.currentTask.rows[index][key] = value;
+    autoSaveTask();
+    updateCostEstimate();
+  }
 }
 
 function addDataRow() {
-  state.genDataRows.push({ url: '', keywords: '', topic: '', brief: '' });
-  renderDataTable();
+  if (!state.currentTask) return;
+  var row = {};
+  (state.currentTask.columns||[]).forEach(function(col){ row[col.key] = ''; });
+  state.currentTask.rows.push(row);
+  renderDynamicDataTable();
+  autoSaveTask();
   updateCostEstimate();
 }
 
 function removeDataRow(index) {
-  state.genDataRows.splice(index, 1);
-  renderDataTable();
+  if (!state.currentTask) return;
+  state.currentTask.rows.splice(index, 1);
+  renderDynamicDataTable();
+  autoSaveTask();
   updateCostEstimate();
 }
 
-// --- Вкладки генерации ---
-function switchGenTab(tab) {
-  var tabs = document.querySelectorAll('#screen-generation .tab');
-  for (var i = 0; i < tabs.length; i++) {
-    tabs[i].classList.remove('active');
-    if (tabs[i].getAttribute('data-tab') === tab) tabs[i].classList.add('active');
-  }
-  var contents = document.querySelectorAll('#screen-generation .tab-content');
-  for (var j = 0; j < contents.length; j++) {
-    contents[j].style.display = 'none';
-  }
-  var target = document.getElementById('gen-tab-' + tab);
-  if (target) target.style.display = 'block';
+// --- Длинный текст — модалка ---
+function openLongTextEditor(rowIndex, colKey) {
+  state.longTextEdit = { rowIndex: rowIndex, colKey: colKey };
+  var col = (state.currentTask.columns||[]).find(function(c){return c.key===colKey;});
+  document.getElementById('longtext-title').textContent = col ? col.label : 'Редактирование';
+  document.getElementById('longtext-row-info').textContent = 'Строка '+(rowIndex+1)+' из '+state.currentTask.rows.length;
+  document.getElementById('longtext-textarea').value = state.currentTask.rows[rowIndex][colKey] || '';
+  openModal('modal-longtext');
+  setTimeout(function(){ document.getElementById('longtext-textarea').focus(); }, 100);
 }
 
-// --- Выбор шаблона ---
+function saveLongText() {
+  var ri = state.longTextEdit.rowIndex, ck = state.longTextEdit.colKey;
+  if (ri >= 0 && state.currentTask && state.currentTask.rows[ri]) {
+    state.currentTask.rows[ri][ck] = document.getElementById('longtext-textarea').value;
+    renderDynamicDataTable();
+    autoSaveTask();
+  }
+  closeModal('modal-longtext');
+}
+function closeLongTextModal() { closeModal('modal-longtext'); }
+
+// --- Выбор шаблона и версии ---
 function populateTemplateSelect() {
-  var select = document.getElementById('gen-template-select');
-  if (!select) return;
-  var html = '<option value="">— Выберите шаблон —</option>';
-  state.templates.forEach(function(t) {
-    html += '<option value="' + t.id + '">' + escapeHtml(t.name) + '</option>';
-  });
-  select.innerHTML = html;
+  var sel = document.getElementById('gen-template-select'); if (!sel) return;
+  var h = '<option value="">— Выберите шаблон —</option>';
+  state.templates.forEach(function(t){ h += '<option value="'+t.id+'">'+escapeHtml(t.name)+'</option>'; });
+  sel.innerHTML = h;
 }
 
 function onTemplateChange() {
-  var select = document.getElementById('gen-template-select');
-  var versionGroup = document.getElementById('gen-version-group');
-  var versionSelect = document.getElementById('gen-version-select');
-  var preview = document.getElementById('gen-template-preview');
-  var tpl = state.templates.find(function(t) { return t.id === select.value; });
-
+  var sel = document.getElementById('gen-template-select');
+  var vg = document.getElementById('gen-version-group');
+  var vs = document.getElementById('gen-version-select');
+  var pr = document.getElementById('gen-template-preview');
+  var tpl = state.templates.find(function(t){return t.id===sel.value;});
   if (tpl) {
-    // Показать версию и загрузить список версий
-    versionGroup.style.display = 'block';
-    versionSelect.innerHTML = '<option value="current">v' + (tpl.version || 1) + ' (текущая)</option>';
-
-    // Показать превью текущей версии
-    var text = (tpl.user_prompt || '').substring(0, 200);
-    preview.textContent = text + (tpl.user_prompt && tpl.user_prompt.length > 200 ? '...' : '');
-    preview.style.display = 'block';
-
-    // Загрузить историю версий
-    google.script.run.withSuccessHandler(function(versions) {
-      state.genTemplateVersions = versions || [];
-      versions.forEach(function(v) {
-        var opt = document.createElement('option');
-        opt.value = v.id;
-        opt.textContent = 'v' + v.version + ' (' + formatDateTime(v.saved_at) + ')';
-        versionSelect.appendChild(opt);
-      });
+    vg.style.display = 'block';
+    vs.innerHTML = '<option value="current">v'+(tpl.version||1)+' (текущая)</option>';
+    var txt = (tpl.user_prompt||'').substring(0,200);
+    pr.textContent = txt + (tpl.user_prompt&&tpl.user_prompt.length>200?'...':'');
+    pr.style.display = 'block';
+    google.script.run.withSuccessHandler(function(versions){
+      state.genTemplateVersions=versions||[];
+      versions.forEach(function(v){ var o=document.createElement('option'); o.value=v.id; o.textContent='v'+v.version+' ('+formatDateTime(v.saved_at)+')'; vs.appendChild(o); });
     }).getTemplateVersions(tpl.id);
-  } else {
-    versionGroup.style.display = 'none';
-    preview.style.display = 'none';
-    state.genTemplateVersions = [];
-  }
+  } else { vg.style.display='none'; pr.style.display='none'; state.genTemplateVersions=[]; }
 }
 
 function onVersionChange() {
-  var versionSelect = document.getElementById('gen-version-select');
-  var preview = document.getElementById('gen-template-preview');
-  var templateSelect = document.getElementById('gen-template-select');
-  var val = versionSelect.value;
-
-  if (val === 'current') {
-    var tpl = state.templates.find(function(t) { return t.id === templateSelect.value; });
-    if (tpl) {
-      var text = (tpl.user_prompt || '').substring(0, 200);
-      preview.textContent = text + (tpl.user_prompt && tpl.user_prompt.length > 200 ? '...' : '');
-      preview.style.display = 'block';
-    }
+  var vs=document.getElementById('gen-version-select'), pr=document.getElementById('gen-template-preview'), ts=document.getElementById('gen-template-select');
+  if (vs.value==='current') {
+    var tpl=state.templates.find(function(t){return t.id===ts.value;});
+    if(tpl){pr.textContent=(tpl.user_prompt||'').substring(0,200);pr.style.display='block';}
   } else {
-    var version = (state.genTemplateVersions || []).find(function(v) { return v.id === val; });
-    if (version) {
-      var text = (version.user_prompt || '').substring(0, 200);
-      preview.textContent = text + (version.user_prompt && version.user_prompt.length > 200 ? '...' : '');
-      preview.style.display = 'block';
-    }
+    var v=(state.genTemplateVersions||[]).find(function(x){return x.id===vs.value;});
+    if(v){pr.textContent=(v.user_prompt||'').substring(0,200);pr.style.display='block';}
   }
 }
 
-// --- Оценка стоимости ---
+// --- Стоимость ---
 function updateCostEstimate() {
-  var select = document.getElementById('gen-llm-select');
-  var costEl = document.getElementById('cost-text');
-  if (!select || !costEl) return;
-
-  var model = select.options[select.selectedIndex].text;
-  var rowCount = state.genDataRows.filter(function(r) {
-    return r.url || r.keywords || r.topic;
-  }).length;
-
-  var prices = { 'ChatGPT (GPT-4o)': 0.03, 'ChatGPT (GPT-4o-mini)': 0.005, 'Claude Sonnet': 0.015, 'Claude Opus': 0.075, 'Perplexity Online': 0.02 };
-  var price = prices[model] || 0.02;
-  var total = (rowCount * price).toFixed(2);
-  costEl.textContent = rowCount + ' текстов x ' + model + ' ~ $' + total;
+  var sel=document.getElementById('gen-llm-select'), ce=document.getElementById('cost-text');
+  if (!sel||!ce) return;
+  var model=sel.options[sel.selectedIndex].text;
+  var rowCount=state.currentTask?(state.currentTask.rows||[]).filter(function(r){for(var k in r){if(r[k])return true;}return false;}).length:0;
+  var prices={'ChatGPT (GPT-4o)':0.03,'ChatGPT (GPT-4o-mini)':0.005,'Claude Sonnet':0.015,'Claude Opus':0.075,'Perplexity Online':0.02};
+  var price=prices[model]||0.02;
+  ce.textContent=rowCount+' текстов × '+model+' ≈ $'+(rowCount*price).toFixed(2);
 }
 
-// --- Загрузка из Sheets (заглушка) ---
 function loadFromSheets() {
-  showToast('Загрузка из Google Sheets будет доступна в полной версии. Заполняю демо-данными.', 'info');
-  state.genDataRows = [
-    { url: '/blog/seo-tips', keywords: 'SEO советы, продвижение', topic: '10 советов по SEO для начинающих', brief: 'Статья для блога, 2000 слов' },
-    { url: '/blog/content-marketing', keywords: 'контент-маркетинг, стратегия', topic: 'Контент-маркетинг в 2025 году', brief: 'Обзорная статья, 2500 слов' },
-    { url: '/blog/link-building', keywords: 'линкбилдинг, обратные ссылки', topic: 'Как строить ссылочный профиль', brief: 'Гайд, 3000 слов' },
-    { url: '/services/seo-audit', keywords: 'SEO аудит, анализ сайта', topic: 'SEO-аудит вашего сайта', brief: 'Страница услуги, 1500 слов' },
-    { url: '/services/copywriting', keywords: 'копирайтинг, тексты для сайта', topic: 'Профессиональный копирайтинг', brief: 'Страница услуги, 1500 слов' }
-  ];
-  renderDataTable();
+  showToast('Загрузка из Google Sheets будет в полной версии. Заполняю демо.','info');
+  if (!state.currentTask) return;
+  var cols = state.currentTask.columns;
+  var rows = [];
+  for (var i=0;i<3;i++) { var row={}; cols.forEach(function(c){row[c.key]='Пример '+(i+1);}); rows.push(row); }
+  state.currentTask.rows = rows;
+  renderDynamicDataTable();
+  autoSaveTask();
   updateCostEstimate();
 }
 
-// --- Запуск генерации (симуляция) ---
+// --- Запуск генерации ---
 function startGeneration() {
-  var filledRows = state.genDataRows.filter(function(r) { return r.topic; });
-  if (!filledRows.length) { showToast('Добавьте хотя бы одну строку с темой', 'error'); return; }
-
-  var templateId = document.getElementById('gen-template-select').value;
-  var versionSelect = document.getElementById('gen-version-select');
-  var selectedVersion = versionSelect ? versionSelect.value : 'current';
-  var llmValue = document.getElementById('gen-llm-select').value;
-  var parts = llmValue.split('|');
-
-  var genData = {
-    project_id: state.currentProject ? state.currentProject.id : '',
-    template_id: templateId,
-    template_version_id: selectedVersion !== 'current' ? selectedVersion : null,
-    llm_provider: parts[0],
-    llm_model: parts[1],
-    rows: filledRows,
-    options: {
-      humanize: document.getElementById('opt-humanize').checked,
-      uniqueness: document.getElementById('opt-uniqueness').checked,
-      factcheck: document.getElementById('opt-factcheck').checked,
-      ai_detector: document.getElementById('opt-ai-detector').checked,
-      drive_folder: document.getElementById('gen-drive-folder').value
-    }
+  if (!state.currentTask) return;
+  var filledRows = (state.currentTask.rows||[]).filter(function(r){for(var k in r){if(r[k])return true;}return false;});
+  if (!filledRows.length) { showToast('Добавьте данные','error'); return; }
+  // Сохранить настройки в задачу
+  var tSel = document.getElementById('gen-template-select');
+  var lSel = document.getElementById('gen-llm-select');
+  var parts = lSel.value.split('|');
+  state.currentTask.template_id = tSel.value;
+  var vSel = document.getElementById('gen-version-select');
+  state.currentTask.template_version_id = (vSel&&vSel.value!=='current') ? vSel.value : null;
+  state.currentTask.llm_provider = parts[0];
+  state.currentTask.llm_model = parts[1];
+  state.currentTask.options = {
+    humanize: document.getElementById('opt-humanize').checked,
+    uniqueness: document.getElementById('opt-uniqueness').checked,
+    factcheck: document.getElementById('opt-factcheck').checked,
+    ai_detector: document.getElementById('opt-ai-detector').checked
   };
+  state.currentTask.drive_folder = document.getElementById('gen-drive-folder').value;
+  autoSaveTask();
 
-  showToast('Запуск генерации...', 'info');
-  document.getElementById('gen-stop-btn').style.display = 'inline-block';
+  showToast('Запуск генерации...','info');
+  document.getElementById('task-stop-btn').style.display = 'inline-block';
 
-  google.script.run
-    .withSuccessHandler(function(result) {
-      state.currentGeneration = result.generation;
-      state.texts = result.texts;
-      showToast('Генерация запущена!', 'success');
-      switchGenTab('progress');
-      simulateGeneration();
-    })
-    .withFailureHandler(function(e) { showToast(e.message, 'error'); })
-    .createGeneration(genData);
+  google.script.run.withSuccessHandler(function(result) {
+    state.currentTask = result.task;
+    state.texts = result.texts;
+    showToast('Генерация запущена!','success');
+    switchTaskTab('progress');
+    simulateGeneration();
+  }).withFailureHandler(function(e){showToast(e.message,'error');}).startTask(state.currentTask.id);
 }
 
-// --- Симуляция генерации ---
+// --- Симуляция ---
 function simulateGeneration() {
-  if (!state.currentGeneration || !state.texts.length) return;
-
-  var pendingTexts = state.texts.filter(function(t) { return t.status === 'pending'; });
-  if (!pendingTexts.length) {
-    finishGeneration();
-    return;
-  }
-
-  // Обработать следующий текст
-  var next = pendingTexts[0];
+  if (!state.currentTask || !state.texts.length) return;
+  var pending = state.texts.filter(function(t){return t.status==='pending';});
+  if (!pending.length) { finishGeneration(); return; }
+  var next = pending[0];
   next.status = 'processing';
   renderProgressTab();
-
   state.genSimulationTimer = setTimeout(function() {
-    // Симулировать результат (80% успех, 20% ошибка)
-    var success = Math.random() > 0.2;
-    if (success) {
-      next.status = 'completed';
-      next.uniqueness_score = Math.floor(Math.random() * 20 + 80);
-      next.ai_score = Math.floor(Math.random() * 30 + 5);
-      next.gdoc_url = '#doc-' + next.id;
-      next.content = generateFakeContent(next.source_data ? next.source_data.topic : 'Текст', null);
-      next.comment = '';
-      next.regeneration_count = 0;
-      state.currentGeneration.completed_texts++;
+    if (Math.random()>0.2) {
+      next.status='completed'; next.uniqueness_score=Math.floor(Math.random()*20+80);
+      next.ai_score=Math.floor(Math.random()*30+5); next.gdoc_url='#doc-'+next.id;
+      next.content=generateFakeContent(next.source_data); next.comment=''; next.regeneration_count=0;
+      state.currentTask.completed_texts++;
     } else {
-      next.status = 'failed';
-      next.error_message = 'API timeout (симуляция)';
-      state.currentGeneration.failed_texts++;
+      next.status='failed'; next.error_message='API timeout (симуляция)';
+      state.currentTask.failed_texts++;
     }
-
     renderProgressTab();
     simulateGeneration();
-  }, 1500 + Math.random() * 2000);
+  }, 1500+Math.random()*2000);
 }
-
 function stopGeneration() {
-  if (state.genSimulationTimer) {
-    clearTimeout(state.genSimulationTimer);
-    state.genSimulationTimer = null;
-  }
-  if (state.currentGeneration) {
-    state.currentGeneration.status = 'stopped';
-  }
-  document.getElementById('gen-stop-btn').style.display = 'none';
-  showToast('Генерация остановлена', 'info');
-  renderProgressTab();
+  if(state.genSimulationTimer){clearTimeout(state.genSimulationTimer);state.genSimulationTimer=null;}
+  if(state.currentTask)state.currentTask.status='stopped';
+  document.getElementById('task-stop-btn').style.display='none';
+  showToast('Остановлена','info'); renderProgressTab();
 }
-
 function finishGeneration() {
-  if (state.currentGeneration) {
-    state.currentGeneration.status = 'completed';
-    state.currentGeneration.completed_at = new Date().toISOString();
-  }
-  document.getElementById('gen-stop-btn').style.display = 'none';
-  showToast('Генерация завершена!', 'success');
-  renderProgressTab();
-  renderResultsTab();
+  if(state.currentTask){state.currentTask.status='completed';state.currentTask.completed_at=new Date().toISOString();}
+  document.getElementById('task-stop-btn').style.display='none';
+  showToast('Генерация завершена!','success');
+  renderProgressTab(); renderResultsTab();
 }
 
-// --- Рендер вкладки прогресса ---
+function generateFakeContent(srcData) {
+  var topic = '';
+  if (srcData) { for (var k in srcData) { if (srcData[k] && srcData[k].length > 3) { topic = srcData[k]; break; } } }
+  topic = topic || 'Текст';
+  return '<h1>'+escapeHtml(topic)+'</h1>\n<p>В данной статье рассмотрим ключевые аспекты темы «'+escapeHtml(topic)+'».</p>\n<h2>Основные критерии</h2>\n<p>Современный рынок предлагает множество решений. Рассмотрим каждый подробнее.</p>\n<h2>Заключение</h2>\n<p>Используйте рекомендации из этой статьи для оптимального выбора.</p>';
+}
+
+// --- Рендер прогресса ---
 function renderProgressTab() {
-  if (!state.currentGeneration || !state.texts.length) return;
-
-  var total = state.texts.length;
-  var completed = state.texts.filter(function(t) { return t.status === 'completed'; }).length;
-  var processing = state.texts.filter(function(t) { return t.status === 'processing'; }).length;
-  var pending = state.texts.filter(function(t) { return t.status === 'pending'; }).length;
-  var pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-  document.getElementById('progress-text').textContent = completed + ' из ' + total;
-  document.getElementById('progress-bar-fill').style.width = pct + '%';
-  document.getElementById('stat-completed').textContent = completed;
-  document.getElementById('stat-processing').textContent = processing;
-  document.getElementById('stat-pending').textContent = pending;
-
-  // Средняя уникальность
-  var withScore = state.texts.filter(function(t) { return t.uniqueness_score != null; });
-  if (withScore.length) {
-    var avg = Math.round(withScore.reduce(function(s, t) { return s + t.uniqueness_score; }, 0) / withScore.length);
-    document.getElementById('stat-uniqueness').textContent = avg + '%';
-  } else {
-    document.getElementById('stat-uniqueness').textContent = '—';
-  }
-
-  // Таблица текстов
-  var tbody = document.getElementById('progress-texts-table');
-  var statusLabels = { pending: 'Ожидает', processing: 'Обработка...', completed: 'Готово', failed: 'Ошибка' };
-  var statusClasses = { pending: '', processing: 'badge-warning', completed: 'badge-success', failed: 'badge-danger' };
-  var html = '';
-  state.texts.forEach(function(t, i) {
-    html += '<tr>' +
-      '<td>' + (i + 1) + '</td>' +
-      '<td>' + escapeHtml(t.source_data ? t.source_data.topic : '') + '</td>' +
-      '<td><span class="badge ' + (statusClasses[t.status] || '') + '">' + (statusLabels[t.status] || t.status) + '</span></td>' +
-      '<td>' + (t.uniqueness_score != null ? t.uniqueness_score + '%' : '—') + '</td>' +
-      '<td>' + (t.gdoc_url ? '<a href="' + t.gdoc_url + '" target="_blank">Открыть</a>' : '—') + '</td>' +
-    '</tr>';
+  if (!state.currentTask||!state.texts.length) return;
+  var total=state.texts.length, completed=state.texts.filter(function(t){return t.status==='completed';}).length;
+  var processing=state.texts.filter(function(t){return t.status==='processing';}).length;
+  var pending=state.texts.filter(function(t){return t.status==='pending';}).length;
+  var pct=total>0?Math.round((completed/total)*100):0;
+  document.getElementById('progress-text').textContent=completed+' из '+total;
+  document.getElementById('progress-bar-fill').style.width=pct+'%';
+  document.getElementById('stat-completed').textContent=completed;
+  document.getElementById('stat-processing').textContent=processing;
+  document.getElementById('stat-pending').textContent=pending;
+  var ws=state.texts.filter(function(t){return t.uniqueness_score!=null;});
+  document.getElementById('stat-uniqueness').textContent=ws.length?Math.round(ws.reduce(function(s,t){return s+t.uniqueness_score;},0)/ws.length)+'%':'—';
+  var tb=document.getElementById('progress-texts-table');
+  var sL={pending:'Ожидает',processing:'Обработка...',completed:'Готово',failed:'Ошибка'};
+  var sC={pending:'',processing:'badge-warning',completed:'badge-success',failed:'badge-danger'};
+  var h='';
+  state.texts.forEach(function(t,i){
+    var label = getRowLabel(t.source_data);
+    h+='<tr><td>'+(i+1)+'</td><td>'+escapeHtml(label)+'</td><td><span class="badge '+(sC[t.status]||'')+'">'+(sL[t.status]||t.status)+'</span></td><td>'+(t.uniqueness_score!=null?t.uniqueness_score+'%':'—')+'</td><td>'+(t.gdoc_url?'<a href="'+t.gdoc_url+'" target="_blank">Открыть</a>':'—')+'</td></tr>';
   });
-  tbody.innerHTML = html;
+  tb.innerHTML=h;
 }
 
-// --- Рендер вкладки результатов ---
+function getRowLabel(srcData) {
+  if (!srcData) return '—';
+  for (var k in srcData) { if (srcData[k] && srcData[k].length > 2) return srcData[k]; }
+  return '—';
+}
+
+// --- Рендер результатов ---
 function renderResultsTab() {
-  if (!state.currentGeneration) return;
-
-  var completed = state.texts.filter(function(t) { return t.status === 'completed'; }).length;
-  var failed = state.texts.filter(function(t) { return t.status === 'failed'; }).length;
-
-  document.getElementById('results-not-ready').style.display = 'none';
-  document.getElementById('results-content').style.display = 'block';
-  document.getElementById('res-total').textContent = state.texts.length;
-  document.getElementById('res-completed').textContent = completed;
-  document.getElementById('res-failed').textContent = failed;
-
-  var withScore = state.texts.filter(function(t) { return t.uniqueness_score != null; });
-  if (withScore.length) {
-    var avg = Math.round(withScore.reduce(function(s, t) { return s + t.uniqueness_score; }, 0) / withScore.length);
-    document.getElementById('res-uniqueness').textContent = avg + '%';
-  }
-
-  var tbody = document.getElementById('results-texts-table');
-  var statusLabels = { completed: 'Готово', failed: 'Ошибка', pending: 'Ожидает', processing: 'Обработка...' };
-  var statusClasses = { completed: 'badge-success', failed: 'badge-danger', pending: '', processing: 'badge-warning' };
-  var html = '';
-  state.texts.forEach(function(t, i) {
-    var isExpanded = state.expandedTextId === t.id;
-    var expandClass = isExpanded ? ' expanded' : '';
-    var regenBadge = t.regeneration_count ? '<span class="regeneration-badge">x' + t.regeneration_count + '</span>' : '';
-    var commentIndicator = t.comment ? '<span class="result-comment-saved" title="Есть комментарий"><span class="comment-indicator"></span></span>' : '';
-
-    // Основная строка
-    html += '<tr class="result-row" onclick="toggleTextPreview(\'' + t.id + '\')">' +
-      '<td><span class="result-expand-icon' + expandClass + '">&#9654;</span></td>' +
-      '<td>' + (i + 1) + '</td>' +
-      '<td>' + escapeHtml(t.source_data ? t.source_data.topic : '') + regenBadge + commentIndicator + '</td>' +
-      '<td><span class="badge ' + (statusClasses[t.status] || '') + '">' + (statusLabels[t.status] || t.status) + '</span></td>' +
-      '<td>' + (t.uniqueness_score != null ? t.uniqueness_score + '%' : '—') + '</td>' +
-      '<td>' + (t.ai_score != null ? t.ai_score + '%' : '—') + '</td>' +
-      '<td>' + (t.gdoc_url ? '<a href="' + t.gdoc_url + '" target="_blank" onclick="event.stopPropagation();">Открыть</a>' : '—') + '</td>' +
-      '<td><button class="btn btn-sm btn-regenerate" onclick="event.stopPropagation(); regenerateText(\'' + t.id + '\')">Перегенерировать</button></td>' +
-    '</tr>';
-
-    // Раскрывающаяся детализация
-    html += '<tr class="result-detail-row" id="detail-' + t.id + '" style="display:' + (isExpanded ? 'table-row' : 'none') + ';">' +
-      '<td colspan="8">' +
-        '<div class="result-detail-content">' +
-          (t.error_message ? '<div class="result-error-box">Ошибка: ' + escapeHtml(t.error_message) + '</div>' : '') +
-          '<div class="result-text-preview" id="preview-' + t.id + '">' +
-            (t.content ? t.content : '<span class="text-secondary">Текст не сгенерирован</span>') +
-          '</div>' +
-          '<div class="result-actions-bar">' +
-            '<div class="result-comment-area">' +
-              '<div class="result-comment-label">Комментарий к правкам</div>' +
-              '<textarea id="comment-' + t.id + '" placeholder="Укажите, что нужно изменить при перегенерации..." onchange="saveTextComment(\'' + t.id + '\')" onclick="event.stopPropagation();">' + escapeHtml(t.comment || '') + '</textarea>' +
-            '</div>' +
-            '<div class="result-action-buttons">' +
-              '<button class="btn btn-sm btn-regenerate" id="regen-btn-' + t.id + '" onclick="event.stopPropagation(); regenerateText(\'' + t.id + '\')">Перегенерировать</button>' +
-              (t.gdoc_url ? '<a href="' + t.gdoc_url + '" target="_blank" class="btn btn-sm" onclick="event.stopPropagation();">Открыть документ</a>' : '') +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-      '</td>' +
-    '</tr>';
+  if (!state.currentTask) return;
+  var completed=state.texts.filter(function(t){return t.status==='completed';}).length;
+  var failed=state.texts.filter(function(t){return t.status==='failed';}).length;
+  document.getElementById('results-not-ready').style.display='none';
+  document.getElementById('results-content').style.display='block';
+  document.getElementById('res-total').textContent=state.texts.length;
+  document.getElementById('res-completed').textContent=completed;
+  document.getElementById('res-failed').textContent=failed;
+  var ws=state.texts.filter(function(t){return t.uniqueness_score!=null;});
+  document.getElementById('res-uniqueness').textContent=ws.length?Math.round(ws.reduce(function(s,t){return s+t.uniqueness_score;},0)/ws.length)+'%':'—';
+  var tb=document.getElementById('results-texts-table');
+  var sL={completed:'Готово',failed:'Ошибка',pending:'Ожидает',processing:'Обработка...'};
+  var sC={completed:'badge-success',failed:'badge-danger',pending:'',processing:'badge-warning'};
+  var h='';
+  state.texts.forEach(function(t,i){
+    var isExp=state.expandedTextId===t.id, label=getRowLabel(t.source_data);
+    var regenBadge=t.regeneration_count?'<span class="regeneration-badge">×'+t.regeneration_count+'</span>':'';
+    h+='<tr class="result-row" onclick="toggleTextPreview(\''+t.id+'\')"><td><span class="result-expand-icon'+(isExp?' expanded':'')+'">&#9654;</span></td><td>'+(i+1)+'</td><td>'+escapeHtml(label)+regenBadge+'</td><td><span class="badge '+(sC[t.status]||'')+'">'+(sL[t.status]||t.status)+'</span></td><td>'+(t.uniqueness_score!=null?t.uniqueness_score+'%':'—')+'</td><td>'+(t.ai_score!=null?t.ai_score+'%':'—')+'</td><td>'+(t.gdoc_url?'<a href="'+t.gdoc_url+'" target="_blank" onclick="event.stopPropagation();">Открыть</a>':'—')+'</td><td><button class="btn btn-sm btn-regenerate" onclick="event.stopPropagation();regenerateText(\''+t.id+'\')">Перегенерировать</button></td></tr>';
+    h+='<tr class="result-detail-row" id="detail-'+t.id+'" style="display:'+(isExp?'table-row':'none')+';"><td colspan="8"><div class="result-detail-content">'+(t.error_message?'<div class="result-error-box">Ошибка: '+escapeHtml(t.error_message)+'</div>':'')+'<div class="result-text-preview">'+(t.content||'<span class="text-secondary">Нет текста</span>')+'</div><div class="result-actions-bar"><div class="result-comment-area"><div class="result-comment-label">Комментарий к правкам</div><textarea id="comment-'+t.id+'" placeholder="Что изменить при перегенерации..." onchange="saveTextComment(\''+t.id+'\')" onclick="event.stopPropagation();">'+escapeHtml(t.comment||'')+'</textarea></div><div class="result-action-buttons"><button class="btn btn-sm btn-regenerate" onclick="event.stopPropagation();regenerateText(\''+t.id+'\')">Перегенерировать</button></div></div></div></td></tr>';
   });
-  tbody.innerHTML = html;
+  tb.innerHTML=h;
 }
 
-// --- Раскрыть/скрыть превью текста ---
 function toggleTextPreview(textId) {
-  var detailRow = document.getElementById('detail-' + textId);
-  if (!detailRow) return;
-
-  if (state.expandedTextId === textId) {
-    detailRow.style.display = 'none';
-    state.expandedTextId = null;
-  } else {
-    // Закрыть предыдущий
-    if (state.expandedTextId) {
-      var prev = document.getElementById('detail-' + state.expandedTextId);
-      if (prev) prev.style.display = 'none';
-    }
-    detailRow.style.display = 'table-row';
-    state.expandedTextId = textId;
-  }
-
-  // Обновить иконки
-  var icons = document.querySelectorAll('.result-expand-icon');
-  for (var i = 0; i < icons.length; i++) {
-    icons[i].classList.remove('expanded');
-  }
-  if (state.expandedTextId) {
-    var row = detailRow.previousElementSibling;
-    if (row) {
-      var icon = row.querySelector('.result-expand-icon');
-      if (icon) icon.classList.add('expanded');
-    }
-  }
+  var dr=document.getElementById('detail-'+textId); if(!dr)return;
+  if(state.expandedTextId===textId){dr.style.display='none';state.expandedTextId=null;}
+  else{if(state.expandedTextId){var p=document.getElementById('detail-'+state.expandedTextId);if(p)p.style.display='none';}dr.style.display='table-row';state.expandedTextId=textId;}
+  var icons=document.querySelectorAll('.result-expand-icon');for(var i=0;i<icons.length;i++)icons[i].classList.remove('expanded');
+  if(state.expandedTextId){var row=dr.previousElementSibling;if(row){var ic=row.querySelector('.result-expand-icon');if(ic)ic.classList.add('expanded');}}
 }
 
-// --- Сохранить комментарий к тексту ---
 function saveTextComment(textId) {
-  var textarea = document.getElementById('comment-' + textId);
-  if (!textarea) return;
-  var comment = textarea.value.trim();
-
-  var text = state.texts.find(function(t) { return t.id === textId; });
-  if (text) {
-    text.comment = comment;
-    showToast('Комментарий сохранен', 'success');
-  }
+  var ta=document.getElementById('comment-'+textId); if(!ta)return;
+  var t=state.texts.find(function(x){return x.id===textId;}); if(t){t.comment=ta.value.trim();showToast('Комментарий сохранён','success');}
 }
 
-// --- Перегенерировать один текст ---
 function regenerateText(textId) {
-  var text = state.texts.find(function(t) { return t.id === textId; });
-  if (!text) return;
-
-  // Получить комментарий если есть
-  var commentEl = document.getElementById('comment-' + textId);
-  if (commentEl) {
-    text.comment = commentEl.value.trim();
-  }
-
-  var btn = document.getElementById('regen-btn-' + textId);
-  if (btn) {
-    btn.classList.add('regenerating');
-    btn.textContent = 'Генерация...';
-  }
-
-  // Установить статус
-  text.status = 'processing';
-  text.regeneration_count = (text.regeneration_count || 0) + 1;
-  renderResultsTab();
-
-  // Расширить строку обратно
-  state.expandedTextId = textId;
-  var detailRow = document.getElementById('detail-' + textId);
-  if (detailRow) detailRow.style.display = 'table-row';
-  var row = detailRow ? detailRow.previousElementSibling : null;
-  if (row) {
-    var icon = row.querySelector('.result-expand-icon');
-    if (icon) icon.classList.add('expanded');
-  }
-
-  showToast('Перегенерация запущена' + (text.comment ? ' (с учетом комментария)' : ''), 'info');
-
-  // Симуляция перегенерации
-  setTimeout(function() {
-    var success = Math.random() > 0.1; // 90% успех при перегенерации
-    if (success) {
-      text.status = 'completed';
-      text.uniqueness_score = Math.floor(Math.random() * 15 + 85);
-      text.ai_score = Math.floor(Math.random() * 25 + 5);
-      text.content = generateFakeContent(text.source_data ? text.source_data.topic : 'Текст', text.comment);
-      text.error_message = null;
-      showToast('Текст "' + escapeHtml((text.source_data && text.source_data.topic) || '') + '" перегенерирован', 'success');
-    } else {
-      text.status = 'failed';
-      text.error_message = 'API timeout при перегенерации (симуляция)';
-      showToast('Ошибка перегенерации', 'error');
-    }
-    renderResultsTab();
-    // Восстановить раскрытое состояние
-    state.expandedTextId = textId;
-    var dr = document.getElementById('detail-' + textId);
-    if (dr) dr.style.display = 'table-row';
-    var r2 = dr ? dr.previousElementSibling : null;
-    if (r2) {
-      var ic = r2.querySelector('.result-expand-icon');
-      if (ic) ic.classList.add('expanded');
-    }
-  }, 2000 + Math.random() * 2000);
+  var t=state.texts.find(function(x){return x.id===textId;}); if(!t)return;
+  var ce=document.getElementById('comment-'+textId); if(ce)t.comment=ce.value.trim();
+  t.status='processing'; t.regeneration_count=(t.regeneration_count||0)+1;
+  renderResultsTab(); state.expandedTextId=textId;
+  var dr=document.getElementById('detail-'+textId); if(dr)dr.style.display='table-row';
+  showToast('Перегенерация...'+(t.comment?' (с комментарием)':''),'info');
+  setTimeout(function(){
+    if(Math.random()>0.1){t.status='completed';t.uniqueness_score=Math.floor(Math.random()*15+85);t.ai_score=Math.floor(Math.random()*25+5);t.content=generateFakeContent(t.source_data);t.error_message=null;showToast('Перегенерировано','success');}
+    else{t.status='failed';t.error_message='Timeout (симуляция)';showToast('Ошибка','error');}
+    renderResultsTab();state.expandedTextId=textId;var d2=document.getElementById('detail-'+textId);if(d2)d2.style.display='table-row';
+  },2000+Math.random()*2000);
 }
 
-// --- Генератор фейкового контента (симуляция) ---
-function generateFakeContent(topic, comment) {
-  topic = topic || 'Тема статьи';
-  var commentNote = comment ? '\n\n[Учтен комментарий: ' + comment + ']\n' : '';
-
-  var paragraphs = [
-    'В данной статье мы подробно рассмотрим ключевые аспекты темы «' + escapeHtml(topic) + '». Эта информация будет полезна как начинающим, так и опытным специалистам, которые хотят углубить свои знания.',
-    'Современный рынок предлагает множество решений и подходов. Важно разобраться в основных критериях выбора, чтобы принять взвешенное решение. Рассмотрим каждый из них подробнее.',
-    'Первое, на что стоит обратить внимание — это качество и надежность. Независимо от бюджета, этот фактор остается определяющим. Многие эксперты рекомендуют начинать именно с оценки этого параметра.',
-    'Не менее важным является соотношение цены и функциональности. Переплата за ненужные функции — одна из самых распространенных ошибок. Составьте список действительно необходимых характеристик перед покупкой.',
-    'Отзывы реальных пользователей — ценный источник информации. Обращайте внимание на отзывы, оставленные через 2-3 месяца использования, когда первые впечатления уже сменились объективной оценкой.',
-    'Подведем итоги. Выбор требует внимательного подхода и анализа. Используйте рекомендации из этой статьи, чтобы сделать оптимальный выбор. Если у вас остались вопросы — оставляйте комментарии.'
-  ];
-
-  var content = '<h1>' + escapeHtml(topic) + '</h1>\n\n';
-  content += '<h2>Введение</h2>\n<p>' + paragraphs[0] + '</p>\n\n';
-  content += '<h2>Основные критерии</h2>\n<p>' + paragraphs[1] + '</p>\n<p>' + paragraphs[2] + '</p>\n\n';
-  content += '<h2>На что обратить внимание</h2>\n<p>' + paragraphs[3] + '</p>\n<p>' + paragraphs[4] + '</p>\n\n';
-  content += '<h2>Заключение</h2>\n<p>' + paragraphs[5] + '</p>';
-  content += commentNote;
-
-  return content;
+// ===========================================
+// Экран прогресса (отдельная страница)
+// ===========================================
+function loadProgressScreen(taskId) {
+  google.script.run.withSuccessHandler(function(task) {
+    if (!task){showToast('Задача не найдена','error');return;}
+    var sL={completed:'Завершена',running:'В процессе',pending:'Ожидает',failed:'Ошибка',stopped:'Остановлена'};
+    var sC={completed:'badge-success',running:'badge-warning',pending:'badge-info',failed:'badge-danger',stopped:'badge-danger'};
+    document.getElementById('prog-status-badge').textContent=sL[task.status]||task.status;
+    document.getElementById('prog-status-badge').className='badge '+(sC[task.status]||'');
+    document.getElementById('prog-llm').textContent=task.llm_model||'';
+    document.getElementById('prog-created').textContent=formatDate(task.created_at);
+    document.getElementById('prog-breadcrumb-task').textContent=task.name||'';
+    var pct=task.total_texts>0?Math.round((task.completed_texts/task.total_texts)*100):0;
+    document.getElementById('prog-progress-text').textContent=(task.completed_texts||0)+' из '+(task.total_texts||0);
+    document.getElementById('prog-progress-fill').style.width=pct+'%';
+    document.getElementById('prog-stat-completed').textContent=task.completed_texts||0;
+    document.getElementById('prog-stat-failed').textContent=task.failed_texts||0;
+    document.getElementById('prog-stat-pending').textContent=Math.max(0,(task.total_texts||0)-(task.completed_texts||0)-(task.failed_texts||0));
+    document.getElementById('prog-stat-processing').textContent=task.status==='running'?1:0;
+    if(task.template_id){google.script.run.withSuccessHandler(function(tpl){document.getElementById('prog-template').textContent=tpl?tpl.name:'—';}).getTemplate(task.template_id);}
+    google.script.run.withSuccessHandler(function(texts){
+      state.progressTexts=texts||[];renderProgressTextsTable();
+    }).getGeneratedTexts(taskId);
+  }).getTask(taskId);
 }
 
-// --- Экран прогресса (отдельная страница) ---
-function loadProgressScreen(generationId) {
-  google.script.run.withSuccessHandler(function(gen) {
-    if (!gen) { showToast('Генерация не найдена', 'error'); return; }
-
-    var statusLabels = { completed: 'Завершена', running: 'В процессе', pending: 'Ожидает', failed: 'Ошибка', stopped: 'Остановлена' };
-    var statusClasses = { completed: 'badge-success', running: 'badge-warning', pending: 'badge-info', failed: 'badge-danger', stopped: 'badge-danger' };
-
-    document.getElementById('prog-status-badge').textContent = statusLabels[gen.status] || gen.status;
-    document.getElementById('prog-status-badge').className = 'badge ' + (statusClasses[gen.status] || '');
-    document.getElementById('prog-llm').textContent = gen.llm_model || '';
-    document.getElementById('prog-created').textContent = formatDate(gen.created_at);
-
-    var pct = gen.total_texts > 0 ? Math.round((gen.completed_texts / gen.total_texts) * 100) : 0;
-    document.getElementById('prog-progress-text').textContent = gen.completed_texts + ' из ' + gen.total_texts;
-    document.getElementById('prog-progress-fill').style.width = pct + '%';
-    document.getElementById('prog-stat-completed').textContent = gen.completed_texts || 0;
-    document.getElementById('prog-stat-failed').textContent = gen.failed_texts || 0;
-    document.getElementById('prog-stat-pending').textContent = Math.max(0, gen.total_texts - gen.completed_texts - gen.failed_texts);
-    document.getElementById('prog-stat-processing').textContent = gen.status === 'running' ? 1 : 0;
-
-    // Загрузить шаблон
-    if (gen.template_id) {
-      google.script.run.withSuccessHandler(function(tpl) {
-        document.getElementById('prog-template').textContent = tpl ? tpl.name : '—';
-      }).getTemplate(gen.template_id);
-    }
-
-    // Загрузить проект для breadcrumb
-    if (gen.project_id) {
-      google.script.run.withSuccessHandler(function(project) {
-        document.getElementById('prog-breadcrumb-project').textContent = project ? project.name : '';
-      }).getProject(gen.project_id);
-    }
-
-    // Загрузить тексты
-    google.script.run.withSuccessHandler(function(texts) {
-      state.progressTexts = texts || [];
-      renderProgressTextsTable();
-    }).getGeneratedTexts(generationId);
-
-  }).getGeneration(generationId);
-}
-
-// --- Рендер таблицы текстов на странице прогресса ---
 function renderProgressTextsTable() {
-  var tbody = document.getElementById('prog-texts-table');
-  if (!tbody) return;
-  var texts = state.progressTexts || [];
-  if (!texts.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-secondary">Нет текстов</td></tr>';
-    return;
-  }
-
-  var sLabels = { pending: 'Ожидает', processing: 'Обработка', completed: 'Готово', failed: 'Ошибка' };
-  var sClasses = { pending: '', processing: 'badge-warning', completed: 'badge-success', failed: 'badge-danger' };
-  var html = '';
-
-  texts.forEach(function(t, i) {
-    var isExpanded = state.expandedProgressTextId === t.id;
-    var expandClass = isExpanded ? ' expanded' : '';
-    var regenBadge = t.regeneration_count ? '<span class="regeneration-badge">x' + t.regeneration_count + '</span>' : '';
-    var commentIndicator = t.comment ? '<span class="result-comment-saved"><span class="comment-indicator"></span></span>' : '';
-
-    html += '<tr class="result-row" onclick="toggleProgressTextPreview(\'' + t.id + '\')">' +
-      '<td><span class="result-expand-icon' + expandClass + '">&#9654;</span></td>' +
-      '<td>' + (i + 1) + '</td>' +
-      '<td>' + escapeHtml(t.source_data ? t.source_data.topic : '') + regenBadge + commentIndicator + '</td>' +
-      '<td><span class="badge ' + (sClasses[t.status] || '') + '">' + (sLabels[t.status] || t.status) + '</span></td>' +
-      '<td>' + (t.uniqueness_score != null ? t.uniqueness_score + '%' : '—') + '</td>' +
-      '<td>' + (t.ai_score != null ? t.ai_score + '%' : '—') + '</td>' +
-      '<td>' + (t.gdoc_url ? '<a href="' + t.gdoc_url + '" target="_blank" onclick="event.stopPropagation();">Открыть</a>' : '—') + '</td>' +
-      '<td>' + (t.status === 'completed' || t.status === 'failed' ? '<button class="btn btn-sm btn-regenerate" onclick="event.stopPropagation(); regenerateProgressText(\'' + t.id + '\')">Перегенерировать</button>' : '') + '</td>' +
-    '</tr>';
-
-    html += '<tr class="result-detail-row" id="prog-detail-' + t.id + '" style="display:' + (isExpanded ? 'table-row' : 'none') + ';">' +
-      '<td colspan="8">' +
-        '<div class="result-detail-content">' +
-          (t.error_message ? '<div class="result-error-box">Ошибка: ' + escapeHtml(t.error_message) + '</div>' : '') +
-          '<div class="result-text-preview">' +
-            (t.content ? t.content : '<span class="text-secondary">Текст не сгенерирован</span>') +
-          '</div>' +
-          '<div class="result-actions-bar">' +
-            '<div class="result-comment-area">' +
-              '<div class="result-comment-label">Комментарий к правкам</div>' +
-              '<textarea id="prog-comment-' + t.id + '" placeholder="Укажите, что нужно изменить при перегенерации..." onchange="saveProgressTextComment(\'' + t.id + '\')" onclick="event.stopPropagation();">' + escapeHtml(t.comment || '') + '</textarea>' +
-            '</div>' +
-            '<div class="result-action-buttons">' +
-              '<button class="btn btn-sm btn-regenerate" id="prog-regen-btn-' + t.id + '" onclick="event.stopPropagation(); regenerateProgressText(\'' + t.id + '\')">Перегенерировать</button>' +
-              (t.gdoc_url ? '<a href="' + t.gdoc_url + '" target="_blank" class="btn btn-sm" onclick="event.stopPropagation();">Открыть документ</a>' : '') +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-      '</td>' +
-    '</tr>';
+  var tb=document.getElementById('prog-texts-table'); if(!tb)return;
+  var texts=state.progressTexts||[];
+  if(!texts.length){tb.innerHTML='<tr><td colspan="8" class="text-center text-secondary">Нет текстов</td></tr>';return;}
+  var sL={pending:'Ожидает',processing:'Обработка',completed:'Готово',failed:'Ошибка'};
+  var sC={pending:'',processing:'badge-warning',completed:'badge-success',failed:'badge-danger'};
+  var h='';
+  texts.forEach(function(t,i){
+    var isExp=state.expandedProgressTextId===t.id, label=getRowLabel(t.source_data);
+    h+='<tr class="result-row" onclick="toggleProgressTextPreview(\''+t.id+'\')"><td><span class="result-expand-icon'+(isExp?' expanded':'')+'">&#9654;</span></td><td>'+(i+1)+'</td><td>'+escapeHtml(label)+'</td><td><span class="badge '+(sC[t.status]||'')+'">'+(sL[t.status]||t.status)+'</span></td><td>'+(t.uniqueness_score!=null?t.uniqueness_score+'%':'—')+'</td><td>'+(t.ai_score!=null?t.ai_score+'%':'—')+'</td><td>'+(t.gdoc_url?'<a href="'+t.gdoc_url+'" target="_blank" onclick="event.stopPropagation();">Открыть</a>':'—')+'</td><td>'+(t.status==='completed'||t.status==='failed'?'<button class="btn btn-sm btn-regenerate" onclick="event.stopPropagation();regenerateProgressText(\''+t.id+'\')">Перегенерировать</button>':'')+'</td></tr>';
+    h+='<tr class="result-detail-row" id="prog-detail-'+t.id+'" style="display:'+(isExp?'table-row':'none')+';"><td colspan="8"><div class="result-detail-content">'+(t.error_message?'<div class="result-error-box">'+escapeHtml(t.error_message)+'</div>':'')+'<div class="result-text-preview">'+(t.content||'<span class="text-secondary">Нет текста</span>')+'</div></div></td></tr>';
   });
-  tbody.innerHTML = html;
+  tb.innerHTML=h;
 }
 
-function toggleProgressTextPreview(textId) {
-  var detailRow = document.getElementById('prog-detail-' + textId);
-  if (!detailRow) return;
-
-  if (state.expandedProgressTextId === textId) {
-    detailRow.style.display = 'none';
-    state.expandedProgressTextId = null;
-  } else {
-    if (state.expandedProgressTextId) {
-      var prev = document.getElementById('prog-detail-' + state.expandedProgressTextId);
-      if (prev) prev.style.display = 'none';
-    }
-    detailRow.style.display = 'table-row';
-    state.expandedProgressTextId = textId;
-  }
-
-  var icons = document.querySelectorAll('#prog-texts-table .result-expand-icon');
-  for (var i = 0; i < icons.length; i++) {
-    icons[i].classList.remove('expanded');
-  }
-  if (state.expandedProgressTextId) {
-    var row = detailRow.previousElementSibling;
-    if (row) {
-      var icon = row.querySelector('.result-expand-icon');
-      if (icon) icon.classList.add('expanded');
-    }
-  }
+function toggleProgressTextPreview(textId){
+  var dr=document.getElementById('prog-detail-'+textId);if(!dr)return;
+  if(state.expandedProgressTextId===textId){dr.style.display='none';state.expandedProgressTextId=null;}
+  else{if(state.expandedProgressTextId){var p=document.getElementById('prog-detail-'+state.expandedProgressTextId);if(p)p.style.display='none';}dr.style.display='table-row';state.expandedProgressTextId=textId;}
 }
 
-function saveProgressTextComment(textId) {
-  var textarea = document.getElementById('prog-comment-' + textId);
-  if (!textarea) return;
-  var comment = textarea.value.trim();
-
-  var text = (state.progressTexts || []).find(function(t) { return t.id === textId; });
-  if (text) {
-    text.comment = comment;
-    // Сохранить на сервере
-    google.script.run.updateGeneratedText(textId, { comment: comment });
-    showToast('Комментарий сохранен', 'success');
-  }
-}
-
-function regenerateProgressText(textId) {
-  var text = (state.progressTexts || []).find(function(t) { return t.id === textId; });
-  if (!text) return;
-
-  var commentEl = document.getElementById('prog-comment-' + textId);
-  if (commentEl) text.comment = commentEl.value.trim();
-
-  text.status = 'processing';
-  text.regeneration_count = (text.regeneration_count || 0) + 1;
-  renderProgressTextsTable();
-
-  state.expandedProgressTextId = textId;
-  var dr = document.getElementById('prog-detail-' + textId);
-  if (dr) dr.style.display = 'table-row';
-
-  showToast('Перегенерация запущена' + (text.comment ? ' (с учетом комментария)' : ''), 'info');
-
-  setTimeout(function() {
-    var success = Math.random() > 0.1;
-    if (success) {
-      text.status = 'completed';
-      text.uniqueness_score = Math.floor(Math.random() * 15 + 85);
-      text.ai_score = Math.floor(Math.random() * 25 + 5);
-      text.content = generateFakeContent(text.source_data ? text.source_data.topic : 'Текст', text.comment);
-      text.error_message = null;
-      showToast('Текст перегенерирован', 'success');
-    } else {
-      text.status = 'failed';
-      text.error_message = 'API timeout при перегенерации (симуляция)';
-      showToast('Ошибка перегенерации', 'error');
-    }
-
-    // Обновить на сервере
-    google.script.run.updateGeneratedText(textId, {
-      status: text.status,
-      uniqueness_score: text.uniqueness_score,
-      ai_score: text.ai_score,
-      content: text.content,
-      error_message: text.error_message,
-      regeneration_count: text.regeneration_count,
-      comment: text.comment
-    });
-
+function regenerateProgressText(textId){
+  var t=(state.progressTexts||[]).find(function(x){return x.id===textId;});if(!t)return;
+  t.status='processing';t.regeneration_count=(t.regeneration_count||0)+1;
+  renderProgressTextsTable();showToast('Перегенерация...','info');
+  setTimeout(function(){
+    if(Math.random()>0.1){t.status='completed';t.uniqueness_score=Math.floor(Math.random()*15+85);t.ai_score=Math.floor(Math.random()*25+5);t.content=generateFakeContent(t.source_data);t.error_message=null;showToast('Перегенерировано','success');}
+    else{t.status='failed';t.error_message='Timeout (симуляция)';showToast('Ошибка','error');}
+    google.script.run.updateGeneratedText(textId,{status:t.status,uniqueness_score:t.uniqueness_score,ai_score:t.ai_score,content:t.content,error_message:t.error_message,regeneration_count:t.regeneration_count});
     renderProgressTextsTable();
-    state.expandedProgressTextId = textId;
-    var dr2 = document.getElementById('prog-detail-' + textId);
-    if (dr2) dr2.style.display = 'table-row';
-    var r2 = dr2 ? dr2.previousElementSibling : null;
-    if (r2) {
-      var ic = r2.querySelector('.result-expand-icon');
-      if (ic) ic.classList.add('expanded');
-    }
-  }, 2000 + Math.random() * 2000);
+  },2000+Math.random()*2000);
 }
 </script>
