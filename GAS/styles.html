@@ -743,6 +743,59 @@ textarea.input-field {
   margin-right: 6px;
 }
 
+/* --- Column required badge --- */
+.column-card-required {
+  font-size: 9px;
+  color: #D97706;
+  background: #FFFBEB;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* --- Client tags в шаблоне задачи --- */
+.tt-client-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tt-client-tag {
+  padding: 4px 12px;
+  border: 1px solid #E5E5E0;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  color: #888;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+.tt-client-tag:hover {
+  border-color: #1A5FB4;
+  color: #1A5FB4;
+}
+.tt-client-tag.active {
+  background: #EBF5FF;
+  color: #1A5FB4;
+  border-color: #1A5FB4;
+  font-weight: 500;
+}
+
+/* --- Modal filter toggle --- */
+.task-tpl-modal-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.task-tpl-filter-toggle {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 /* --- Лейаут шаблонов --- */
 .templates-layout {
   display: flex;

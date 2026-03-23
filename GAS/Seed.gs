@@ -339,12 +339,15 @@ function seedData() {
       name: 'Статьи для блога',
       description: 'Генерация SEO-статей для блога с ключевыми словами и ТЗ',
       columns: [
-        { key: 'url', label: 'URL', type: 'short' },
-        { key: 'keywords', label: 'Ключевые слова', type: 'short' },
-        { key: 'topic', label: 'Тема', type: 'short' },
-        { key: 'brief', label: 'ТЗ', type: 'long' }
+        { key: 'url', label: 'URL', type: 'short', required: true },
+        { key: 'keywords', label: 'Ключевые слова', type: 'short', required: true },
+        { key: 'topic', label: 'Тема', type: 'short', required: true },
+        { key: 'brief', label: 'ТЗ', type: 'long', required: false }
       ],
+      client_ids: ['c1', 'c2'],
       template_id: 't1',
+      local_system_prompt: '',
+      local_user_prompt: '',
       llm_provider: 'anthropic',
       llm_model: 'Claude Sonnet',
       options: { humanize: true, uniqueness: true, factcheck: false, ai_detector: true },
@@ -356,12 +359,15 @@ function seedData() {
       name: 'Карточки товаров',
       description: 'Описания для карточек товаров интернет-магазина',
       columns: [
-        { key: 'url', label: 'URL товара', type: 'short' },
-        { key: 'product_name', label: 'Название товара', type: 'short' },
-        { key: 'category', label: 'Категория', type: 'short' },
-        { key: 'specs', label: 'Характеристики', type: 'long' }
+        { key: 'url', label: 'URL товара', type: 'short', required: true },
+        { key: 'product_name', label: 'Название товара', type: 'short', required: true },
+        { key: 'category', label: 'Категория', type: 'short', required: false },
+        { key: 'specs', label: 'Характеристики', type: 'long', required: false }
       ],
+      client_ids: ['c1', 'c4'],
       template_id: 't3',
+      local_system_prompt: '',
+      local_user_prompt: '',
       llm_provider: 'openai',
       llm_model: 'ChatGPT (GPT-4o)',
       options: { humanize: false, uniqueness: true, factcheck: true, ai_detector: false },
@@ -373,11 +379,14 @@ function seedData() {
       name: 'Описания категорий',
       description: 'SEO-тексты для страниц категорий каталога',
       columns: [
-        { key: 'url', label: 'URL категории', type: 'short' },
-        { key: 'category_name', label: 'Название категории', type: 'short' },
-        { key: 'keywords', label: 'Ключевые слова', type: 'short' }
+        { key: 'url', label: 'URL категории', type: 'short', required: true },
+        { key: 'category_name', label: 'Название категории', type: 'short', required: true },
+        { key: 'keywords', label: 'Ключевые слова', type: 'short', required: false }
       ],
+      client_ids: ['c1'],
       template_id: 't4',
+      local_system_prompt: '',
+      local_user_prompt: '',
       llm_provider: 'anthropic',
       llm_model: 'Claude Sonnet',
       options: { humanize: true, uniqueness: true, factcheck: false, ai_detector: false },
