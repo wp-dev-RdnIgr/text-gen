@@ -20,7 +20,9 @@ var state = {
   viewingVersionId: null,
   genTemplateVersions: [],
   longTextEdit: { rowIndex: -1, colKey: '' },
-  taskTemplates: []
+  taskTemplates: [],
+  selectedTaskTemplateId: null,
+  editingTaskTemplate: null
 };
 
 // --- Инициализация ---
@@ -58,6 +60,7 @@ function handleHashRoute() {
     case '#templates': showScreen('screen-templates'); renderTemplateList(); break;
     case '#task': showScreen('screen-task'); if (parts[1]) loadTaskScreen(parts[1]); break;
     case '#progress': showScreen('screen-progress'); if (parts[1]) loadProgressScreen(parts[1]); break;
+    case '#task-templates': showScreen('screen-task-templates'); renderTaskTemplateListSidebar(); break;
     default: showScreen('screen-dashboard');
   }
 }
@@ -406,10 +409,12 @@ function renderColumnsGrid() {
   var typeLabels = { short: 'строка', long: 'текст' };
   var h = '';
   cols.forEach(function(col) {
+    var reqBadge = col.required ? '<span class="column-card-required">обяз.</span>' : '';
     h += '<div class="column-card">' +
       '<button class="column-card-delete" onclick="removeColumn(\''+col.key+'\')" title="Удалить колонку">&times;</button>' +
       '<div class="column-card-top">' +
         '<span class="column-card-name" ondblclick="renameColumnPrompt(\''+col.key+'\')" title="Двойной клик для переименования">'+escapeHtml(col.label)+'</span>' +
+        reqBadge +
         '<span class="column-card-type">'+escapeHtml(typeLabels[col.type]||col.type)+'</span>' +
       '</div>' +
       '<div class="column-card-variable">' +
@@ -436,11 +441,13 @@ function confirmAddColumn() {
   // Проверить уникальность ключа
   var exists = (state.currentTask.columns||[]).some(function(c){return c.key===key;});
   if (exists) key = key + '_' + Date.now();
-  state.currentTask.columns.push({ key: key, label: label, type: type });
+  var required = document.getElementById('new-col-required').checked;
+  state.currentTask.columns.push({ key: key, label: label, type: type, required: required });
   // Добавить в каждую строку
   (state.currentTask.rows||[]).forEach(function(row){ row[key] = ''; });
   closeModal('modal-addcolumn');
   document.getElementById('new-col-label').value = '';
+  document.getElementById('new-col-required').checked = false;
   renderColumnsGrid();
   renderDynamicDataTable();
   autoSaveTask();
@@ -864,5 +871,263 @@ function regenerateProgressText(textId){
     google.script.run.updateGeneratedText(textId,{status:t.status,uniqueness_score:t.uniqueness_score,ai_score:t.ai_score,content:t.content,error_message:t.error_message,regeneration_count:t.regeneration_count});
     renderProgressTextsTable();
   },2000+Math.random()*2000);
+}
+
+// ===========================================
+// Экран «Шаблоны задач» — редактор
+// ===========================================
+function renderTaskTemplateListSidebar() {
+  var c = document.getElementById('tt-list'); if (!c) return;
+  var tts = state.taskTemplates || [];
+  if (!tts.length) { c.innerHTML = '<div class="placeholder-message" style="height:100px"><p>Нет шаблонов</p></div>'; return; }
+  var h = '';
+  tts.forEach(function(tt) {
+    var colCount = (tt.columns || []).length;
+    h += '<div class="template-item' + (tt.id === state.selectedTaskTemplateId ? ' active' : '') + '" onclick="selectTaskTemplate(\'' + tt.id + '\')">' +
+      '<div class="template-item-name">' + escapeHtml(tt.name) + '</div>' +
+      '<div class="template-item-meta">' + colCount + ' колонок</div>' +
+    '</div>';
+  });
+  c.innerHTML = h;
+}
+
+function filterTaskTemplateList(q) {
+  var items = document.querySelectorAll('#tt-list .template-item'); q = q.toLowerCase();
+  for (var i = 0; i < items.length; i++) {
+    items[i].style.display = items[i].querySelector('.template-item-name').textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+  }
+}
+
+function selectTaskTemplate(ttId) {
+  state.selectedTaskTemplateId = ttId;
+  var tt = (state.taskTemplates || []).find(function(x) { return x.id === ttId; });
+  if (!tt) return;
+  state.editingTaskTemplate = JSON.parse(JSON.stringify(tt));
+  renderTaskTemplateListSidebar();
+  document.getElementById('tt-placeholder').style.display = 'none';
+  document.getElementById('tt-editor-content').style.display = 'block';
+  document.getElementById('tt-name').value = tt.name || '';
+  document.getElementById('tt-description').value = tt.description || '';
+  renderTTClientTags();
+  renderTTColumnsGrid();
+  populateTTTemplateSelect();
+  if (tt.template_id) {
+    document.getElementById('tt-template-select').value = tt.template_id;
+  }
+  document.getElementById('tt-system-prompt').value = tt.local_system_prompt || '';
+  document.getElementById('tt-user-prompt').value = tt.local_user_prompt || '';
+  if (tt.llm_provider && tt.llm_model) {
+    document.getElementById('tt-llm-select').value = tt.llm_provider + '|' + tt.llm_model;
+  }
+  var opts = tt.options || {};
+  document.getElementById('tt-opt-humanize').checked = !!opts.humanize;
+  document.getElementById('tt-opt-uniqueness').checked = !!opts.uniqueness;
+  document.getElementById('tt-opt-factcheck').checked = !!opts.factcheck;
+  document.getElementById('tt-opt-ai-detector').checked = !!opts.ai_detector;
+  document.getElementById('tt-drive-folder').value = tt.drive_folder || '';
+}
+
+function createNewTaskTemplate() {
+  state.selectedTaskTemplateId = null;
+  state.editingTaskTemplate = {
+    columns: [
+      { key: 'url', label: 'URL', type: 'short', required: false },
+      { key: 'keywords', label: 'Ключевые слова', type: 'short', required: false },
+      { key: 'topic', label: 'Тема', type: 'short', required: false }
+    ],
+    client_ids: [],
+    options: {}
+  };
+  document.getElementById('tt-placeholder').style.display = 'none';
+  document.getElementById('tt-editor-content').style.display = 'block';
+  document.getElementById('tt-name').value = '';
+  document.getElementById('tt-description').value = '';
+  document.getElementById('tt-system-prompt').value = '';
+  document.getElementById('tt-user-prompt').value = '';
+  document.getElementById('tt-drive-folder').value = '';
+  document.getElementById('tt-opt-humanize').checked = false;
+  document.getElementById('tt-opt-uniqueness').checked = true;
+  document.getElementById('tt-opt-factcheck').checked = false;
+  document.getElementById('tt-opt-ai-detector').checked = false;
+  renderTTClientTags();
+  renderTTColumnsGrid();
+  populateTTTemplateSelect();
+  renderTaskTemplateListSidebar();
+}
+
+function saveCurrentTaskTemplate() {
+  var name = document.getElementById('tt-name').value.trim();
+  if (!name) { showToast('Укажите название', 'error'); return; }
+  var et = state.editingTaskTemplate || {};
+  var lSel = document.getElementById('tt-llm-select');
+  var parts = lSel.value.split('|');
+  var tSel = document.getElementById('tt-template-select');
+  var data = {
+    name: name,
+    description: document.getElementById('tt-description').value.trim(),
+    columns: et.columns || [],
+    client_ids: et.client_ids || [],
+    template_id: tSel.value || '',
+    local_system_prompt: document.getElementById('tt-system-prompt').value || '',
+    local_user_prompt: document.getElementById('tt-user-prompt').value || '',
+    llm_provider: parts[0] || '',
+    llm_model: parts[1] || '',
+    options: {
+      humanize: document.getElementById('tt-opt-humanize').checked,
+      uniqueness: document.getElementById('tt-opt-uniqueness').checked,
+      factcheck: document.getElementById('tt-opt-factcheck').checked,
+      ai_detector: document.getElementById('tt-opt-ai-detector').checked
+    },
+    drive_folder: document.getElementById('tt-drive-folder').value
+  };
+  if (state.selectedTaskTemplateId) data.id = state.selectedTaskTemplateId;
+  google.script.run.withSuccessHandler(function(s) {
+    showToast('Шаблон задачи сохранён', 'success');
+    state.selectedTaskTemplateId = s.id;
+    google.script.run.withSuccessHandler(function(list) {
+      state.taskTemplates = list || [];
+      renderTaskTemplateListSidebar();
+      selectTaskTemplate(s.id);
+    }).getTaskTemplates();
+  }).withFailureHandler(function(e) { showToast(e.message, 'error'); }).saveTaskTemplate(data);
+}
+
+function deleteCurrentTaskTemplate() {
+  if (!state.selectedTaskTemplateId) return;
+  if (!confirm('Удалить шаблон задачи?')) return;
+  google.script.run.withSuccessHandler(function() {
+    showToast('Удалён', 'success');
+    state.selectedTaskTemplateId = null;
+    state.editingTaskTemplate = null;
+    document.getElementById('tt-editor-content').style.display = 'none';
+    document.getElementById('tt-placeholder').style.display = 'block';
+    google.script.run.withSuccessHandler(function(list) {
+      state.taskTemplates = list || [];
+      renderTaskTemplateListSidebar();
+    }).getTaskTemplates();
+  }).withFailureHandler(function(e) { showToast(e.message, 'error'); }).deleteTaskTemplate(state.selectedTaskTemplateId);
+}
+
+// --- Client tags for task template ---
+function renderTTClientTags() {
+  var c = document.getElementById('tt-client-tags'); if (!c) return;
+  var et = state.editingTaskTemplate || {};
+  var linked = et.client_ids || [];
+  var h = '';
+  (state.clients || []).forEach(function(cl) {
+    var isLinked = linked.indexOf(cl.id) !== -1;
+    h += '<span class="tt-client-tag' + (isLinked ? ' active' : '') + '" onclick="toggleTTClient(\'' + cl.id + '\')">' + escapeHtml(cl.name) + '</span>';
+  });
+  if (!state.clients.length) h = '<span class="text-secondary">Нет клиентов</span>';
+  c.innerHTML = h;
+}
+
+function toggleTTClient(clientId) {
+  var et = state.editingTaskTemplate; if (!et) return;
+  if (!et.client_ids) et.client_ids = [];
+  var idx = et.client_ids.indexOf(clientId);
+  if (idx === -1) { et.client_ids.push(clientId); }
+  else { et.client_ids.splice(idx, 1); }
+  renderTTClientTags();
+}
+
+// --- Columns for task template ---
+function renderTTColumnsGrid() {
+  var grid = document.getElementById('tt-columns-grid'); if (!grid) return;
+  var et = state.editingTaskTemplate || {};
+  var cols = et.columns || [];
+  var typeLabels = { short: 'строка', long: 'текст' };
+  var h = '';
+  cols.forEach(function(col, i) {
+    var reqBadge = col.required ? '<span class="column-card-required">обяз.</span>' : '';
+    h += '<div class="column-card">' +
+      '<button class="column-card-delete" onclick="removeTTColumn(' + i + ')" title="Удалить">&times;</button>' +
+      '<div class="column-card-top">' +
+        '<span class="column-card-name">' + escapeHtml(col.label) + '</span>' +
+        reqBadge +
+        '<span class="column-card-type">' + escapeHtml(typeLabels[col.type] || col.type) + '</span>' +
+      '</div>' +
+      '<div class="column-card-variable">' +
+        '<span class="column-card-var-tag">{{' + escapeHtml(col.key) + '}}</span>' +
+      '</div>' +
+    '</div>';
+  });
+  grid.innerHTML = h;
+}
+
+function confirmAddTTColumn() {
+  var label = document.getElementById('tt-new-col-label').value.trim();
+  var type = document.getElementById('tt-new-col-type').value;
+  var required = document.getElementById('tt-new-col-required').checked;
+  if (!label) { showToast('Укажите название', 'error'); return; }
+  var key = generateColumnKey(label);
+  var et = state.editingTaskTemplate; if (!et) return;
+  if (!et.columns) et.columns = [];
+  var exists = et.columns.some(function(c) { return c.key === key; });
+  if (exists) key = key + '_' + Date.now();
+  et.columns.push({ key: key, label: label, type: type, required: required });
+  closeModal('modal-tt-addcolumn');
+  document.getElementById('tt-new-col-label').value = '';
+  document.getElementById('tt-new-col-required').checked = false;
+  renderTTColumnsGrid();
+}
+
+function removeTTColumn(index) {
+  if (!confirm('Удалить колонку?')) return;
+  var et = state.editingTaskTemplate; if (!et || !et.columns) return;
+  et.columns.splice(index, 1);
+  renderTTColumnsGrid();
+}
+
+// --- Template select for task template editor ---
+function populateTTTemplateSelect() {
+  var sel = document.getElementById('tt-template-select'); if (!sel) return;
+  var h = '<option value="">— Без шаблона промта —</option>';
+  state.templates.forEach(function(t) { h += '<option value="' + t.id + '">' + escapeHtml(t.name) + '</option>'; });
+  sel.innerHTML = h;
+}
+
+function onTTTemplateChange() {
+  var sel = document.getElementById('tt-template-select');
+  var tpl = state.templates.find(function(t) { return t.id === sel.value; });
+  if (tpl) {
+    document.getElementById('tt-system-prompt').value = tpl.system_prompt || '';
+    document.getElementById('tt-user-prompt').value = tpl.user_prompt || '';
+  }
+}
+
+// ===========================================
+// Модалка выбора шаблона при создании задачи — с фильтром по клиенту
+// ===========================================
+function renderTaskTemplateList() {
+  var c = document.getElementById('task-template-list'); if (!c) return;
+  var filterEl = document.getElementById('task-tpl-client-filter');
+  var filterOn = filterEl ? filterEl.checked : false;
+  var tts = state.taskTemplates || [];
+  if (filterOn && state.selectedClientId) {
+    tts = tts.filter(function(tt) {
+      return (tt.client_ids || []).indexOf(state.selectedClientId) !== -1;
+    });
+  }
+  if (!tts.length) {
+    c.innerHTML = '<div class="placeholder-message" style="height:100px;grid-column:1/-1;"><p>' + (filterOn ? 'Нет шаблонов для этого клиента' : 'Нет сохранённых шаблонов задач') + '</p></div>';
+    return;
+  }
+  var h = '';
+  tts.forEach(function(tt) {
+    var colTags = (tt.columns || []).map(function(col) { return '<span class="task-template-card-tag">' + escapeHtml(col.label) + '</span>'; }).join('');
+    var tplName = '—';
+    if (tt.template_id) { var tpl = state.templates.find(function(x) { return x.id === tt.template_id; }); if (tpl) tplName = tpl.name; }
+    h += '<div class="task-template-card" onclick="createTaskFromTemplate(\'' + tt.id + '\')">' +
+      '<div class="task-template-card-name">' + escapeHtml(tt.name) + '</div>' +
+      '<div class="task-template-card-desc">' + escapeHtml(tt.description || '') + '</div>' +
+      '<div class="task-template-card-meta">' +
+        '<span class="task-template-card-tag" style="background:#EBF5FF;color:#1A5FB4;">' + escapeHtml(tplName) + '</span>' +
+        '<span class="task-template-card-tag">' + escapeHtml(tt.llm_model || '—') + '</span>' +
+        colTags +
+      '</div>' +
+    '</div>';
+  });
+  c.innerHTML = h;
 }
 </script>

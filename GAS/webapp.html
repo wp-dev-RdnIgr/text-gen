@@ -272,6 +272,23 @@ textarea.input-field { resize: vertical; }
   content: '\2713 '; color: #16A34A; font-weight: 700; margin-right: 6px;
 }
 
+/* --- Client tags в шаблоне задачи --- */
+.tt-client-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tt-client-tag {
+  padding: 4px 12px; border: 1px solid #E5E5E0; border-radius: 6px;
+  background: #fff; font-size: 12px; color: #888; cursor: pointer;
+  transition: all 0.15s; user-select: none;
+}
+.tt-client-tag:hover { border-color: #1A5FB4; color: #1A5FB4; }
+.tt-client-tag.active { background: #EBF5FF; color: #1A5FB4; border-color: #1A5FB4; font-weight: 500; }
+
+/* --- Modal filter toggle --- */
+.task-tpl-modal-controls {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 16px;
+}
+.task-tpl-filter-toggle { font-size: 12px; white-space: nowrap; }
+
 /* --- Лейаут шаблонов --- */
 .templates-layout { display: flex; height: calc(100vh - 48px); }
 .templates-sidebar {
@@ -485,6 +502,10 @@ textarea.input-field { resize: vertical; }
   transition: color 0.15s, background 0.15s;
 }
 .column-card-delete:hover { color: #DC2626; background: #FEF2F2; }
+.column-card-required {
+  font-size: 9px; color: #D97706; background: #FFFBEB; padding: 1px 5px;
+  border-radius: 3px; font-weight: 600; white-space: nowrap;
+}
 .column-add-btn {
   padding: 8px 16px; border: 1px dashed #1A5FB4; border-radius: 8px;
   background: none; color: #1A5FB4; font-size: 12px; font-weight: 500;
@@ -523,6 +544,7 @@ textarea.input-field { resize: vertical; }
       <button class="nav-tab active" data-hash="#dashboard" onclick="navigateTo('#dashboard')">Дашборд</button>
       <button class="nav-tab" data-hash="#clients" onclick="navigateTo('#clients')">Клиенты</button>
       <button class="nav-tab" data-hash="#templates" onclick="navigateTo('#templates')">Шаблоны</button>
+      <button class="nav-tab" data-hash="#task-templates" onclick="navigateTo('#task-templates')">Шаблоны задач</button>
     </div>
     <div>
       <button class="btn btn-sm" onclick="seedDemoData()">Демо-данные</button>
@@ -536,6 +558,7 @@ textarea.input-field { resize: vertical; }
     <?!= include('page_progress'); ?>
     <?!= include('page_templates'); ?>
     <?!= include('page_clients'); ?>
+    <?!= include('page_task_templates'); ?>
   </div>
 
   <!-- Модалка: Клиент -->

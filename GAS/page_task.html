@@ -295,6 +295,11 @@
           <option value="long">Длинный текст (многострочный)</option>
         </select>
       </div>
+      <div class="field-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="new-col-required"> Обязательная колонка
+        </label>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-addcolumn')">Отмена</button>
@@ -311,7 +316,13 @@
       <button class="modal-close" onclick="closeModal('modal-task-template')">&times;</button>
     </div>
     <div class="modal-body">
-      <p class="text-secondary" style="margin-bottom:16px;">Выберите шаблон задачи или создайте пустую задачу</p>
+      <div class="task-tpl-modal-controls">
+        <p class="text-secondary">Выберите шаблон задачи или создайте пустую задачу</p>
+        <label class="checkbox-label task-tpl-filter-toggle">
+          <input type="checkbox" id="task-tpl-client-filter" onchange="renderTaskTemplateList()">
+          Только шаблоны этого клиента
+        </label>
+      </div>
       <div id="task-template-list" class="task-template-grid">
         <!-- Заполняется динамически -->
       </div>
