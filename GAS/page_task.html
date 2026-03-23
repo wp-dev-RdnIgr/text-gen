@@ -300,13 +300,23 @@
       <button class="modal-close" onclick="closeModal('modal-task-template')">&times;</button>
     </div>
     <div class="modal-body">
-      <div class="task-tpl-modal-controls">
-        <p class="text-secondary">Выберите шаблон задачи или создайте пустую задачу</p>
-        <label class="checkbox-label task-tpl-filter-toggle">
-          <input type="checkbox" id="task-tpl-client-filter" onchange="renderTaskTemplateList()">
-          Только шаблоны этого клиента
-        </label>
+      <p class="text-secondary" style="margin-bottom:12px;">Выберите шаблон задачи или создайте пустую задачу</p>
+
+      <!-- Фильтр по клиентам — мультиселект с поиском -->
+      <div class="multiselect-filter" style="margin-bottom:16px;">
+        <label class="field-label">Фильтр по клиентам</label>
+        <div class="multiselect-box" id="task-tpl-client-ms" onclick="toggleMultiselect('task-tpl-client-ms')">
+          <span class="multiselect-placeholder" id="task-tpl-client-ms-label">Все клиенты</span>
+          <span class="multiselect-arrow">&#9662;</span>
+        </div>
+        <div class="multiselect-dropdown" id="task-tpl-client-ms-dropdown" style="display:none;">
+          <input type="text" class="multiselect-search" placeholder="Поиск клиента..." oninput="filterMultiselectOptions('task-tpl-client-ms-dropdown', this.value)">
+          <div class="multiselect-options" id="task-tpl-client-ms-options">
+            <!-- Заполняется динамически -->
+          </div>
+        </div>
       </div>
+
       <div id="task-template-list" class="task-template-grid"></div>
     </div>
     <div class="modal-footer">

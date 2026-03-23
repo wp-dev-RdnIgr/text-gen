@@ -287,7 +287,35 @@ textarea.input-field { resize: vertical; }
   display: flex; justify-content: space-between; align-items: center;
   margin-bottom: 16px;
 }
-.task-tpl-filter-toggle { font-size: 12px; white-space: nowrap; }
+/* --- Мультиселект с поиском --- */
+.multiselect-box {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 7px 12px; border: 1px solid #DDD; border-radius: 7px;
+  background: #fff; cursor: pointer; font-size: 13px; color: #1A1A1A;
+  transition: border-color 0.15s; user-select: none; min-height: 34px;
+}
+.multiselect-box:hover { border-color: #1A5FB4; }
+.multiselect-arrow { font-size: 10px; color: #888; margin-left: 8px; }
+.multiselect-placeholder { color: #888; }
+.multiselect-placeholder.has-selection { color: #1A1A1A; }
+.multiselect-dropdown {
+  position: relative; z-index: 100; background: #fff;
+  border: 1px solid #DDD; border-radius: 0 0 7px 7px; border-top: none;
+  max-height: 220px; overflow: hidden; display: flex; flex-direction: column;
+  margin-top: -1px;
+}
+.multiselect-search {
+  width: 100%; padding: 8px 12px; border: none; border-bottom: 1px solid #E5E5E0;
+  font-family: 'DM Sans', sans-serif; font-size: 12px; outline: none;
+}
+.multiselect-options { overflow-y: auto; max-height: 170px; }
+.multiselect-option {
+  display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+  font-size: 12px; cursor: pointer; transition: background 0.1s;
+}
+.multiselect-option:hover { background: #F5F5F0; }
+.multiselect-option input[type="checkbox"] { accent-color: #1A5FB4; }
+.multiselect-option.hidden { display: none; }
 
 /* --- Лейаут шаблонов --- */
 .templates-layout { display: flex; height: calc(100vh - 48px); }
