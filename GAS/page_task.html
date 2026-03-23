@@ -22,143 +22,127 @@
   <!-- Вкладки -->
   <div class="tabs">
     <button class="tab active" data-tab="data" onclick="switchTaskTab('data')">Данные</button>
-    <button class="tab" data-tab="settings" onclick="switchTaskTab('settings')">Настройки генерации</button>
     <button class="tab" data-tab="progress" onclick="switchTaskTab('progress')">Прогресс</button>
     <button class="tab" data-tab="results" onclick="switchTaskTab('results')">Результаты</button>
   </div>
 
   <div class="task-content-area">
-    <!-- Вкладка: Данные -->
+    <!-- Вкладка: Данные + Настройки генерации -->
     <div id="task-tab-data" class="tab-content active">
+      <!-- Блок данных -->
       <div class="section">
-        <!-- Управление колонками -->
         <div class="section-header-row">
           <h3 class="section-title">Данные для генерации</h3>
           <button class="btn btn-sm" onclick="loadFromSheets()">Загрузить из Google Sheets</button>
         </div>
 
-        <!-- Колонки и переменные — единый блок -->
+        <!-- Колонки и переменные -->
         <div id="columns-variables-block" class="columns-variables-block">
           <div class="columns-variables-header">
             <span class="columns-variables-title">Колонки данных</span>
             <button class="column-add-btn" onclick="openModal('modal-addcolumn')">+ Колонка</button>
           </div>
-          <div id="columns-grid" class="columns-grid">
-            <!-- Заполняется динамически: карточки колонок -->
-          </div>
+          <div id="columns-grid" class="columns-grid"></div>
         </div>
 
         <!-- Таблица данных -->
         <div class="table-container">
           <table class="data-table editable-table" id="task-data-table-wrapper">
-            <thead id="task-data-thead">
-              <!-- Динамические заголовки -->
-            </thead>
-            <tbody id="task-data-table">
-              <!-- Динамические строки -->
-            </tbody>
+            <thead id="task-data-thead"></thead>
+            <tbody id="task-data-table"></tbody>
           </table>
         </div>
         <button class="btn" onclick="addDataRow()" style="margin-top:8px;">+ Добавить строку</button>
       </div>
-    </div>
 
-    <!-- Вкладка: Настройки генерации -->
-    <div id="task-tab-settings" class="tab-content" style="display:none;">
-      <div class="settings-tab-layout">
-        <!-- Левая часть: Промты (широкая) -->
-        <div class="settings-prompts-col">
-          <!-- Шаблон + версия -->
-          <div class="settings-template-row">
-            <div class="field-group" style="flex:1;">
-              <label class="field-label">Шаблон промта</label>
-              <select id="gen-template-select" class="input-field" onchange="onTemplateChange()">
-              </select>
-            </div>
-            <div id="gen-version-group" class="field-group" style="width:200px;display:none;">
-              <label class="field-label">Версия шаблона</label>
-              <select id="gen-version-select" class="input-field" onchange="onVersionChange()">
-              </select>
-            </div>
-          </div>
-
-          <!-- Промты -->
-          <div id="gen-local-prompt-group" style="display:none;">
-            <div class="local-prompt-header">
-              <label class="field-label" style="margin-bottom:0;">Промт для этой задачи</label>
-              <button class="btn btn-sm" onclick="resetLocalPrompt()" title="Сбросить к оригиналу шаблона">Сбросить</button>
-            </div>
-            <div class="local-prompt-hint">Изменения здесь не влияют на оригинальный шаблон</div>
-
-            <div class="prompts-grid">
-              <div class="prompt-block">
-                <label class="field-label">Системный промт</label>
-                <textarea id="gen-local-system-prompt" class="input-field textarea-mono" rows="10" placeholder="Системный промт — задаёт роль и стиль генерации..." onchange="saveLocalPrompt()"></textarea>
+      <!-- Блок настроек генерации -->
+      <div class="section" style="margin-top:12px;">
+        <h3 class="section-title">Настройки генерации</h3>
+        <div class="settings-tab-layout">
+          <!-- Левая часть: Промты -->
+          <div class="settings-prompts-col">
+            <div class="settings-template-row">
+              <div class="field-group" style="flex:1;">
+                <label class="field-label">Шаблон промта</label>
+                <select id="gen-template-select" class="input-field" onchange="onTemplateChange()">
+                </select>
               </div>
-              <div class="prompt-block">
-                <label class="field-label">Пользовательский промт</label>
-                <textarea id="gen-local-user-prompt" class="input-field textarea-mono" rows="10" placeholder="Пользовательский промт — шаблон запроса с переменными {{url}}, {{keywords}}..." onchange="saveLocalPrompt()"></textarea>
+              <div id="gen-version-group" class="field-group" style="width:200px;display:none;">
+                <label class="field-label">Версия шаблона</label>
+                <select id="gen-version-select" class="input-field" onchange="onVersionChange()">
+                </select>
               </div>
             </div>
+
+            <div id="gen-local-prompt-group" style="display:none;">
+              <div class="local-prompt-header">
+                <label class="field-label" style="margin-bottom:0;">Промт для этой задачи</label>
+                <button class="btn btn-sm" onclick="resetLocalPrompt()" title="Сбросить к оригиналу шаблона">Сбросить</button>
+              </div>
+              <div class="local-prompt-hint">Изменения здесь не влияют на оригинальный шаблон</div>
+
+              <div class="prompts-grid">
+                <div class="prompt-block">
+                  <label class="field-label">Системный промт</label>
+                  <textarea id="gen-local-system-prompt" class="input-field textarea-mono" rows="10" placeholder="Системный промт — задаёт роль и стиль генерации..." onchange="saveLocalPrompt()"></textarea>
+                </div>
+                <div class="prompt-block">
+                  <label class="field-label">Пользовательский промт</label>
+                  <textarea id="gen-local-user-prompt" class="input-field textarea-mono" rows="10" placeholder="Пользовательский промт — шаблон запроса с переменными {{url}}, {{keywords}}..." onchange="saveLocalPrompt()"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <div id="gen-no-template-hint" class="placeholder-message" style="height:200px;">
+              <p>Выберите шаблон промта выше, чтобы настроить промты</p>
+            </div>
           </div>
 
-          <!-- Подсказка если шаблон не выбран -->
-          <div id="gen-no-template-hint" class="placeholder-message" style="height:200px;">
-            <p>Выберите шаблон промта выше, чтобы настроить промты</p>
+          <!-- Правая часть: Настройки -->
+          <div class="settings-options-col">
+            <div class="field-group">
+              <label class="field-label">LLM модель</label>
+              <select id="gen-llm-select" class="input-field" onchange="updateCostEstimate()">
+                <option value="openai|ChatGPT (GPT-4o)">ChatGPT (GPT-4o)</option>
+                <option value="openai|ChatGPT (GPT-4o-mini)">ChatGPT (GPT-4o-mini)</option>
+                <option value="anthropic|Claude Sonnet" selected>Claude Sonnet</option>
+                <option value="anthropic|Claude Opus">Claude Opus</option>
+                <option value="perplexity|Perplexity Online">Perplexity Online</option>
+              </select>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label">Постобработка</label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="opt-humanize" checked> Гуманизация
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="opt-uniqueness" checked> Проверка уникальности
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="opt-factcheck"> Фактчекинг
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="opt-ai-detector"> AI-детектор
+              </label>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label">Папка Google Drive</label>
+              <input type="text" id="gen-drive-folder" class="input-field" placeholder="ID папки или URL">
+            </div>
+
+            <div id="cost-estimate" class="cost-estimate">
+              <span id="cost-text">0 текстов ~ $0.00</span>
+            </div>
+
+            <button class="btn btn-primary btn-block" onclick="startGeneration()" style="margin-top:12px;">
+              Запустить генерацию
+            </button>
+            <button class="btn btn-block" onclick="saveAsTaskTemplate()" style="margin-top:8px;">
+              Сохранить как шаблон задачи
+            </button>
           </div>
-        </div>
-
-        <!-- Правая часть: Настройки -->
-        <div class="settings-options-col">
-          <!-- LLM -->
-          <div class="field-group">
-            <label class="field-label">LLM модель</label>
-            <select id="gen-llm-select" class="input-field" onchange="updateCostEstimate()">
-              <option value="openai|ChatGPT (GPT-4o)">ChatGPT (GPT-4o)</option>
-              <option value="openai|ChatGPT (GPT-4o-mini)">ChatGPT (GPT-4o-mini)</option>
-              <option value="anthropic|Claude Sonnet" selected>Claude Sonnet</option>
-              <option value="anthropic|Claude Opus">Claude Opus</option>
-              <option value="perplexity|Perplexity Online">Perplexity Online</option>
-            </select>
-          </div>
-
-          <!-- Постобработка -->
-          <div class="field-group">
-            <label class="field-label">Постобработка</label>
-            <label class="checkbox-label">
-              <input type="checkbox" id="opt-humanize" checked> Гуманизация
-            </label>
-            <label class="checkbox-label">
-              <input type="checkbox" id="opt-uniqueness" checked> Проверка уникальности
-            </label>
-            <label class="checkbox-label">
-              <input type="checkbox" id="opt-factcheck"> Фактчекинг
-            </label>
-            <label class="checkbox-label">
-              <input type="checkbox" id="opt-ai-detector"> AI-детектор
-            </label>
-          </div>
-
-          <!-- Папка Google Drive -->
-          <div class="field-group">
-            <label class="field-label">Папка Google Drive</label>
-            <input type="text" id="gen-drive-folder" class="input-field" placeholder="ID папки или URL">
-          </div>
-
-          <!-- Оценка стоимости -->
-          <div id="cost-estimate" class="cost-estimate">
-            <span id="cost-text">0 текстов ~ $0.00</span>
-          </div>
-
-          <!-- Кнопка запуска -->
-          <button class="btn btn-primary btn-block" onclick="startGeneration()" style="margin-top:12px;">
-            Запустить генерацию
-          </button>
-
-          <!-- Сохранить как шаблон задачи -->
-          <button class="btn btn-block" onclick="saveAsTaskTemplate()" style="margin-top:8px;">
-            Сохранить как шаблон задачи
-          </button>
         </div>
       </div>
     </div>
@@ -323,9 +307,7 @@
           Только шаблоны этого клиента
         </label>
       </div>
-      <div id="task-template-list" class="task-template-grid">
-        <!-- Заполняется динамически -->
-      </div>
+      <div id="task-template-list" class="task-template-grid"></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-task-template')">Отмена</button>
@@ -352,9 +334,7 @@
       </div>
       <div class="task-tpl-summary">
         <div class="field-label">Что будет сохранено:</div>
-        <ul id="task-tpl-summary-list" class="task-tpl-checklist">
-          <!-- Заполняется динамически -->
-        </ul>
+        <ul id="task-tpl-summary-list" class="task-tpl-checklist"></ul>
       </div>
     </div>
     <div class="modal-footer">
