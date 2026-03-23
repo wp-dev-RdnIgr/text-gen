@@ -228,8 +228,7 @@ function loadTaskScreen(taskId) {
       var cl = (clients||[]).find(function(c){return c.id===task.client_id;});
       document.getElementById('task-breadcrumb-client').textContent = cl?cl.name:'';
     }).getClients();
-    renderColumnBar();
-    renderVariableHints();
+    renderColumnsGrid();
     renderDynamicDataTable();
     populateTemplateSelect();
     // Восстановить настройки
@@ -276,31 +275,26 @@ function switchTaskTab(tab) {
   if (target) target.style.display='block';
 }
 
-// --- Бар колонок ---
-function renderColumnBar() {
-  var bar = document.getElementById('column-bar'); if (!bar || !state.currentTask) return;
+// --- Колонки + переменные (единый блок) ---
+function renderColumnsGrid() {
+  var grid = document.getElementById('columns-grid'); if (!grid || !state.currentTask) return;
   var cols = state.currentTask.columns || [];
+  var typeLabels = { short: 'строка', long: 'текст' };
   var h = '';
   cols.forEach(function(col) {
-    var typeIcon = col.type === 'long' ? ' (текст)' : '';
-    h += '<span class="column-chip" title="Переменная: {{'+col.key+'}}">' +
-      '<span class="column-chip-label" ondblclick="renameColumnPrompt(\''+col.key+'\')">'+escapeHtml(col.label)+typeIcon+'</span>' +
-      '<button class="column-chip-delete" onclick="removeColumn(\''+col.key+'\')">&times;</button>' +
-    '</span>';
+    h += '<div class="column-card">' +
+      '<button class="column-card-delete" onclick="removeColumn(\''+col.key+'\')" title="Удалить колонку">&times;</button>' +
+      '<div class="column-card-top">' +
+        '<span class="column-card-name" ondblclick="renameColumnPrompt(\''+col.key+'\')" title="Двойной клик для переименования">'+escapeHtml(col.label)+'</span>' +
+        '<span class="column-card-type">'+escapeHtml(typeLabels[col.type]||col.type)+'</span>' +
+      '</div>' +
+      '<div class="column-card-variable">' +
+        '<span class="column-card-var-tag" onclick="copyVariable(\''+col.key+'\')" title="Нажмите, чтобы скопировать">{{'+escapeHtml(col.key)+'}}</span>' +
+      '</div>' +
+    '</div>';
   });
   h += '<button class="column-add-btn" onclick="openModal(\'modal-addcolumn\')">+ Колонка</button>';
-  bar.innerHTML = h;
-}
-
-function renderVariableHints() {
-  var el = document.getElementById('variable-hints'); if (!el || !state.currentTask) return;
-  var cols = state.currentTask.columns || [];
-  if (!cols.length) { el.innerHTML = ''; return; }
-  var h = '<span class="text-secondary" style="font-size:11px;margin-right:6px;">Переменные для промпта:</span>';
-  cols.forEach(function(col) {
-    h += '<span class="variable-tag" onclick="copyVariable(\''+col.key+'\')" title="Нажмите, чтобы скопировать">{{'+escapeHtml(col.key)+'}}</span> ';
-  });
-  el.innerHTML = h;
+  grid.innerHTML = h;
 }
 
 function copyVariable(key) {
@@ -323,8 +317,7 @@ function confirmAddColumn() {
   (state.currentTask.rows||[]).forEach(function(row){ row[key] = ''; });
   closeModal('modal-addcolumn');
   document.getElementById('new-col-label').value = '';
-  renderColumnBar();
-  renderVariableHints();
+  renderColumnsGrid();
   renderDynamicDataTable();
   autoSaveTask();
 }
@@ -333,8 +326,7 @@ function removeColumn(key) {
   if (!confirm('Удалить колонку?')) return;
   state.currentTask.columns = state.currentTask.columns.filter(function(c){return c.key!==key;});
   (state.currentTask.rows||[]).forEach(function(row){ delete row[key]; });
-  renderColumnBar();
-  renderVariableHints();
+  renderColumnsGrid();
   renderDynamicDataTable();
   autoSaveTask();
 }
@@ -345,7 +337,7 @@ function renameColumnPrompt(key) {
   var newLabel = prompt('Новое название колонки:', col.label);
   if (newLabel && newLabel.trim()) {
     col.label = newLabel.trim();
-    renderColumnBar();
+    renderColumnsGrid();
     autoSaveTask();
   }
 }
@@ -441,30 +433,64 @@ function onTemplateChange() {
   var sel = document.getElementById('gen-template-select');
   var vg = document.getElementById('gen-version-group');
   var vs = document.getElementById('gen-version-select');
-  var pr = document.getElementById('gen-template-preview');
+  var lpg = document.getElementById('gen-local-prompt-group');
   var tpl = state.templates.find(function(t){return t.id===sel.value;});
   if (tpl) {
     vg.style.display = 'block';
+    lpg.style.display = 'block';
     vs.innerHTML = '<option value="current">v'+(tpl.version||1)+' (текущая)</option>';
-    var txt = (tpl.user_prompt||'').substring(0,200);
-    pr.textContent = txt + (tpl.user_prompt&&tpl.user_prompt.length>200?'...':'');
-    pr.style.display = 'block';
+    // Заполнить локальный промт: если уже есть сохранённый — использовать его, иначе взять из шаблона
+    if (state.currentTask && state.currentTask.local_system_prompt != null) {
+      document.getElementById('gen-local-system-prompt').value = state.currentTask.local_system_prompt;
+      document.getElementById('gen-local-user-prompt').value = state.currentTask.local_user_prompt || '';
+    } else {
+      document.getElementById('gen-local-system-prompt').value = tpl.system_prompt || '';
+      document.getElementById('gen-local-user-prompt').value = tpl.user_prompt || '';
+    }
     google.script.run.withSuccessHandler(function(versions){
       state.genTemplateVersions=versions||[];
       versions.forEach(function(v){ var o=document.createElement('option'); o.value=v.id; o.textContent='v'+v.version+' ('+formatDateTime(v.saved_at)+')'; vs.appendChild(o); });
     }).getTemplateVersions(tpl.id);
-  } else { vg.style.display='none'; pr.style.display='none'; state.genTemplateVersions=[]; }
+  } else {
+    vg.style.display='none'; lpg.style.display='none'; state.genTemplateVersions=[];
+  }
 }
 
 function onVersionChange() {
-  var vs=document.getElementById('gen-version-select'), pr=document.getElementById('gen-template-preview'), ts=document.getElementById('gen-template-select');
+  var vs=document.getElementById('gen-version-select'), ts=document.getElementById('gen-template-select');
   if (vs.value==='current') {
     var tpl=state.templates.find(function(t){return t.id===ts.value;});
-    if(tpl){pr.textContent=(tpl.user_prompt||'').substring(0,200);pr.style.display='block';}
+    if(tpl){
+      document.getElementById('gen-local-system-prompt').value = tpl.system_prompt || '';
+      document.getElementById('gen-local-user-prompt').value = tpl.user_prompt || '';
+      saveLocalPrompt();
+    }
   } else {
     var v=(state.genTemplateVersions||[]).find(function(x){return x.id===vs.value;});
-    if(v){pr.textContent=(v.user_prompt||'').substring(0,200);pr.style.display='block';}
+    if(v){
+      document.getElementById('gen-local-system-prompt').value = v.system_prompt || '';
+      document.getElementById('gen-local-user-prompt').value = v.user_prompt || '';
+      saveLocalPrompt();
+    }
   }
+}
+
+function saveLocalPrompt() {
+  if (!state.currentTask) return;
+  state.currentTask.local_system_prompt = document.getElementById('gen-local-system-prompt').value;
+  state.currentTask.local_user_prompt = document.getElementById('gen-local-user-prompt').value;
+  autoSaveTask();
+}
+
+function resetLocalPrompt() {
+  var ts=document.getElementById('gen-template-select');
+  var tpl=state.templates.find(function(t){return t.id===ts.value;});
+  if (!tpl){showToast('Сначала выберите шаблон','error');return;}
+  if (!confirm('Сбросить промт к оригиналу шаблона?')) return;
+  document.getElementById('gen-local-system-prompt').value = tpl.system_prompt || '';
+  document.getElementById('gen-local-user-prompt').value = tpl.user_prompt || '';
+  saveLocalPrompt();
+  showToast('Промт сброшен к оригиналу','success');
 }
 
 // --- Стоимость ---
@@ -511,6 +537,9 @@ function startGeneration() {
     ai_detector: document.getElementById('opt-ai-detector').checked
   };
   state.currentTask.drive_folder = document.getElementById('gen-drive-folder').value;
+  // Сохранить локальные промты
+  state.currentTask.local_system_prompt = document.getElementById('gen-local-system-prompt').value;
+  state.currentTask.local_user_prompt = document.getElementById('gen-local-user-prompt').value;
   autoSaveTask();
 
   showToast('Запуск генерации...','info');
