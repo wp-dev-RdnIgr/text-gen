@@ -40,6 +40,27 @@
           <textarea id="tpl-description" class="input-field" rows="2" placeholder="Краткое описание — для чего этот шаблон..."></textarea>
         </div>
 
+        <!-- Привязка к клиентам -->
+        <div class="field-group">
+          <div class="field-label">
+            Привязка к клиентам
+            <span class="tooltip-wrap">
+              <span class="tooltip-icon">?</span>
+              <span class="tooltip-text">Шаблон будет доступен только для выбранных клиентов. Если не выбрано — доступен всем.</span>
+            </span>
+          </div>
+          <div class="multiselect-box" id="tpl-client-ms" onclick="toggleMultiselect('tpl-client-ms')">
+            <span class="multiselect-placeholder" id="tpl-client-ms-label">Все клиенты</span>
+            <span class="multiselect-arrow">&#9662;</span>
+          </div>
+          <div class="multiselect-dropdown" id="tpl-client-ms-dropdown" style="display:none;">
+            <input type="text" class="multiselect-search" placeholder="Поиск клиента..." oninput="filterMultiselectOptions('tpl-client-ms-dropdown', this.value)">
+            <div class="multiselect-options" id="tpl-client-ms-options">
+              <!-- Заполняется динамически -->
+            </div>
+          </div>
+        </div>
+
         <!-- Промпты -->
         <div class="settings-layout">
           <div class="settings-main">

@@ -69,7 +69,23 @@
         <button class="modal-close" onclick="closeModal('modal-new-task')">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="text-secondary" style="margin-bottom:16px;">Выберите шаблон или создайте задачу с нуля</p>
+        <p class="text-secondary" style="margin-bottom:12px;">Выберите шаблон или создайте задачу с нуля</p>
+
+        <!-- Фильтр по клиентам -->
+        <div style="margin-bottom:16px;">
+          <label class="field-label">Фильтр по клиентам</label>
+          <div class="multiselect-box" id="new-task-client-ms" onclick="toggleMultiselect('new-task-client-ms')">
+            <span class="multiselect-placeholder" id="new-task-client-ms-label">Все клиенты</span>
+            <span class="multiselect-arrow">&#9662;</span>
+          </div>
+          <div class="multiselect-dropdown" id="new-task-client-ms-dropdown" style="display:none;">
+            <input type="text" class="multiselect-search" placeholder="Поиск клиента..." oninput="filterMultiselectOptions('new-task-client-ms-dropdown', this.value)">
+            <div class="multiselect-options" id="new-task-client-ms-options">
+              <!-- Заполняется динамически -->
+            </div>
+          </div>
+        </div>
+
         <div id="new-task-template-list" class="task-template-grid">
           <!-- Заполняется динамически -->
         </div>

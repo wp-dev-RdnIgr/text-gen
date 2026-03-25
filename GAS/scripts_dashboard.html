@@ -51,22 +51,75 @@ function createNewTask() {
 function renderNewTaskTemplateList() {
   var c = document.getElementById('new-task-template-list');
   if (!c) return;
+
+  // Populate client filter multiselect
+  populateNewTaskClientFilter();
+
+  // Get selected client filter
+  var selectedClients = getMultiselectSelected('new-task-client-ms-options');
+
   var tts = state.taskTemplates || [];
+
+  // Filter by selected clients
+  if (selectedClients.length > 0) {
+    tts = tts.filter(function(tt) {
+      var ids = tt.client_ids || [];
+      if (ids.length === 0) return true; // no restriction = show for all
+      return selectedClients.some(function(cid) { return ids.indexOf(cid) !== -1; });
+    });
+  }
+
   if (!tts.length) {
-    c.innerHTML = '<div class="placeholder-message" style="height:80px;grid-column:1/-1;"><p>Нет сохранённых шаблонов</p></div>';
+    c.innerHTML = '<div class="placeholder-message" style="height:80px;grid-column:1/-1;"><p>' +
+      (selectedClients.length ? 'Нет шаблонов для выбранных клиентов' : 'Нет сохранённых шаблонов') + '</p></div>';
     return;
   }
   var h = '';
   tts.forEach(function(tt) {
+    // Show client tags
+    var clientTags = '';
+    (tt.client_ids || []).forEach(function(cid) {
+      var cl = (state.clients || []).find(function(c) { return c.id === cid; });
+      if (cl) clientTags += '<span class="task-template-card-tag">' + escapeHtml(cl.name) + '</span>';
+    });
     h += '<div class="task-template-card" onclick="createTaskFromTemplate(\'' + tt.id + '\')">' +
       '<div class="task-template-card-name">' + escapeHtml(tt.name) + '</div>' +
       '<div class="task-template-card-desc">' + escapeHtml(tt.description || '') + '</div>' +
       '<div class="task-template-card-meta">' +
         '<span class="task-template-card-tag" style="background:#EBF5FF;color:#1A5FB4;">' + escapeHtml(tt.llm_model || '—') + '</span>' +
+        clientTags +
       '</div>' +
     '</div>';
   });
   c.innerHTML = h;
+}
+
+function populateNewTaskClientFilter() {
+  var opts = document.getElementById('new-task-client-ms-options');
+  if (!opts) return;
+  if (opts.children.length > 0) return; // already populated
+  var h = '';
+  (state.clients || []).forEach(function(cl) {
+    h += '<label class="multiselect-option"><input type="checkbox" value="' + cl.id + '" onchange="onNewTaskClientFilterChange()">' + escapeHtml(cl.name) + '</label>';
+  });
+  opts.innerHTML = h || '<div style="padding:8px 12px;color:#888;font-size:12px;">Нет клиентов</div>';
+}
+
+function onNewTaskClientFilterChange() {
+  var selected = getMultiselectSelected('new-task-client-ms-options');
+  var label = document.getElementById('new-task-client-ms-label');
+  if (selected.length === 0) {
+    label.textContent = 'Все клиенты';
+    label.className = 'multiselect-placeholder';
+  } else {
+    var names = selected.map(function(id) {
+      var cl = (state.clients || []).find(function(c) { return c.id === id; });
+      return cl ? cl.name : '';
+    }).join(', ');
+    label.textContent = names;
+    label.className = 'multiselect-placeholder has-selection';
+  }
+  renderNewTaskTemplateList();
 }
 
 function createTaskFromScratch() {

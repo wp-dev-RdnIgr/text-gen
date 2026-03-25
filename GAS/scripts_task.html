@@ -13,7 +13,6 @@ function loadTaskScreen(taskId) {
     document.getElementById('task-name-input').value = task.name || '';
     document.getElementById('task-breadcrumb-name').textContent = task.name || '';
     document.getElementById('task-system-prompt').value = task.system_prompt || '';
-    document.getElementById('task-user-prompt').value = task.user_prompt || '';
 
     // Шаблон
     var tplName = '—';
@@ -84,7 +83,6 @@ function saveTaskName() {
 function saveTaskPrompts() {
   if (!state.currentTask) return;
   state.currentTask.system_prompt = document.getElementById('task-system-prompt').value;
-  state.currentTask.user_prompt = document.getElementById('task-user-prompt').value;
   autoSaveTask();
 }
 
