@@ -45,7 +45,8 @@ function loadTaskScreen(taskId) {
     document.getElementById('gen-empty').style.display = 'flex';
     document.getElementById('gen-result').style.display = 'none';
     document.getElementById('gen-loading').style.display = 'none';
-    document.getElementById('gen-user-input').value = '';
+    // Подставить пользовательский промпт в поле ввода
+    document.getElementById('gen-user-input').value = task.user_prompt || '';
 
     switchTaskTab('generate');
     loadTaskHistory(taskId);
