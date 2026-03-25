@@ -3,6 +3,9 @@
 // scripts_templates.html - Шаблоны задач
 // ===========================================
 
+// --- Хранилище client_ids для текущего шаблона ---
+var _tplClientIds = [];
+
 function renderTemplateList() {
   var c = document.getElementById('template-list');
   if (!c) return;
@@ -16,9 +19,11 @@ function renderTemplateList() {
   var h = '';
   tts.forEach(function(tt) {
     var active = tt.id === state.selectedTemplateId ? ' active' : '';
+    var clientCount = (tt.client_ids || []).length;
+    var metaExtra = clientCount ? ' · ' + clientCount + ' кл.' : '';
     h += '<div class="template-item' + active + '" onclick="selectTemplate(\'' + tt.id + '\')">' +
       '<div class="template-item-name">' + escapeHtml(tt.name) + '</div>' +
-      '<div class="template-item-meta">' + escapeHtml(tt.llm_model || '—') + '</div>' +
+      '<div class="template-item-meta">' + escapeHtml(tt.llm_model || '—') + metaExtra + '</div>' +
     '</div>';
   });
   c.innerHTML = h;
@@ -56,10 +61,15 @@ function selectTemplate(ttId) {
   document.getElementById('tpl-opt-uniqueness').checked = !!opts.uniqueness;
   document.getElementById('tpl-opt-factcheck').checked = !!opts.factcheck;
   document.getElementById('tpl-opt-ai-detector').checked = !!opts.ai_detector;
+
+  // Клиенты
+  _tplClientIds = (tt.client_ids || []).slice();
+  renderTplClientMultiselect();
 }
 
 function createNewTemplate() {
   state.selectedTemplateId = null;
+  _tplClientIds = [];
   renderTemplateList();
   document.getElementById('template-placeholder').style.display = 'none';
   document.getElementById('template-editor-content').style.display = 'block';
@@ -73,6 +83,43 @@ function createNewTemplate() {
   document.getElementById('tpl-opt-uniqueness').checked = true;
   document.getElementById('tpl-opt-factcheck').checked = false;
   document.getElementById('tpl-opt-ai-detector').checked = false;
+
+  renderTplClientMultiselect();
+}
+
+// --- Мультиселект клиентов в шаблоне ---
+function renderTplClientMultiselect() {
+  var opts = document.getElementById('tpl-client-ms-options');
+  if (!opts) return;
+  var h = '';
+  (state.clients || []).forEach(function(cl) {
+    var checked = _tplClientIds.indexOf(cl.id) !== -1 ? ' checked' : '';
+    h += '<label class="multiselect-option"><input type="checkbox" value="' + cl.id + '"' + checked + ' onchange="onTplClientChange()">' + escapeHtml(cl.name) + '</label>';
+  });
+  if (!state.clients.length) h = '<div style="padding:8px 12px;color:#888;font-size:12px;">Нет клиентов</div>';
+  opts.innerHTML = h;
+  updateTplClientLabel();
+}
+
+function onTplClientChange() {
+  _tplClientIds = getMultiselectSelected('tpl-client-ms-options');
+  updateTplClientLabel();
+}
+
+function updateTplClientLabel() {
+  var label = document.getElementById('tpl-client-ms-label');
+  if (!label) return;
+  if (_tplClientIds.length === 0) {
+    label.textContent = 'Все клиенты';
+    label.className = 'multiselect-placeholder';
+  } else {
+    var names = _tplClientIds.map(function(id) {
+      var cl = (state.clients || []).find(function(c) { return c.id === id; });
+      return cl ? cl.name : '';
+    }).join(', ');
+    label.textContent = names;
+    label.className = 'multiselect-placeholder has-selection';
+  }
 }
 
 function saveCurrentTemplate() {
@@ -87,6 +134,7 @@ function saveCurrentTemplate() {
     description: document.getElementById('tpl-description').value.trim(),
     system_prompt: document.getElementById('tpl-system-prompt').value,
     user_prompt: document.getElementById('tpl-user-prompt').value,
+    client_ids: _tplClientIds,
     llm_provider: parts[0] || '',
     llm_model: parts[1] || '',
     options: {
@@ -140,6 +188,7 @@ function duplicateTemplate() {
     description: tt.description || '',
     system_prompt: tt.system_prompt || '',
     user_prompt: tt.user_prompt || '',
+    client_ids: (tt.client_ids || []).slice(),
     llm_provider: tt.llm_provider || '',
     llm_model: tt.llm_model || '',
     options: tt.options || {}

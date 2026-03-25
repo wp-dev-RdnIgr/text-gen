@@ -203,6 +203,40 @@ function generateFakeContent(userInput) {
     '<p>Используйте информацию из этой статьи для оптимального выбора. Мы уверены, что наши советы помогут вам принять правильное решение.</p>';
 }
 
+// --- Мультиселект ---
+function toggleMultiselect(boxId) {
+  var dd = document.getElementById(boxId + '-dropdown');
+  if (!dd) return;
+  dd.style.display = dd.style.display === 'none' ? 'flex' : 'none';
+}
+
+function filterMultiselectOptions(dropdownId, q) {
+  var opts = document.querySelectorAll('#' + dropdownId + ' .multiselect-option');
+  q = q.toLowerCase();
+  for (var i = 0; i < opts.length; i++) {
+    opts[i].classList.toggle('hidden', opts[i].textContent.toLowerCase().indexOf(q) === -1);
+  }
+}
+
+function getMultiselectSelected(optionsId) {
+  var opts = document.querySelectorAll('#' + optionsId + ' input[type="checkbox"]:checked');
+  var r = [];
+  for (var i = 0; i < opts.length; i++) r.push(opts[i].value);
+  return r;
+}
+
+// Close dropdowns on outside click
+document.addEventListener('click', function(e) {
+  var dds = document.querySelectorAll('.multiselect-dropdown');
+  for (var i = 0; i < dds.length; i++) {
+    var boxId = dds[i].id.replace('-dropdown', '');
+    var box = document.getElementById(boxId);
+    if (box && !box.contains(e.target) && !dds[i].contains(e.target)) {
+      dds[i].style.display = 'none';
+    }
+  }
+});
+
 // --- Демо-данные ---
 function seedDemoData() {
   showToast('Загрузка демо-данных...', 'info');
