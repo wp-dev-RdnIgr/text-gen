@@ -56,19 +56,8 @@ function getTask(taskId) {
 
 function saveTask(taskData) {
   try {
-    if (!taskData.columns) {
-      taskData.columns = [
-        { key: 'url', label: 'URL', type: 'short' },
-        { key: 'keywords', label: 'Ключевые слова', type: 'short' },
-        { key: 'topic', label: 'Тема', type: 'short' },
-        { key: 'brief', label: 'ТЗ', type: 'long' }
-      ];
-    }
-    if (!taskData.rows) {
-      taskData.rows = [];
-    }
     if (!taskData.status) {
-      taskData.status = 'draft';
+      taskData.status = 'active';
     }
     if (!taskData.created_at) {
       taskData.created_at = new Date().toISOString();
@@ -81,189 +70,13 @@ function saveTask(taskData) {
 
 function deleteTask(taskId) {
   try {
+    // Удалить все тексты задачи
     var texts = _getAll('generated_texts');
     texts = texts.filter(function(t) { return t.task_id !== taskId; });
     _saveAll('generated_texts', texts);
     return _deleteItem('tasks', taskId);
   } catch (e) {
     throw new Error('Ошибка удаления задачи: ' + e.message);
-  }
-}
-
-function startTask(taskId) {
-  try {
-    var task = _findById('tasks', taskId);
-    if (!task) throw new Error('Задача не найдена');
-
-    var filledRows = (task.rows || []).filter(function(r) {
-      for (var k in r) { if (r[k]) return true; }
-      return false;
-    });
-    if (!filledRows.length) throw new Error('Нет данных для генерации');
-
-    task.status = 'running';
-    task.total_texts = filledRows.length;
-    task.completed_texts = 0;
-    task.failed_texts = 0;
-    task.started_at = new Date().toISOString();
-    task.completed_at = null;
-    _saveItem('tasks', task, 'task_');
-
-    var texts = _getAll('generated_texts');
-    var newTexts = [];
-    for (var i = 0; i < filledRows.length; i++) {
-      var text = {
-        id: 'gt' + Date.now() + '_' + i,
-        task_id: taskId,
-        row_number: i + 1,
-        source_data: filledRows[i],
-        status: 'pending',
-        uniqueness_score: null,
-        ai_score: null,
-        gdoc_url: null,
-        error_message: null,
-        comment: '',
-        regeneration_count: 0
-      };
-      newTexts.push(text);
-    }
-    texts = texts.concat(newTexts);
-    _saveAll('generated_texts', texts);
-
-    return { task: task, texts: newTexts };
-  } catch (e) {
-    throw new Error('Ошибка запуска задачи: ' + e.message);
-  }
-}
-
-// --- Шаблоны ---
-
-function getTemplates(category) {
-  try {
-    if (category) {
-      return _filterBy('prompt_templates', 'category', category);
-    }
-    return _getAll('prompt_templates');
-  } catch (e) {
-    throw new Error('Ошибка загрузки шаблонов: ' + e.message);
-  }
-}
-
-function getTemplate(templateId) {
-  try {
-    return _findById('prompt_templates', templateId);
-  } catch (e) {
-    throw new Error('Ошибка загрузки шаблона: ' + e.message);
-  }
-}
-
-function saveTemplate(templateData) {
-  try {
-    if (templateData.id) {
-      var existing = _findById('prompt_templates', templateData.id);
-      if (existing) {
-        var versionSnapshot = {
-          id: 'tv_' + existing.id + '_v' + (existing.version || 1),
-          template_id: existing.id,
-          version: existing.version || 1,
-          name: existing.name,
-          category: existing.category,
-          system_prompt: existing.system_prompt,
-          user_prompt: existing.user_prompt,
-          usage_count: existing.usage_count || 0,
-          avg_uniqueness: existing.avg_uniqueness || 0,
-          saved_at: new Date().toISOString()
-        };
-        var versions = _getAll('template_versions');
-        var exists = versions.some(function(v) { return v.id === versionSnapshot.id; });
-        if (!exists) {
-          versions.push(versionSnapshot);
-          _saveAll('template_versions', versions);
-        }
-        templateData.version = (existing.version || 1) + 1;
-      }
-    } else {
-      templateData.version = 1;
-      templateData.usage_count = 0;
-      templateData.avg_uniqueness = 0;
-    }
-    return _saveItem('prompt_templates', templateData, 't');
-  } catch (e) {
-    throw new Error('Ошибка сохранения шаблона: ' + e.message);
-  }
-}
-
-function deleteTemplate(templateId) {
-  try {
-    var versions = _getAll('template_versions');
-    versions = versions.filter(function(v) { return v.template_id !== templateId; });
-    _saveAll('template_versions', versions);
-    return _deleteItem('prompt_templates', templateId);
-  } catch (e) {
-    throw new Error('Ошибка удаления шаблона: ' + e.message);
-  }
-}
-
-function getTemplateVersions(templateId) {
-  try {
-    var versions = _filterBy('template_versions', 'template_id', templateId);
-    versions.sort(function(a, b) { return (b.version || 0) - (a.version || 0); });
-    return versions;
-  } catch (e) {
-    throw new Error('Ошибка загрузки версий шаблона: ' + e.message);
-  }
-}
-
-function restoreTemplateVersion(templateId, versionId) {
-  try {
-    var version = _findById('template_versions', versionId);
-    if (!version) throw new Error('Версия не найдена');
-    var current = _findById('prompt_templates', templateId);
-    if (!current) throw new Error('Шаблон не найден');
-
-    var snapshot = {
-      id: 'tv_' + current.id + '_v' + (current.version || 1),
-      template_id: current.id,
-      version: current.version || 1,
-      name: current.name,
-      category: current.category,
-      system_prompt: current.system_prompt,
-      user_prompt: current.user_prompt,
-      usage_count: current.usage_count || 0,
-      avg_uniqueness: current.avg_uniqueness || 0,
-      saved_at: new Date().toISOString()
-    };
-    var versions = _getAll('template_versions');
-    var exists = versions.some(function(v) { return v.id === snapshot.id; });
-    if (!exists) {
-      versions.push(snapshot);
-      _saveAll('template_versions', versions);
-    }
-
-    current.system_prompt = version.system_prompt;
-    current.user_prompt = version.user_prompt;
-    current.version = (current.version || 1) + 1;
-    return _saveItem('prompt_templates', current, 't');
-  } catch (e) {
-    throw new Error('Ошибка восстановления версии: ' + e.message);
-  }
-}
-
-// --- Тексты ---
-
-function getGeneratedTexts(taskId) {
-  try {
-    return _filterBy('generated_texts', 'task_id', taskId);
-  } catch (e) {
-    throw new Error('Ошибка загрузки текстов: ' + e.message);
-  }
-}
-
-function updateGeneratedText(textId, updates) {
-  try {
-    return _updateItem('generated_texts', textId, updates);
-  } catch (e) {
-    throw new Error('Ошибка обновления текста: ' + e.message);
   }
 }
 
@@ -275,6 +88,153 @@ function updateTask(taskId, updates) {
   }
 }
 
+// --- Генерация текста ---
+
+function generateText(taskId, userInput) {
+  try {
+    var task = _findById('tasks', taskId);
+    if (!task) throw new Error('Задача не найдена');
+
+    var text = {
+      id: 'gt_' + Date.now(),
+      task_id: taskId,
+      user_input: userInput || '',
+      used_system_prompt: task.system_prompt || '',
+      used_user_prompt: task.user_prompt || '',
+      used_llm_model: task.llm_model || '',
+      content: '',
+      blocks: [],
+      status: 'pending',
+      error_message: null,
+      uniqueness_score: null,
+      ai_score: null,
+      regeneration_count: 0,
+      comment: '',
+      created_at: new Date().toISOString()
+    };
+
+    var texts = _getAll('generated_texts');
+    texts.push(text);
+    _saveAll('generated_texts', texts);
+
+    return text;
+  } catch (e) {
+    throw new Error('Ошибка создания текста: ' + e.message);
+  }
+}
+
+// --- Тексты ---
+
+function getGeneratedTexts(taskId) {
+  try {
+    var texts = _filterBy('generated_texts', 'task_id', taskId);
+    texts.sort(function(a, b) {
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
+    return texts;
+  } catch (e) {
+    throw new Error('Ошибка загрузки текстов: ' + e.message);
+  }
+}
+
+function getGeneratedText(textId) {
+  try {
+    return _findById('generated_texts', textId);
+  } catch (e) {
+    throw new Error('Ошибка загрузки текста: ' + e.message);
+  }
+}
+
+function updateGeneratedText(textId, updates) {
+  try {
+    return _updateItem('generated_texts', textId, updates);
+  } catch (e) {
+    throw new Error('Ошибка обновления текста: ' + e.message);
+  }
+}
+
+function deleteGeneratedText(textId) {
+  try {
+    return _deleteItem('generated_texts', textId);
+  } catch (e) {
+    throw new Error('Ошибка удаления текста: ' + e.message);
+  }
+}
+
+// --- Обновление блока текста ---
+
+function updateTextBlock(textId, blockIndex, newContent) {
+  try {
+    var text = _findById('generated_texts', textId);
+    if (!text) throw new Error('Текст не найден');
+    if (!text.blocks || blockIndex >= text.blocks.length) throw new Error('Блок не найден');
+
+    text.blocks[blockIndex].content = newContent;
+
+    // Пересобрать полный контент из блоков
+    text.content = text.blocks.map(function(b) {
+      if (b.type === 'heading') return '<' + b.tag + '>' + b.content + '</' + b.tag + '>';
+      if (b.type === 'list') return b.content;
+      return '<p>' + b.content + '</p>';
+    }).join('\n');
+
+    return _saveItem('generated_texts', text, 'gt_');
+  } catch (e) {
+    throw new Error('Ошибка обновления блока: ' + e.message);
+  }
+}
+
+// --- Разбивка / объединение блоков ---
+
+function splitTextBlock(textId, blockIndex, splitPosition) {
+  try {
+    var text = _findById('generated_texts', textId);
+    if (!text || !text.blocks || blockIndex >= text.blocks.length) throw new Error('Блок не найден');
+
+    var block = text.blocks[blockIndex];
+    var content = block.content;
+    var part1 = content.substring(0, splitPosition).trim();
+    var part2 = content.substring(splitPosition).trim();
+
+    if (!part1 || !part2) throw new Error('Невозможно разбить — одна из частей пуста');
+
+    var newBlock = { id: 'b_' + Date.now(), type: block.type, tag: block.tag, content: part2 };
+    block.content = part1;
+    text.blocks.splice(blockIndex + 1, 0, newBlock);
+
+    // Пересобрать контент
+    text.content = rebuildContentFromBlocks(text.blocks);
+    return _saveItem('generated_texts', text, 'gt_');
+  } catch (e) {
+    throw new Error('Ошибка разбивки блока: ' + e.message);
+  }
+}
+
+function mergeTextBlocks(textId, blockIndex) {
+  try {
+    var text = _findById('generated_texts', textId);
+    if (!text || !text.blocks || blockIndex + 1 >= text.blocks.length) throw new Error('Невозможно объединить');
+
+    var block = text.blocks[blockIndex];
+    var nextBlock = text.blocks[blockIndex + 1];
+    block.content = block.content + ' ' + nextBlock.content;
+    text.blocks.splice(blockIndex + 1, 1);
+
+    text.content = rebuildContentFromBlocks(text.blocks);
+    return _saveItem('generated_texts', text, 'gt_');
+  } catch (e) {
+    throw new Error('Ошибка объединения блоков: ' + e.message);
+  }
+}
+
+function rebuildContentFromBlocks(blocks) {
+  return blocks.map(function(b) {
+    if (b.type === 'heading') return '<' + b.tag + '>' + b.content + '</' + b.tag + '>';
+    if (b.type === 'list') return b.content;
+    return '<p>' + b.content + '</p>';
+  }).join('\n');
+}
+
 // --- Шаблоны задач (Task Templates) ---
 
 function getTaskTemplates() {
@@ -282,6 +242,14 @@ function getTaskTemplates() {
     return _getAll('task_templates');
   } catch (e) {
     throw new Error('Ошибка загрузки шаблонов задач: ' + e.message);
+  }
+}
+
+function getTaskTemplate(id) {
+  try {
+    return _findById('task_templates', id);
+  } catch (e) {
+    throw new Error('Ошибка загрузки шаблона задачи: ' + e.message);
   }
 }
 

@@ -1,0 +1,107 @@
+<!-- Экран: Редактор текста (блочное редактирование) -->
+<div id="screen-editor" class="screen" style="display:none;">
+  <div class="editor-layout">
+    <!-- Хедер -->
+    <div class="editor-header">
+      <div>
+        <div class="breadcrumbs">
+          <a href="#" onclick="navigateTo('#dashboard'); return false;">Дашборд</a>
+          <span class="breadcrumb-sep">/</span>
+          <a href="#" id="editor-breadcrumb-task-link">Задача</a>
+          <span class="breadcrumb-sep">/</span>
+          <span>Редактор</span>
+        </div>
+        <h1 class="page-title" style="font-size:16px;margin-top:4px;">Редактирование текста</h1>
+        <div id="editor-meta" class="text-secondary" style="margin-top:4px;"></div>
+      </div>
+      <div class="editor-actions">
+        <button class="btn btn-sm" onclick="toggleEditorPromptInfo()">Промпт</button>
+        <button class="btn btn-sm btn-danger" onclick="regenerateFullText()">Перегенерировать всё</button>
+        <button class="btn btn-sm" onclick="openRegenWithComment()">Перегенерировать с комментарием</button>
+        <button class="btn btn-sm" onclick="navigateBackFromEditor()">Назад к задаче</button>
+      </div>
+    </div>
+
+    <!-- Информация о промпте (скрытая по умолчанию) -->
+    <div id="editor-prompt-info" class="editor-prompt-info" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="field-label" style="margin:0;">Настройки генерации</span>
+        <span id="editor-llm-badge" class="badge badge-info"></span>
+      </div>
+      <div id="editor-prompt-details" class="editor-prompt-content visible" style="display:block;margin-top:8px;border-top:none;padding-top:0;">
+        <div style="margin-bottom:8px;">
+          <span class="field-label">Системный промт</span>
+          <div id="editor-system-prompt" class="editor-prompt-text"></div>
+        </div>
+        <div>
+          <span class="field-label">Запрос пользователя</span>
+          <div id="editor-user-input" class="editor-prompt-text"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Область регенерации с комментарием -->
+    <div id="editor-regen-comment" class="regen-comment-area" style="display:none;">
+      <div class="field-label">Комментарий к перегенерации</div>
+      <textarea id="editor-regen-comment-text" placeholder="Опишите, что нужно изменить..."></textarea>
+      <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-sm" onclick="closeRegenComment()">Отмена</button>
+        <button class="btn btn-sm btn-primary" onclick="regenerateFullTextWithComment()">Перегенерировать</button>
+      </div>
+    </div>
+
+    <!-- Подсказка по блокам -->
+    <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#92690C;display:flex;align-items:center;gap:8px;">
+      <span style="font-size:16px;">&#128161;</span>
+      <span>
+        <strong>Наведите</strong> на блок текста, чтобы выделить его.
+        <strong>Нажмите</strong> на блок, чтобы открыть действия: перегенерация, разбивка, объединение.
+      </span>
+      <button class="btn btn-sm" style="margin-left:auto;font-size:10px;" onclick="this.parentElement.style.display='none'">Скрыть</button>
+    </div>
+
+    <!-- Блоки текста -->
+    <div id="editor-blocks" class="editor-blocks">
+      <!-- Заполняется динамически -->
+    </div>
+
+    <!-- Статистика -->
+    <div style="margin-top:24px;">
+      <div class="stats-cards stats-cards-3">
+        <div class="stat-card">
+          <div class="stat-value stat-value-sm" id="editor-stat-uniqueness">—</div>
+          <div class="stat-label">Уникальность</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value stat-value-sm" id="editor-stat-ai">—</div>
+          <div class="stat-label">AI-детектор</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value stat-value-sm" id="editor-stat-regens">0</div>
+          <div class="stat-label">Перегенераций</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка: Комментарий к блоку -->
+<div id="modal-block-comment" class="modal-overlay" style="display:none;">
+  <div class="modal-card" style="max-width:450px;">
+    <div class="modal-header">
+      <h3>Перегенерировать блок</h3>
+      <button class="modal-close" onclick="closeModal('modal-block-comment')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="block-comment-preview" style="background:#F5F5F0;border-radius:8px;padding:12px;font-size:12px;color:#555;margin-bottom:12px;max-height:100px;overflow:auto;"></div>
+      <div class="field-group">
+        <label class="field-label">Комментарий (необязательно)</label>
+        <textarea id="block-comment-text" class="input-field" rows="3" placeholder="Что изменить в этом блоке..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-block-comment')">Отмена</button>
+      <button class="btn btn-primary" onclick="confirmBlockRegeneration()">Перегенерировать</button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,254 @@
+<script>
+// ===========================================
+// scripts_task.html - Экран задачи, генерация, история
+// ===========================================
+
+function loadTaskScreen(taskId) {
+  google.script.run.withSuccessHandler(function(task) {
+    if (!task) { showToast('Задача не найдена', 'error'); return; }
+    state.currentTask = task;
+    state.lastGeneratedText = null;
+
+    // Заполнить UI
+    document.getElementById('task-name-input').value = task.name || '';
+    document.getElementById('task-breadcrumb-name').textContent = task.name || '';
+    document.getElementById('task-system-prompt').value = task.system_prompt || '';
+    document.getElementById('task-user-prompt').value = task.user_prompt || '';
+
+    // Шаблон
+    var tplName = '—';
+    if (task.template_id) {
+      var tpl = (state.taskTemplates || []).find(function(x) { return x.id === task.template_id; });
+      if (tpl) tplName = tpl.name;
+    }
+    document.getElementById('task-template-name').textContent = tplName;
+
+    // LLM
+    if (task.llm_provider && task.llm_model) {
+      document.getElementById('task-llm-select').value = task.llm_provider + '|' + task.llm_model;
+    }
+
+    // Опции
+    var opts = task.options || {};
+    document.getElementById('task-opt-humanize').checked = !!opts.humanize;
+    document.getElementById('task-opt-uniqueness').checked = !!opts.uniqueness;
+    document.getElementById('task-opt-factcheck').checked = !!opts.factcheck;
+    document.getElementById('task-opt-ai-detector').checked = !!opts.ai_detector;
+
+    // Клиент в хлебных крошках
+    google.script.run.withSuccessHandler(function(clients) {
+      var cl = (clients || []).find(function(c) { return c.id === task.client_id; });
+      document.getElementById('task-breadcrumb-client').textContent = cl ? cl.name : '';
+    }).getClients();
+
+    // Сбросить UI генерации
+    document.getElementById('gen-empty').style.display = 'flex';
+    document.getElementById('gen-result').style.display = 'none';
+    document.getElementById('gen-loading').style.display = 'none';
+    document.getElementById('gen-user-input').value = '';
+
+    switchTaskTab('generate');
+    loadTaskHistory(taskId);
+  }).getTask(taskId);
+}
+
+function loadTaskHistory(taskId) {
+  google.script.run.withSuccessHandler(function(texts) {
+    state.currentTexts = texts || [];
+    var countEl = document.getElementById('task-history-count');
+    if (countEl) countEl.textContent = state.currentTexts.length;
+    renderHistoryList();
+  }).getGeneratedTexts(taskId);
+}
+
+// --- Табы задачи ---
+function switchTaskTab(tab) {
+  var tabs = document.querySelectorAll('.task-tabs .tab');
+  for (var i = 0; i < tabs.length; i++) {
+    tabs[i].classList.remove('active');
+    if (tabs[i].getAttribute('data-tab') === tab) tabs[i].classList.add('active');
+  }
+  document.getElementById('task-tab-generate').style.display = tab === 'generate' ? 'flex' : 'none';
+  document.getElementById('task-tab-history').style.display = tab === 'history' ? 'flex' : 'none';
+}
+
+// --- Сохранение настроек ---
+function saveTaskName() {
+  if (!state.currentTask) return;
+  state.currentTask.name = document.getElementById('task-name-input').value.trim();
+  document.getElementById('task-breadcrumb-name').textContent = state.currentTask.name;
+  autoSaveTask();
+}
+
+function saveTaskPrompts() {
+  if (!state.currentTask) return;
+  state.currentTask.system_prompt = document.getElementById('task-system-prompt').value;
+  state.currentTask.user_prompt = document.getElementById('task-user-prompt').value;
+  autoSaveTask();
+}
+
+function saveTaskSettings() {
+  if (!state.currentTask) return;
+  var lSel = document.getElementById('task-llm-select');
+  var parts = lSel.value.split('|');
+  state.currentTask.llm_provider = parts[0];
+  state.currentTask.llm_model = parts[1];
+  state.currentTask.options = {
+    humanize: document.getElementById('task-opt-humanize').checked,
+    uniqueness: document.getElementById('task-opt-uniqueness').checked,
+    factcheck: document.getElementById('task-opt-factcheck').checked,
+    ai_detector: document.getElementById('task-opt-ai-detector').checked
+  };
+  autoSaveTask();
+}
+
+function autoSaveTask() {
+  if (!state.currentTask) return;
+  google.script.run.withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+  }).saveTask(state.currentTask);
+}
+
+function deleteCurrentTask() {
+  if (!state.currentTask) return;
+  if (!confirm('Удалить задачу и все её тексты?')) return;
+  google.script.run.withSuccessHandler(function() {
+    showToast('Задача удалена', 'success');
+    navigateTo('#dashboard');
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+  }).deleteTask(state.currentTask.id);
+}
+
+// --- Генерация ---
+function startGeneration() {
+  if (!state.currentTask) return;
+  var input = document.getElementById('gen-user-input').value.trim();
+  if (!input) { showToast('Введите запрос для генерации', 'error'); return; }
+
+  // Показать лоадер
+  document.getElementById('gen-empty').style.display = 'none';
+  document.getElementById('gen-result').style.display = 'none';
+  document.getElementById('gen-loading').style.display = 'block';
+  document.getElementById('gen-send-btn').disabled = true;
+
+  // Сохранить текст на сервер
+  google.script.run.withSuccessHandler(function(text) {
+    state.lastGeneratedText = text;
+    // Симуляция генерации
+    simulateGeneration(text, input);
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+    resetGenUI();
+  }).generateText(state.currentTask.id, input);
+}
+
+function simulateGeneration(text, userInput) {
+  setTimeout(function() {
+    // Генерация фейкового контента
+    var content = generateFakeContent(userInput);
+    var blocks = parseContentToBlocks(content);
+
+    text.content = content;
+    text.blocks = blocks;
+    text.status = 'completed';
+    text.uniqueness_score = Math.floor(Math.random() * 15 + 85);
+    text.ai_score = Math.floor(Math.random() * 25 + 5);
+
+    // Сохранить на сервер
+    google.script.run.updateGeneratedText(text.id, {
+      content: text.content,
+      blocks: text.blocks,
+      status: text.status,
+      uniqueness_score: text.uniqueness_score,
+      ai_score: text.ai_score
+    });
+
+    state.lastGeneratedText = text;
+
+    // Показать результат
+    document.getElementById('gen-loading').style.display = 'none';
+    document.getElementById('gen-result').style.display = 'block';
+    document.getElementById('gen-result-content').innerHTML = content;
+    document.getElementById('gen-send-btn').disabled = false;
+
+    // Обновить историю
+    state.currentTexts.unshift(text);
+    var countEl = document.getElementById('task-history-count');
+    if (countEl) countEl.textContent = state.currentTexts.length;
+    renderHistoryList();
+
+    showToast('Текст сгенерирован!', 'success');
+  }, 2000 + Math.random() * 2000);
+}
+
+function clearGenResult() {
+  document.getElementById('gen-empty').style.display = 'flex';
+  document.getElementById('gen-result').style.display = 'none';
+  document.getElementById('gen-user-input').value = '';
+  state.lastGeneratedText = null;
+}
+
+function resetGenUI() {
+  document.getElementById('gen-loading').style.display = 'none';
+  document.getElementById('gen-empty').style.display = 'flex';
+  document.getElementById('gen-send-btn').disabled = false;
+}
+
+function openEditorForLastGen() {
+  if (!state.lastGeneratedText || !state.currentTask) return;
+  navigateTo('#editor/' + state.currentTask.id + '/' + state.lastGeneratedText.id);
+}
+
+// --- История ---
+function renderHistoryList() {
+  var list = document.getElementById('history-list');
+  var empty = document.getElementById('history-empty');
+  if (!list) return;
+
+  var texts = state.currentTexts || [];
+  if (!texts.length) {
+    empty.style.display = 'flex';
+    list.innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  var h = '';
+  texts.forEach(function(t) {
+    var statusLabel = { pending: 'Ожидает', processing: 'Генерация...', completed: 'Готово', failed: 'Ошибка' };
+    var statusClass = { pending: 'badge-neutral', processing: 'badge-warning', completed: 'badge-success', failed: 'badge-danger' };
+    var regenBadge = t.regeneration_count ? ' <span class="badge badge-info" style="font-size:9px;">x' + t.regeneration_count + '</span>' : '';
+
+    // Превью текста
+    var preview = '';
+    if (t.content) {
+      var div = document.createElement('div');
+      div.innerHTML = t.content;
+      preview = div.textContent || div.innerText || '';
+      preview = truncate(preview, 150);
+    }
+
+    h += '<div class="history-item" onclick="openEditorFromHistory(\'' + t.id + '\')">' +
+      '<div class="history-item-header">' +
+        '<span class="badge ' + (statusClass[t.status] || '') + '">' + (statusLabel[t.status] || t.status) + '</span>' +
+        regenBadge +
+        '<span class="text-secondary">' + formatDateTime(t.created_at) + '</span>' +
+      '</div>' +
+      '<div class="history-item-input">' + escapeHtml(truncate(t.user_input, 100)) + '</div>' +
+      '<div class="history-item-preview">' + escapeHtml(preview) + '</div>' +
+      '<div class="history-item-meta">' +
+        (t.uniqueness_score != null ? '<span class="badge badge-success">Уник: ' + t.uniqueness_score + '%</span>' : '') +
+        (t.ai_score != null ? '<span class="badge badge-neutral">AI: ' + t.ai_score + '%</span>' : '') +
+        '<span class="text-secondary">' + escapeHtml(t.used_llm_model || '') + '</span>' +
+      '</div>' +
+    '</div>';
+  });
+  list.innerHTML = h;
+}
+
+function openEditorFromHistory(textId) {
+  if (!state.currentTask) return;
+  navigateTo('#editor/' + state.currentTask.id + '/' + textId);
+}
+</script>

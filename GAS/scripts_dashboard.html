@@ -1,0 +1,125 @@
+<script>
+// ===========================================
+// scripts_dashboard.html - Дашборд, карточки задач
+// ===========================================
+
+function renderTaskCards() {
+  var grid = document.getElementById('tasks-grid');
+  if (!grid) return;
+
+  var tasks = state.dashboardTasks || [];
+  var sorted = tasks.slice().sort(function(a, b) {
+    return new Date(b.created_at) - new Date(a.created_at);
+  });
+
+  var h = '';
+  sorted.forEach(function(t) {
+    var tplName = '—';
+    if (t.template_id) {
+      var tpl = (state.taskTemplates || []).find(function(x) { return x.id === t.template_id; });
+      if (tpl) tplName = tpl.name;
+    }
+    h += '<div class="task-card" onclick="navigateTo(\'#task/' + t.id + '\')">' +
+      '<div class="task-card-header">' +
+        '<div class="task-card-name">' + escapeHtml(t.name) + '</div>' +
+        '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteTaskConfirm(\'' + t.id + '\')" title="Удалить задачу">&times;</button>' +
+      '</div>' +
+      '<div class="task-card-desc">' + escapeHtml(truncate(t.system_prompt, 80)) + '</div>' +
+      '<div class="task-card-meta">' +
+        '<span class="badge badge-info">' + escapeHtml(t.llm_model || '—') + '</span>' +
+        (tplName !== '—' ? '<span class="badge badge-neutral">' + escapeHtml(tplName) + '</span>' : '') +
+      '</div>' +
+      '<div class="task-card-stats">' + formatDate(t.created_at) + '</div>' +
+    '</div>';
+  });
+
+  // Карточка «создать новую»
+  h += '<div class="task-card task-card-add" onclick="createNewTask()">+ Новая задача</div>';
+  grid.innerHTML = h;
+}
+
+// --- Создание задачи ---
+function createNewTask() {
+  if (!state.selectedClientId) {
+    showToast('Сначала выберите клиента', 'error');
+    return;
+  }
+  renderNewTaskTemplateList();
+  openModal('modal-new-task');
+}
+
+function renderNewTaskTemplateList() {
+  var c = document.getElementById('new-task-template-list');
+  if (!c) return;
+  var tts = state.taskTemplates || [];
+  if (!tts.length) {
+    c.innerHTML = '<div class="placeholder-message" style="height:80px;grid-column:1/-1;"><p>Нет сохранённых шаблонов</p></div>';
+    return;
+  }
+  var h = '';
+  tts.forEach(function(tt) {
+    h += '<div class="task-template-card" onclick="createTaskFromTemplate(\'' + tt.id + '\')">' +
+      '<div class="task-template-card-name">' + escapeHtml(tt.name) + '</div>' +
+      '<div class="task-template-card-desc">' + escapeHtml(tt.description || '') + '</div>' +
+      '<div class="task-template-card-meta">' +
+        '<span class="task-template-card-tag" style="background:#EBF5FF;color:#1A5FB4;">' + escapeHtml(tt.llm_model || '—') + '</span>' +
+      '</div>' +
+    '</div>';
+  });
+  c.innerHTML = h;
+}
+
+function createTaskFromScratch() {
+  closeModal('modal-new-task');
+  var task = {
+    client_id: state.selectedClientId,
+    name: 'Новая задача',
+    system_prompt: '',
+    user_prompt: '',
+    llm_provider: 'anthropic',
+    llm_model: 'Claude Sonnet',
+    options: { humanize: false, uniqueness: true, factcheck: false, ai_detector: false },
+    status: 'active'
+  };
+  google.script.run.withSuccessHandler(function(s) {
+    showToast('Задача создана', 'success');
+    navigateTo('#task/' + s.id);
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+  }).saveTask(task);
+}
+
+function createTaskFromTemplate(ttId) {
+  closeModal('modal-new-task');
+  var tt = (state.taskTemplates || []).find(function(x) { return x.id === ttId; });
+  if (!tt) { createTaskFromScratch(); return; }
+
+  var task = {
+    client_id: state.selectedClientId,
+    name: tt.name,
+    system_prompt: tt.system_prompt || '',
+    user_prompt: tt.user_prompt || '',
+    template_id: tt.id,
+    llm_provider: tt.llm_provider || 'anthropic',
+    llm_model: tt.llm_model || 'Claude Sonnet',
+    options: tt.options || {},
+    status: 'active'
+  };
+  google.script.run.withSuccessHandler(function(s) {
+    showToast('Задача создана из шаблона', 'success');
+    navigateTo('#task/' + s.id);
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+  }).saveTask(task);
+}
+
+function deleteTaskConfirm(tid) {
+  if (!confirm('Удалить задачу и все её тексты?')) return;
+  google.script.run.withSuccessHandler(function() {
+    showToast('Задача удалена', 'success');
+    if (state.selectedClientId) selectClient(state.selectedClientId);
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+  }).deleteTask(tid);
+}
+</script>

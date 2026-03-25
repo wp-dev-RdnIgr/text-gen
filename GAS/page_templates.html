@@ -1,20 +1,10 @@
-<!-- Экран: Библиотека шаблонов -->
+<!-- Экран: Шаблоны задач -->
 <div id="screen-templates" class="screen" style="display:none;">
   <div class="templates-layout">
     <!-- Левая панель: список шаблонов -->
     <aside class="templates-sidebar">
-      <h2 class="sidebar-title">Библиотека промтов</h2>
+      <h2 class="sidebar-title">Шаблоны задач</h2>
       <input type="text" id="template-search" class="input-field" placeholder="Поиск шаблона..." oninput="filterTemplates(this.value)">
-
-      <!-- Фильтр по категориям -->
-      <div class="tag-filters" id="template-category-filters">
-        <button class="tag-btn active" data-category="all" onclick="filterTemplatesByCategory('all')">Все</button>
-        <button class="tag-btn" data-category="blog" onclick="filterTemplatesByCategory('blog')">Блог</button>
-        <button class="tag-btn" data-category="product_card" onclick="filterTemplatesByCategory('product_card')">Товары</button>
-        <button class="tag-btn" data-category="category" onclick="filterTemplatesByCategory('category')">Категории</button>
-        <button class="tag-btn" data-category="service" onclick="filterTemplatesByCategory('service')">Услуги</button>
-        <button class="tag-btn" data-category="system_humanizer" onclick="filterTemplatesByCategory('system_humanizer')">Системные</button>
-      </div>
 
       <div id="template-list" class="template-list">
         <!-- Заполняется динамически -->
@@ -25,18 +15,17 @@
       </div>
     </aside>
 
-    <!-- Правая часть: редактор -->
+    <!-- Правая часть: редактор шаблона -->
     <main class="templates-editor">
       <div id="template-placeholder" class="placeholder-message">
-        <p>Выберите шаблон из списка слева</p>
+        <p>Выберите шаблон из списка слева<br>или создайте новый</p>
       </div>
 
       <div id="template-editor-content" style="display:none;">
         <!-- Хедер -->
         <div class="content-header">
-          <div class="content-header-info">
+          <div class="content-header-info" style="flex:1;">
             <input type="text" id="tpl-name" class="input-title" placeholder="Название шаблона">
-            <span id="tpl-version-badge" class="badge badge-info">v1</span>
           </div>
           <div class="content-header-actions">
             <button class="btn" onclick="duplicateTemplate()">Дублировать</button>
@@ -45,104 +34,58 @@
           </div>
         </div>
 
-        <!-- Категория -->
+        <!-- Описание -->
         <div class="field-group">
-          <label class="field-label">Категория</label>
-          <select id="tpl-category" class="input-field">
-            <option value="blog">Блог</option>
-            <option value="product_card">Карточка товара</option>
-            <option value="category">Категория</option>
-            <option value="service">Услуга</option>
-            <option value="custom">Произвольный</option>
-            <option value="system_humanizer">Системный (гуманизатор)</option>
-          </select>
+          <label class="field-label">Описание</label>
+          <textarea id="tpl-description" class="input-field" rows="2" placeholder="Краткое описание — для чего этот шаблон..."></textarea>
         </div>
 
-        <!-- Переменные -->
-        <div class="field-group">
-          <label class="field-label">Переменные</label>
-          <div id="tpl-variables" class="variables-row">
-            <!-- Заполняется динамически -->
-          </div>
-        </div>
-
-        <!-- Системный промт -->
-        <div class="field-group">
-          <label class="field-label">Системный промт</label>
-          <textarea id="tpl-system-prompt" class="input-field textarea-mono" rows="6" placeholder="Системный промт..."></textarea>
-        </div>
-
-        <!-- Пользовательский промт -->
-        <div class="field-group">
-          <label class="field-label">Пользовательский промт</label>
-          <textarea id="tpl-user-prompt" class="input-field textarea-mono" rows="6" placeholder="Пользовательский промт..."></textarea>
-        </div>
-
-        <!-- Статистика -->
-        <div class="stats-cards stats-cards-sm">
-          <div class="stat-card">
-            <div class="stat-value stat-value-sm" id="tpl-stat-version">1</div>
-            <div class="stat-label">Версия</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value stat-value-sm" id="tpl-stat-usage">0</div>
-            <div class="stat-label">Использований</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value stat-value-sm" id="tpl-stat-uniqueness">-</div>
-            <div class="stat-label">Ср. уникальность</div>
-          </div>
-        </div>
-
-        <!-- История версий -->
-        <div class="section" id="tpl-versions-section" style="display:none;">
-          <div class="section-header-row">
-            <div class="section-title">История версий</div>
-          </div>
-          <div class="table-container">
-            <table class="data-table versions-table">
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>Версия</th>
-                  <th>Дата</th>
-                  <th>Использований</th>
-                  <th>Ср. уникальность</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="tpl-versions-table">
-                <!-- Заполняется динамически -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Просмотр версии (read-only) -->
-        <div id="tpl-version-viewer" class="version-viewer" style="display:none;">
-          <div class="version-viewer-header">
-            <h4>Версия <span id="version-viewer-num"></span></h4>
-            <div class="version-viewer-actions">
-              <button class="btn" onclick="closeVersionViewer()">Закрыть</button>
-              <button class="btn btn-primary" id="version-restore-btn" onclick="restoreVersion()">Восстановить эту версию</button>
+        <!-- Промпты -->
+        <div class="settings-layout">
+          <div class="settings-main">
+            <div class="prompts-grid">
+              <div class="prompt-block">
+                <div class="prompt-section-label">
+                  <label class="field-label" style="margin:0;">Системный промт</label>
+                  <span class="tooltip-wrap">
+                    <span class="tooltip-icon">?</span>
+                    <span class="tooltip-text">Задаёт роль и стиль. Пример: «Ты — SEO-копирайтер...»</span>
+                  </span>
+                </div>
+                <textarea id="tpl-system-prompt" class="input-field textarea-mono" rows="10" placeholder="Ты — опытный SEO-копирайтер..."></textarea>
+              </div>
+              <div class="prompt-block">
+                <div class="prompt-section-label">
+                  <label class="field-label" style="margin:0;">Пользовательский промт</label>
+                  <span class="tooltip-wrap">
+                    <span class="tooltip-icon">?</span>
+                    <span class="tooltip-text">Общие инструкции для каждого запроса. Пример: «Напиши SEO-статью...»</span>
+                  </span>
+                </div>
+                <textarea id="tpl-user-prompt" class="input-field textarea-mono" rows="10" placeholder="Напиши SEO-статью. Структура: H1, H2 (3-5 шт)..."></textarea>
+              </div>
             </div>
           </div>
-          <div class="field-group">
-            <label class="field-label">Системный промт</label>
-            <div class="version-prompt-preview" id="version-viewer-system"></div>
-          </div>
-          <div class="field-group">
-            <label class="field-label">Пользовательский промт</label>
-            <div class="version-prompt-preview" id="version-viewer-user"></div>
-          </div>
-          <div class="stats-cards stats-cards-sm" style="grid-template-columns: repeat(2, 1fr);">
-            <div class="stat-card">
-              <div class="stat-value stat-value-sm" id="version-viewer-usage">0</div>
-              <div class="stat-label">Использований</div>
+
+          <!-- Настройки справа -->
+          <div class="settings-col">
+            <div class="field-group">
+              <label class="field-label">LLM модель</label>
+              <select id="tpl-llm-select" class="input-field">
+                <option value="openai|ChatGPT (GPT-4o)">ChatGPT (GPT-4o)</option>
+                <option value="openai|ChatGPT (GPT-4o-mini)">ChatGPT (GPT-4o-mini)</option>
+                <option value="anthropic|Claude Sonnet" selected>Claude Sonnet</option>
+                <option value="anthropic|Claude Opus">Claude Opus</option>
+                <option value="perplexity|Perplexity Online">Perplexity Online</option>
+              </select>
             </div>
-            <div class="stat-card">
-              <div class="stat-value stat-value-sm" id="version-viewer-uniqueness">—</div>
-              <div class="stat-label">Ср. уникальность</div>
+
+            <div class="field-group">
+              <label class="field-label">Постобработка</label>
+              <label class="checkbox-label"><input type="checkbox" id="tpl-opt-humanize"> Гуманизация</label>
+              <label class="checkbox-label"><input type="checkbox" id="tpl-opt-uniqueness" checked> Проверка уникальности</label>
+              <label class="checkbox-label"><input type="checkbox" id="tpl-opt-factcheck"> Фактчекинг</label>
+              <label class="checkbox-label"><input type="checkbox" id="tpl-opt-ai-detector"> AI-детектор</label>
             </div>
           </div>
         </div>
