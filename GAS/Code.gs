@@ -7,7 +7,7 @@
  */
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu('SEO-тексты')
+    .createMenu('Генератор текстов')
     .addItem('Открыть панель', 'openSidebar')
     .addItem('Заполнить демо-данные', 'seedData')
     .addItem('Сбросить данные', 'resetData')
@@ -20,7 +20,7 @@ function onOpen() {
 function openSidebar() {
   var html = HtmlService.createTemplateFromFile('webapp')
     .evaluate()
-    .setTitle('SEO-тексты')
+    .setTitle('Генератор текстов')
     .setWidth(400);
   SpreadsheetApp.getUi().showSidebar(html);
 }
@@ -31,7 +31,7 @@ function openSidebar() {
 function doGet(e) {
   var template = HtmlService.createTemplateFromFile('webapp');
   return template.evaluate()
-    .setTitle('SEO-тексты - Генератор контента')
+    .setTitle('TextGen — Генератор контента')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }

@@ -1,355 +1,162 @@
-<!-- Экран: Задача (генерация) -->
+<!-- Экран: Задача (генерация + история) -->
 <div id="screen-task" class="screen" style="display:none;">
-  <!-- Хедер -->
-  <div class="content-header" style="padding: 16px 24px 0;">
-    <div class="content-header-info">
-      <div class="breadcrumbs">
-        <a href="#" onclick="navigateTo('#dashboard'); return false;">Дашборд</a>
-        <span class="breadcrumb-sep">/</span>
-        <span id="task-breadcrumb-client"></span>
-        <span class="breadcrumb-sep">/</span>
-        <span id="task-breadcrumb-name"></span>
-      </div>
-      <input type="text" id="task-name-input" class="input-title" placeholder="Название задачи" onchange="saveTaskName()">
-      <span id="task-status-badge" class="badge"></span>
-    </div>
-    <div class="content-header-actions">
-      <button id="task-stop-btn" class="btn btn-danger" style="display:none;" onclick="stopGeneration()">Остановить</button>
-      <button class="btn btn-danger" onclick="deleteCurrentTask()">Удалить</button>
-    </div>
-  </div>
-
-  <!-- Вкладки -->
-  <div class="tabs">
-    <button class="tab active" data-tab="data" onclick="switchTaskTab('data')">Данные</button>
-    <button class="tab" data-tab="progress" onclick="switchTaskTab('progress')">Прогресс</button>
-    <button class="tab" data-tab="results" onclick="switchTaskTab('results')">Результаты</button>
-  </div>
-
-  <div class="task-content-area">
-    <!-- Вкладка: Данные + Настройки генерации -->
-    <div id="task-tab-data" class="tab-content active">
-      <!-- Блок данных -->
-      <div class="section">
-        <div class="section-header-row">
-          <h3 class="section-title">Данные для генерации</h3>
-          <button class="btn btn-sm" onclick="loadFromSheets()">Загрузить из Google Sheets</button>
+  <div class="task-layout">
+    <!-- Левая часть: контент -->
+    <div class="task-main">
+      <!-- Хедер задачи -->
+      <div class="task-header">
+        <div class="breadcrumbs">
+          <a href="#" onclick="navigateTo('#dashboard'); return false;">Дашборд</a>
+          <span class="breadcrumb-sep">/</span>
+          <span id="task-breadcrumb-client"></span>
+          <span class="breadcrumb-sep">/</span>
+          <span id="task-breadcrumb-name"></span>
         </div>
-
-        <!-- Колонки и переменные -->
-        <div id="columns-variables-block" class="columns-variables-block">
-          <div class="columns-variables-header">
-            <span class="columns-variables-title">Колонки данных</span>
-            <button class="column-add-btn" onclick="openModal('modal-addcolumn')">+ Колонка</button>
+        <div class="content-header" style="margin-bottom:0;">
+          <div class="content-header-info">
+            <input type="text" id="task-name-input" class="input-title" placeholder="Название задачи" onchange="saveTaskName()">
           </div>
-          <div id="columns-grid" class="columns-grid"></div>
+          <div class="content-header-actions">
+            <button class="btn btn-danger btn-sm" onclick="deleteCurrentTask()">Удалить задачу</button>
+          </div>
         </div>
-
-        <!-- Таблица данных -->
-        <div class="table-container">
-          <table class="data-table editable-table" id="task-data-table-wrapper">
-            <thead id="task-data-thead"></thead>
-            <tbody id="task-data-table"></tbody>
-          </table>
-        </div>
-        <button class="btn" onclick="addDataRow()" style="margin-top:8px;">+ Добавить строку</button>
       </div>
 
-      <!-- Блок настроек генерации -->
-      <div class="section" style="margin-top:12px;">
-        <h3 class="section-title">Настройки генерации</h3>
-        <div class="settings-tab-layout">
-          <!-- Левая часть: Промты -->
-          <div class="settings-prompts-col">
-            <div class="settings-template-row">
-              <div class="field-group" style="flex:1;">
-                <label class="field-label">Шаблон промта</label>
-                <select id="gen-template-select" class="input-field" onchange="onTemplateChange()">
-                </select>
-              </div>
-              <div id="gen-version-group" class="field-group" style="width:200px;display:none;">
-                <label class="field-label">Версия шаблона</label>
-                <select id="gen-version-select" class="input-field" onchange="onVersionChange()">
-                </select>
-              </div>
-            </div>
+      <!-- Табы: Генерация | История -->
+      <div class="task-tabs">
+        <button class="tab active" data-tab="generate" onclick="switchTaskTab('generate')">Генерация</button>
+        <button class="tab" data-tab="history" onclick="switchTaskTab('history')">
+          История
+          <span id="task-history-count" class="badge badge-neutral" style="margin-left:4px;font-size:9px;">0</span>
+        </button>
+      </div>
 
-            <div id="gen-local-prompt-group" style="display:none;">
-              <div class="local-prompt-header">
-                <label class="field-label" style="margin-bottom:0;">Промт для этой задачи</label>
-                <button class="btn btn-sm" onclick="resetLocalPrompt()" title="Сбросить к оригиналу шаблона">Сбросить</button>
-              </div>
-              <div class="local-prompt-hint">Изменения здесь не влияют на оригинальный шаблон</div>
-
-              <div class="prompts-grid">
-                <div class="prompt-block">
-                  <label class="field-label">Системный промт</label>
-                  <textarea id="gen-local-system-prompt" class="input-field textarea-mono" rows="10" placeholder="Системный промт — задаёт роль и стиль генерации..." onchange="saveLocalPrompt()"></textarea>
-                </div>
-                <div class="prompt-block">
-                  <label class="field-label">Пользовательский промт</label>
-                  <textarea id="gen-local-user-prompt" class="input-field textarea-mono" rows="10" placeholder="Пользовательский промт — шаблон запроса с переменными {{url}}, {{keywords}}..." onchange="saveLocalPrompt()"></textarea>
-                </div>
-              </div>
-            </div>
-
-            <div id="gen-no-template-hint" class="placeholder-message" style="height:200px;">
-              <p>Выберите шаблон промта выше, чтобы настроить промты</p>
+      <!-- Таб: Генерация -->
+      <div id="task-tab-generate" class="task-tab-content" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+        <!-- Область вывода / пустое состояние -->
+        <div id="gen-output-area" style="flex:1;overflow-y:auto;padding:24px;">
+          <div id="gen-empty" class="gen-empty-state">
+            <p>Введите запрос для генерации текста</p>
+            <div class="gen-empty-hint">
+              Настройте системный и пользовательский промпты в панели справа,
+              затем введите ваш запрос в поле ниже
             </div>
           </div>
-
-          <!-- Правая часть: Настройки -->
-          <div class="settings-options-col">
-            <div class="field-group">
-              <label class="field-label">LLM модель</label>
-              <select id="gen-llm-select" class="input-field" onchange="updateCostEstimate()">
-                <option value="openai|ChatGPT (GPT-4o)">ChatGPT (GPT-4o)</option>
-                <option value="openai|ChatGPT (GPT-4o-mini)">ChatGPT (GPT-4o-mini)</option>
-                <option value="anthropic|Claude Sonnet" selected>Claude Sonnet</option>
-                <option value="anthropic|Claude Opus">Claude Opus</option>
-                <option value="perplexity|Perplexity Online">Perplexity Online</option>
-              </select>
+          <div id="gen-result" style="display:none;">
+            <div style="background:#FFFFFF;border:1px solid #E5E5E0;border-radius:12px;padding:20px;">
+              <div id="gen-result-content" style="font-size:13px;line-height:1.7;color:#1A1A1A;"></div>
             </div>
-
-            <div class="field-group">
-              <label class="field-label">Постобработка</label>
-              <label class="checkbox-label">
-                <input type="checkbox" id="opt-humanize" checked> Гуманизация
-              </label>
-              <label class="checkbox-label">
-                <input type="checkbox" id="opt-uniqueness" checked> Проверка уникальности
-              </label>
-              <label class="checkbox-label">
-                <input type="checkbox" id="opt-factcheck"> Фактчекинг
-              </label>
-              <label class="checkbox-label">
-                <input type="checkbox" id="opt-ai-detector"> AI-детектор
-              </label>
+            <div style="margin-top:12px;display:flex;gap:8px;">
+              <button class="btn btn-blue btn-sm" onclick="openEditorForLastGen()">Открыть в редакторе</button>
+              <button class="btn btn-sm" onclick="clearGenResult()">Новая генерация</button>
             </div>
-
-            <div class="field-group">
-              <label class="field-label">Папка Google Drive</label>
-              <input type="text" id="gen-drive-folder" class="input-field" placeholder="ID папки или URL">
-            </div>
-
-            <div id="cost-estimate" class="cost-estimate">
-              <span id="cost-text">0 текстов ~ $0.00</span>
-            </div>
-
-            <button class="btn btn-primary btn-block" onclick="startGeneration()" style="margin-top:12px;">
-              Запустить генерацию
-            </button>
-            <button class="btn btn-block" onclick="saveAsTaskTemplate()" style="margin-top:8px;">
-              Сохранить как шаблон задачи
-            </button>
           </div>
+          <div id="gen-loading" style="display:none;">
+            <div style="display:flex;flex-direction:column;align-items:center;padding:60px;">
+              <div class="loader-dots"><span></span><span></span><span></span></div>
+              <p style="margin-top:16px;color:#888;font-size:13px;">Генерация текста...</p>
+              <p style="color:#AAA;font-size:11px;margin-top:4px;">Это может занять несколько секунд</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Поле ввода -->
+        <div class="gen-input-area">
+          <div style="font-size:11px;color:#AAA;margin-bottom:6px;">
+            Опишите, какой текст нужно сгенерировать
+            <span class="tooltip-wrap">
+              <span class="tooltip-icon">?</span>
+              <span class="tooltip-text">Укажите тему, ключевые слова, требования к объёму и стилю. Нажмите Enter для отправки.</span>
+            </span>
+          </div>
+          <div class="gen-input-wrapper">
+            <textarea id="gen-user-input" placeholder="Например: Напиши статью о лучших ноутбуках 2026 года, 3000 знаков, ключевые слова: ..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();startGeneration();}"></textarea>
+            <button id="gen-send-btn" class="gen-btn-send" onclick="startGeneration()">Сгенерировать</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Таб: История -->
+      <div id="task-tab-history" class="task-tab-content" style="display:none;flex:1;overflow-y:auto;padding:24px;">
+        <div id="history-empty" class="placeholder-message" style="height:200px;">
+          <p>Ещё нет сгенерированных текстов.<br>Создайте первый на вкладке «Генерация».</p>
+        </div>
+        <div id="history-list" class="history-list">
+          <!-- Заполняется динамически -->
         </div>
       </div>
     </div>
 
-    <!-- Вкладка: Прогресс -->
-    <div id="task-tab-progress" class="tab-content" style="display:none;">
-      <div class="progress-section">
-        <div class="progress-bar-container">
-          <div class="progress-bar-label">
-            <span id="progress-text">0 из 0</span>
-          </div>
-          <div class="progress-bar-track">
-            <div id="progress-bar-fill" class="progress-bar-fill" style="width:0%"></div>
-          </div>
-        </div>
-        <div class="stats-cards">
-          <div class="stat-card stat-success">
-            <div class="stat-value" id="stat-completed">0</div>
-            <div class="stat-label">Готово</div>
-          </div>
-          <div class="stat-card stat-info">
-            <div class="stat-value" id="stat-processing">0</div>
-            <div class="stat-label">В обработке</div>
-          </div>
-          <div class="stat-card stat-neutral">
-            <div class="stat-value" id="stat-pending">0</div>
-            <div class="stat-label">Ожидает</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="stat-uniqueness">—</div>
-            <div class="stat-label">Ср. уникальность</div>
-          </div>
-        </div>
-        <div class="table-container">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th style="width:40px">#</th>
-                <th>Тема</th>
-                <th>Статус</th>
-                <th>Уникальность</th>
-                <th>Документ</th>
-              </tr>
-            </thead>
-            <tbody id="progress-texts-table"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+    <!-- Правая панель: Настройки задачи -->
+    <div class="task-settings-panel">
+      <h3 class="section-title" style="margin-bottom:16px;">Настройки задачи</h3>
 
-    <!-- Вкладка: Результаты -->
-    <div id="task-tab-results" class="tab-content" style="display:none;">
-      <div id="results-not-ready" class="placeholder-message">
-        <p>Генерация ещё не запущена</p>
+      <!-- Шаблон -->
+      <div class="field-group" style="margin-bottom:12px;">
+        <div class="field-label">
+          Создана из шаблона
+        </div>
+        <div id="task-template-name" class="text-secondary" style="font-size:12px;">—</div>
       </div>
-      <div id="results-content" style="display:none;">
-        <div class="stats-cards">
-          <div class="stat-card">
-            <div class="stat-value" id="res-total">0</div>
-            <div class="stat-label">Всего</div>
-          </div>
-          <div class="stat-card stat-success">
-            <div class="stat-value" id="res-completed">0</div>
-            <div class="stat-label">Готово</div>
-          </div>
-          <div class="stat-card stat-danger">
-            <div class="stat-value" id="res-failed">0</div>
-            <div class="stat-label">Ошибки</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="res-uniqueness">—</div>
-            <div class="stat-label">Ср. уникальность</div>
-          </div>
+
+      <!-- Системный промт -->
+      <div class="prompt-section">
+        <div class="prompt-section-label">
+          <label class="field-label" style="margin:0;">Системный промт</label>
+          <span class="tooltip-wrap">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">Задаёт роль и стиль генерации. Определяет «кто» пишет текст.</span>
+          </span>
         </div>
-        <div class="table-container">
-          <table class="data-table results-table">
-            <thead>
-              <tr>
-                <th style="width:30px"></th>
-                <th style="width:40px">#</th>
-                <th>Данные строки</th>
-                <th>Статус</th>
-                <th>Уникальность</th>
-                <th>AI %</th>
-                <th>Документ</th>
-                <th>Действия</th>
-              </tr>
-            </thead>
-            <tbody id="results-texts-table"></tbody>
-          </table>
-        </div>
-        <div style="margin-top:16px;">
-          <button class="btn" onclick="alert('Экспорт отчета будет доступен в полной версии')">Экспорт отчета</button>
-        </div>
+        <textarea id="task-system-prompt" class="input-field textarea-mono" rows="6" placeholder="Ты — опытный SEO-копирайтер..." onchange="saveTaskPrompts()"></textarea>
       </div>
-    </div>
-  </div>
-</div>
 
-<!-- Модалка: Редактирование длинного текста -->
-<div id="modal-longtext" class="modal-overlay" style="display:none;">
-  <div class="modal-card" style="max-width:700px;">
-    <div class="modal-header">
-      <h3 id="longtext-title">Редактирование</h3>
-      <button class="modal-close" onclick="closeLongTextModal()">&times;</button>
-    </div>
-    <div class="modal-body">
-      <div class="longtext-row-info" id="longtext-row-info"></div>
-      <textarea id="longtext-textarea" class="input-field textarea-mono" rows="12" style="min-height:200px;"></textarea>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeLongTextModal()">Отмена</button>
-      <button class="btn btn-primary" onclick="saveLongText()">Сохранить</button>
-    </div>
-  </div>
-</div>
+      <!-- Пользовательский промт -->
+      <div class="prompt-section">
+        <div class="prompt-section-label">
+          <label class="field-label" style="margin:0;">Пользовательский промт</label>
+          <span class="tooltip-wrap">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">Общие инструкции для генерации. Применяются к каждому запросу автоматически.</span>
+          </span>
+        </div>
+        <textarea id="task-user-prompt" class="input-field textarea-mono" rows="6" placeholder="Напиши SEO-статью. Структура: H1, H2..." onchange="saveTaskPrompts()"></textarea>
+      </div>
 
-<!-- Модалка: Добавление колонки -->
-<div id="modal-addcolumn" class="modal-overlay" style="display:none;">
-  <div class="modal-card" style="max-width:400px;">
-    <div class="modal-header">
-      <h3>Добавить колонку</h3>
-      <button class="modal-close" onclick="closeModal('modal-addcolumn')">&times;</button>
-    </div>
-    <div class="modal-body">
+      <hr style="border:none;border-top:1px solid #E5E5E0;margin:16px 0;">
+
+      <!-- LLM модель -->
       <div class="field-group">
-        <label class="field-label">Название колонки</label>
-        <input type="text" id="new-col-label" class="input-field" placeholder="Например: Целевая аудитория">
-      </div>
-      <div class="field-group">
-        <label class="field-label">Тип ввода</label>
-        <select id="new-col-type" class="input-field">
-          <option value="short">Короткий текст (одна строка)</option>
-          <option value="long">Длинный текст (многострочный)</option>
+        <div class="field-label">
+          LLM модель
+          <span class="tooltip-wrap">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">Языковая модель для генерации текста</span>
+          </span>
+        </div>
+        <select id="task-llm-select" class="input-field" onchange="saveTaskSettings()">
+          <option value="openai|ChatGPT (GPT-4o)">ChatGPT (GPT-4o)</option>
+          <option value="openai|ChatGPT (GPT-4o-mini)">ChatGPT (GPT-4o-mini)</option>
+          <option value="anthropic|Claude Sonnet" selected>Claude Sonnet</option>
+          <option value="anthropic|Claude Opus">Claude Opus</option>
+          <option value="perplexity|Perplexity Online">Perplexity Online</option>
         </select>
       </div>
+
+      <!-- Постобработка -->
       <div class="field-group">
-        <label class="checkbox-label">
-          <input type="checkbox" id="new-col-required"> Обязательная колонка
-        </label>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-addcolumn')">Отмена</button>
-      <button class="btn btn-primary" onclick="confirmAddColumn()">Добавить</button>
-    </div>
-  </div>
-</div>
-
-<!-- Модалка: Выбор шаблона задачи при создании -->
-<div id="modal-task-template" class="modal-overlay" style="display:none;">
-  <div class="modal-card" style="max-width:650px;">
-    <div class="modal-header">
-      <h3>Создание задачи</h3>
-      <button class="modal-close" onclick="closeModal('modal-task-template')">&times;</button>
-    </div>
-    <div class="modal-body">
-      <p class="text-secondary" style="margin-bottom:12px;">Выберите шаблон задачи или создайте пустую задачу</p>
-
-      <!-- Фильтр по клиентам — мультиселект с поиском -->
-      <div class="multiselect-filter" style="margin-bottom:16px;">
-        <label class="field-label">Фильтр по клиентам</label>
-        <div class="multiselect-box" id="task-tpl-client-ms" onclick="toggleMultiselect('task-tpl-client-ms')">
-          <span class="multiselect-placeholder" id="task-tpl-client-ms-label">Все клиенты</span>
-          <span class="multiselect-arrow">&#9662;</span>
+        <div class="field-label">
+          Постобработка
+          <span class="tooltip-wrap">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">Дополнительные проверки и улучшения после генерации текста</span>
+          </span>
         </div>
-        <div class="multiselect-dropdown" id="task-tpl-client-ms-dropdown" style="display:none;">
-          <input type="text" class="multiselect-search" placeholder="Поиск клиента..." oninput="filterMultiselectOptions('task-tpl-client-ms-dropdown', this.value)">
-          <div class="multiselect-options" id="task-tpl-client-ms-options">
-            <!-- Заполняется динамически -->
-          </div>
-        </div>
+        <label class="checkbox-label"><input type="checkbox" id="task-opt-humanize" onchange="saveTaskSettings()"> Гуманизация</label>
+        <label class="checkbox-label"><input type="checkbox" id="task-opt-uniqueness" checked onchange="saveTaskSettings()"> Проверка уникальности</label>
+        <label class="checkbox-label"><input type="checkbox" id="task-opt-factcheck" onchange="saveTaskSettings()"> Фактчекинг</label>
+        <label class="checkbox-label"><input type="checkbox" id="task-opt-ai-detector" onchange="saveTaskSettings()"> AI-детектор</label>
       </div>
-
-      <div id="task-template-list" class="task-template-grid"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-task-template')">Отмена</button>
-      <button class="btn btn-primary" onclick="createTaskFromScratch()">Пустая задача</button>
-    </div>
-  </div>
-</div>
-
-<!-- Модалка: Сохранение шаблона задачи -->
-<div id="modal-save-task-template" class="modal-overlay" style="display:none;">
-  <div class="modal-card" style="max-width:450px;">
-    <div class="modal-header">
-      <h3>Сохранить как шаблон задачи</h3>
-      <button class="modal-close" onclick="closeModal('modal-save-task-template')">&times;</button>
-    </div>
-    <div class="modal-body">
-      <div class="field-group">
-        <label class="field-label">Название шаблона</label>
-        <input type="text" id="task-tpl-name" class="input-field" placeholder="Например: Статьи для блога">
-      </div>
-      <div class="field-group">
-        <label class="field-label">Описание</label>
-        <textarea id="task-tpl-description" class="input-field" rows="3" placeholder="Краткое описание для чего этот шаблон..."></textarea>
-      </div>
-      <div class="task-tpl-summary">
-        <div class="field-label">Что будет сохранено:</div>
-        <ul id="task-tpl-summary-list" class="task-tpl-checklist"></ul>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-save-task-template')">Отмена</button>
-      <button class="btn btn-primary" onclick="confirmSaveTaskTemplate()">Сохранить шаблон</button>
     </div>
   </div>
 </div>

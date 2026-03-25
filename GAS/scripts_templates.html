@@ -1,0 +1,159 @@
+<script>
+// ===========================================
+// scripts_templates.html - Шаблоны задач
+// ===========================================
+
+function renderTemplateList() {
+  var c = document.getElementById('template-list');
+  if (!c) return;
+
+  var tts = state.taskTemplates || [];
+  if (!tts.length) {
+    c.innerHTML = '<div class="placeholder-message" style="height:100px"><p>Нет шаблонов</p></div>';
+    return;
+  }
+
+  var h = '';
+  tts.forEach(function(tt) {
+    var active = tt.id === state.selectedTemplateId ? ' active' : '';
+    h += '<div class="template-item' + active + '" onclick="selectTemplate(\'' + tt.id + '\')">' +
+      '<div class="template-item-name">' + escapeHtml(tt.name) + '</div>' +
+      '<div class="template-item-meta">' + escapeHtml(tt.llm_model || '—') + '</div>' +
+    '</div>';
+  });
+  c.innerHTML = h;
+}
+
+function filterTemplates(q) {
+  var items = document.querySelectorAll('#template-list .template-item');
+  q = q.toLowerCase();
+  for (var i = 0; i < items.length; i++) {
+    var name = items[i].querySelector('.template-item-name').textContent.toLowerCase();
+    items[i].style.display = name.indexOf(q) !== -1 ? '' : 'none';
+  }
+}
+
+function selectTemplate(ttId) {
+  state.selectedTemplateId = ttId;
+  var tt = (state.taskTemplates || []).find(function(x) { return x.id === ttId; });
+  if (!tt) return;
+
+  renderTemplateList();
+  document.getElementById('template-placeholder').style.display = 'none';
+  document.getElementById('template-editor-content').style.display = 'block';
+
+  document.getElementById('tpl-name').value = tt.name || '';
+  document.getElementById('tpl-description').value = tt.description || '';
+  document.getElementById('tpl-system-prompt').value = tt.system_prompt || '';
+  document.getElementById('tpl-user-prompt').value = tt.user_prompt || '';
+
+  if (tt.llm_provider && tt.llm_model) {
+    document.getElementById('tpl-llm-select').value = tt.llm_provider + '|' + tt.llm_model;
+  }
+
+  var opts = tt.options || {};
+  document.getElementById('tpl-opt-humanize').checked = !!opts.humanize;
+  document.getElementById('tpl-opt-uniqueness').checked = !!opts.uniqueness;
+  document.getElementById('tpl-opt-factcheck').checked = !!opts.factcheck;
+  document.getElementById('tpl-opt-ai-detector').checked = !!opts.ai_detector;
+}
+
+function createNewTemplate() {
+  state.selectedTemplateId = null;
+  renderTemplateList();
+  document.getElementById('template-placeholder').style.display = 'none';
+  document.getElementById('template-editor-content').style.display = 'block';
+
+  document.getElementById('tpl-name').value = '';
+  document.getElementById('tpl-description').value = '';
+  document.getElementById('tpl-system-prompt').value = '';
+  document.getElementById('tpl-user-prompt').value = '';
+  document.getElementById('tpl-llm-select').value = 'anthropic|Claude Sonnet';
+  document.getElementById('tpl-opt-humanize').checked = false;
+  document.getElementById('tpl-opt-uniqueness').checked = true;
+  document.getElementById('tpl-opt-factcheck').checked = false;
+  document.getElementById('tpl-opt-ai-detector').checked = false;
+}
+
+function saveCurrentTemplate() {
+  var name = document.getElementById('tpl-name').value.trim();
+  if (!name) { showToast('Укажите название', 'error'); return; }
+
+  var lSel = document.getElementById('tpl-llm-select');
+  var parts = lSel.value.split('|');
+
+  var data = {
+    name: name,
+    description: document.getElementById('tpl-description').value.trim(),
+    system_prompt: document.getElementById('tpl-system-prompt').value,
+    user_prompt: document.getElementById('tpl-user-prompt').value,
+    llm_provider: parts[0] || '',
+    llm_model: parts[1] || '',
+    options: {
+      humanize: document.getElementById('tpl-opt-humanize').checked,
+      uniqueness: document.getElementById('tpl-opt-uniqueness').checked,
+      factcheck: document.getElementById('tpl-opt-factcheck').checked,
+      ai_detector: document.getElementById('tpl-opt-ai-detector').checked
+    }
+  };
+
+  if (state.selectedTemplateId) data.id = state.selectedTemplateId;
+
+  google.script.run.withSuccessHandler(function(s) {
+    showToast('Шаблон сохранён', 'success');
+    state.selectedTemplateId = s.id;
+    google.script.run.withSuccessHandler(function(list) {
+      state.taskTemplates = list || [];
+      renderTemplateList();
+      selectTemplate(s.id);
+    }).getTaskTemplates();
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+  }).saveTaskTemplate(data);
+}
+
+function deleteCurrentTemplate() {
+  if (!state.selectedTemplateId) return;
+  if (!confirm('Удалить шаблон?')) return;
+
+  google.script.run.withSuccessHandler(function() {
+    showToast('Шаблон удалён', 'success');
+    state.selectedTemplateId = null;
+    document.getElementById('template-editor-content').style.display = 'none';
+    document.getElementById('template-placeholder').style.display = 'block';
+    google.script.run.withSuccessHandler(function(list) {
+      state.taskTemplates = list || [];
+      renderTemplateList();
+    }).getTaskTemplates();
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+  }).deleteTaskTemplate(state.selectedTemplateId);
+}
+
+function duplicateTemplate() {
+  if (!state.selectedTemplateId) return;
+  var tt = (state.taskTemplates || []).find(function(x) { return x.id === state.selectedTemplateId; });
+  if (!tt) return;
+
+  var data = {
+    name: tt.name + ' (копия)',
+    description: tt.description || '',
+    system_prompt: tt.system_prompt || '',
+    user_prompt: tt.user_prompt || '',
+    llm_provider: tt.llm_provider || '',
+    llm_model: tt.llm_model || '',
+    options: tt.options || {}
+  };
+
+  google.script.run.withSuccessHandler(function(s) {
+    showToast('Шаблон скопирован', 'success');
+    google.script.run.withSuccessHandler(function(list) {
+      state.taskTemplates = list || [];
+      renderTemplateList();
+      selectTemplate(s.id);
+    }).getTaskTemplates();
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+  }).saveTaskTemplate(data);
+}
+</script>

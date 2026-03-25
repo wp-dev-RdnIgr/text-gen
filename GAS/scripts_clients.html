@@ -1,0 +1,138 @@
+<script>
+// ===========================================
+// scripts_clients.html - Управление клиентами
+// ===========================================
+
+function renderClientList() {
+  var c = document.getElementById('client-list');
+  if (!c) return;
+  if (!state.clients.length) {
+    c.innerHTML = '<div class="placeholder-message" style="height:100px"><p>Нет клиентов</p></div>';
+    return;
+  }
+  var h = '';
+  state.clients.forEach(function(cl) {
+    var active = cl.id === state.selectedClientId ? ' active' : '';
+    h += '<div class="client-item' + active + '" onclick="selectClient(\'' + cl.id + '\')">' +
+      '<div class="client-item-name">' + escapeHtml(cl.name) + '</div>' +
+    '</div>';
+  });
+  c.innerHTML = h;
+}
+
+function filterClients(q) {
+  var items = document.querySelectorAll('.client-item');
+  q = q.toLowerCase();
+  for (var i = 0; i < items.length; i++) {
+    var name = items[i].querySelector('.client-item-name').textContent.toLowerCase();
+    items[i].style.display = name.indexOf(q) !== -1 ? '' : 'none';
+  }
+}
+
+function selectClient(clientId) {
+  state.selectedClientId = clientId;
+  renderClientList();
+  document.getElementById('dashboard-placeholder').style.display = 'none';
+  document.getElementById('dashboard-client-content').style.display = 'block';
+
+  // Показать лоадер
+  document.getElementById('tasks-loading').style.display = 'flex';
+  document.getElementById('tasks-grid').innerHTML = '';
+
+  google.script.run.withSuccessHandler(function(data) {
+    document.getElementById('tasks-loading').style.display = 'none';
+    state.dashboardTasks = data.tasks || [];
+    var client = data.client;
+    document.getElementById('dashboard-client-name').textContent = client ? client.name : '';
+    document.getElementById('dashboard-client-niche').textContent = client ? (client.niche || '') : '';
+    renderTaskCards();
+  }).getAllDataForDashboard(clientId);
+}
+
+function openClientModal(clientId) {
+  var t = document.getElementById('modal-client-title');
+  document.getElementById('mc-id').value = '';
+  document.getElementById('mc-name').value = '';
+  document.getElementById('mc-domain').value = '';
+  document.getElementById('mc-niche').value = '';
+  document.getElementById('mc-description').value = '';
+
+  if (clientId) {
+    t.textContent = 'Редактировать клиента';
+    var cl = state.clients.find(function(c) { return c.id === clientId; });
+    if (cl) {
+      document.getElementById('mc-id').value = cl.id;
+      document.getElementById('mc-name').value = cl.name || '';
+      document.getElementById('mc-domain').value = cl.website || '';
+      document.getElementById('mc-niche').value = cl.niche || '';
+      document.getElementById('mc-description').value = cl.notes || '';
+    }
+  } else {
+    t.textContent = 'Новый клиент';
+  }
+  openModal('modal-client');
+}
+
+function saveClientFromModal() {
+  var d = {
+    name: document.getElementById('mc-name').value.trim(),
+    website: document.getElementById('mc-domain').value.trim(),
+    niche: document.getElementById('mc-niche').value.trim(),
+    notes: document.getElementById('mc-description').value.trim()
+  };
+  if (!d.name) { showToast('Укажите название', 'error'); return; }
+  var id = document.getElementById('mc-id').value;
+  if (id) d.id = id;
+
+  google.script.run.withSuccessHandler(function() {
+    closeModal('modal-client');
+    showToast(id ? 'Клиент обновлён' : 'Клиент создан', 'success');
+    loadInitialData();
+    if (state.selectedClientId) selectClient(state.selectedClientId);
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+  }).saveClient(d);
+}
+
+function deleteClientConfirm(cid) {
+  if (!confirm('Удалить клиента и все его задачи?')) return;
+  google.script.run.withSuccessHandler(function() {
+    showToast('Клиент удалён', 'success');
+    state.selectedClientId = null;
+    loadInitialData();
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+  }).deleteClient(cid);
+}
+
+function renderClientsTable() {
+  var tb = document.getElementById('clients-table-body');
+  if (!tb) return;
+  if (!state.clients.length) {
+    tb.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет клиентов</td></tr>';
+    return;
+  }
+  var h = '';
+  state.clients.forEach(function(c) {
+    h += '<tr>' +
+      '<td><strong>' + escapeHtml(c.name) + '</strong></td>' +
+      '<td>' + escapeHtml(c.website || '—') + '</td>' +
+      '<td>' + escapeHtml(c.niche || '—') + '</td>' +
+      '<td id="client-tc-' + c.id + '">—</td>' +
+      '<td>' +
+        '<button class="btn btn-sm" onclick="selectClient(\'' + c.id + '\');navigateTo(\'#dashboard\')">Задачи</button> ' +
+        '<button class="btn btn-sm" onclick="openClientModal(\'' + c.id + '\')">Ред.</button> ' +
+        '<button class="btn btn-sm btn-danger" onclick="deleteClientConfirm(\'' + c.id + '\')">Уд.</button>' +
+      '</td></tr>';
+  });
+  tb.innerHTML = h;
+
+  // Загрузить кол-во задач для каждого клиента
+  state.clients.forEach(function(c) {
+    google.script.run.withSuccessHandler(function(tasks) {
+      var el = document.getElementById('client-tc-' + c.id);
+      if (el) el.textContent = tasks.length;
+    }).getTasks(c.id);
+  });
+}
+</script>

@@ -1,0 +1,217 @@
+<script>
+// ===========================================
+// scripts_core.html - Стейт, роутер, утилиты
+// ===========================================
+
+// --- Глобальный стейт ---
+var state = {
+  clients: [],
+  taskTemplates: [],
+  selectedClientId: null,
+  // Дашборд
+  dashboardTasks: [],
+  // Задача
+  currentTask: null,
+  currentTexts: [],
+  lastGeneratedText: null,
+  // Редактор
+  editorText: null,
+  editorTaskId: null,
+  activeBlockIndex: -1,
+  regenBlockIndex: -1,
+  // Шаблоны
+  selectedTemplateId: null
+};
+
+// --- Инициализация ---
+document.addEventListener('DOMContentLoaded', function() {
+  loadInitialData();
+  handleHashRoute();
+  window.addEventListener('hashchange', handleHashRoute);
+});
+
+function loadInitialData() {
+  google.script.run.withSuccessHandler(function(clients) {
+    state.clients = clients || [];
+    renderClientList();
+    renderClientsTable();
+  }).getClients();
+
+  google.script.run.withSuccessHandler(function(tt) {
+    state.taskTemplates = tt || [];
+  }).getTaskTemplates();
+}
+
+// --- Роутер ---
+function handleHashRoute() {
+  var hash = window.location.hash || '#dashboard';
+  var parts = hash.split('/');
+  var screen = parts[0];
+
+  hideAllScreens();
+  updateActiveNav(screen);
+
+  switch (screen) {
+    case '#dashboard':
+      showScreen('screen-dashboard');
+      break;
+    case '#clients':
+      showScreen('screen-clients');
+      renderClientsTable();
+      break;
+    case '#templates':
+      showScreen('screen-templates');
+      renderTemplateList();
+      break;
+    case '#task':
+      showScreen('screen-task');
+      if (parts[1]) loadTaskScreen(parts[1]);
+      break;
+    case '#editor':
+      showScreen('screen-editor');
+      if (parts[1] && parts[2]) loadEditorScreen(parts[1], parts[2]);
+      break;
+    default:
+      showScreen('screen-dashboard');
+  }
+}
+
+function navigateTo(hash) {
+  window.location.hash = hash;
+}
+
+function hideAllScreens() {
+  var s = document.querySelectorAll('.screen');
+  for (var i = 0; i < s.length; i++) s[i].style.display = 'none';
+}
+
+function showScreen(id) {
+  var el = document.getElementById(id);
+  if (el) el.style.display = 'block';
+}
+
+function updateActiveNav(hash) {
+  var tabs = document.querySelectorAll('.nav-tab');
+  for (var i = 0; i < tabs.length; i++) {
+    tabs[i].classList.remove('active');
+    if (tabs[i].getAttribute('data-hash') === hash) tabs[i].classList.add('active');
+  }
+}
+
+// --- Toast ---
+function showToast(msg, type) {
+  type = type || 'info';
+  var c = document.getElementById('toast-container');
+  var t = document.createElement('div');
+  t.className = 'toast toast-' + type;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(function() { t.remove(); }, 3500);
+}
+
+// --- Модалки ---
+function openModal(id) {
+  document.getElementById(id).style.display = 'flex';
+}
+
+function closeModal(id) {
+  document.getElementById(id).style.display = 'none';
+}
+
+// --- Утилиты ---
+function escapeHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatDate(d) {
+  if (!d) return '—';
+  var x = new Date(d);
+  return ('0' + x.getDate()).slice(-2) + '.' + ('0' + (x.getMonth() + 1)).slice(-2) + '.' + x.getFullYear();
+}
+
+function formatDateTime(d) {
+  if (!d) return '—';
+  var x = new Date(d);
+  return ('0' + x.getDate()).slice(-2) + '.' + ('0' + (x.getMonth() + 1)).slice(-2) + '.' + x.getFullYear() +
+    ' ' + ('0' + x.getHours()).slice(-2) + ':' + ('0' + x.getMinutes()).slice(-2);
+}
+
+function truncate(str, max) {
+  if (!str) return '';
+  return str.length > max ? str.substring(0, max) + '...' : str;
+}
+
+// --- Парсинг HTML в блоки ---
+function parseContentToBlocks(html) {
+  if (!html) return [];
+  var div = document.createElement('div');
+  div.innerHTML = html;
+  var blocks = [];
+  var children = div.childNodes;
+
+  for (var i = 0; i < children.length; i++) {
+    var node = children[i];
+    if (node.nodeType === 3) {
+      // текстовый узел
+      var text = node.textContent.trim();
+      if (text) {
+        blocks.push({ id: 'b_' + Date.now() + '_' + i, type: 'paragraph', tag: 'p', content: text });
+      }
+    } else if (node.nodeType === 1) {
+      var tagName = node.tagName.toLowerCase();
+      if (tagName === 'h1' || tagName === 'h2' || tagName === 'h3') {
+        blocks.push({ id: 'b_' + Date.now() + '_' + i, type: 'heading', tag: tagName, content: node.innerHTML });
+      } else if (tagName === 'ul' || tagName === 'ol') {
+        blocks.push({ id: 'b_' + Date.now() + '_' + i, type: 'list', tag: tagName, content: node.outerHTML });
+      } else if (tagName === 'p') {
+        blocks.push({ id: 'b_' + Date.now() + '_' + i, type: 'paragraph', tag: 'p', content: node.innerHTML });
+      } else {
+        // div, section и т.п. — рекурсивно берём содержимое
+        var inner = node.innerHTML.trim();
+        if (inner) {
+          blocks.push({ id: 'b_' + Date.now() + '_' + i, type: 'paragraph', tag: 'p', content: inner });
+        }
+      }
+    }
+  }
+
+  return blocks;
+}
+
+// --- Сборка контента из блоков ---
+function buildContentFromBlocks(blocks) {
+  return blocks.map(function(b) {
+    if (b.type === 'heading') return '<' + b.tag + '>' + b.content + '</' + b.tag + '>';
+    if (b.type === 'list') return b.content;
+    return '<p>' + b.content + '</p>';
+  }).join('\n');
+}
+
+// --- Генерация фейкового контента (симуляция) ---
+function generateFakeContent(userInput) {
+  var topic = userInput || 'Текст';
+  if (topic.length > 80) topic = topic.substring(0, 80);
+  return '<h1>' + escapeHtml(topic) + '</h1>\n' +
+    '<p>В данной статье рассмотрим ключевые аспекты темы «' + escapeHtml(topic) + '». Это важная тема, которая заслуживает подробного анализа.</p>\n' +
+    '<h2>Основные критерии</h2>\n' +
+    '<p>Современный рынок предлагает множество решений. Рассмотрим каждый из них подробнее, чтобы вы могли сделать оптимальный выбор.</p>\n' +
+    '<p>При выборе обратите внимание на качество, цену и отзывы других пользователей. Эти три фактора являются определяющими.</p>\n' +
+    '<h2>Практические рекомендации</h2>\n' +
+    '<p>Используйте наши рекомендации для достижения лучших результатов. Каждый совет проверен на практике.</p>\n' +
+    '<h2>Заключение</h2>\n' +
+    '<p>Используйте информацию из этой статьи для оптимального выбора. Мы уверены, что наши советы помогут вам принять правильное решение.</p>';
+}
+
+// --- Демо-данные ---
+function seedDemoData() {
+  showToast('Загрузка демо-данных...', 'info');
+  google.script.run.withSuccessHandler(function() {
+    showToast('Демо-данные загружены!', 'success');
+    loadInitialData();
+    if (state.selectedClientId) selectClient(state.selectedClientId);
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+  }).seedData();
+}
+</script>
