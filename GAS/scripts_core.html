@@ -20,7 +20,8 @@ var state = {
   activeBlockIndex: -1,
   regenBlockIndex: -1,
   // Шаблоны
-  selectedTemplateId: null
+  selectedTemplateId: null,
+  tplClientIds: []
 };
 
 // --- Инициализация ---
@@ -35,10 +36,14 @@ function loadInitialData() {
     state.clients = clients || [];
     renderClientList();
     renderClientsTable();
+  }).withFailureHandler(function(e) {
+    console.error('loadClients error:', e);
   }).getClients();
 
   google.script.run.withSuccessHandler(function(tt) {
     state.taskTemplates = tt || [];
+  }).withFailureHandler(function(e) {
+    console.error('loadTaskTemplates error:', e);
   }).getTaskTemplates();
 }
 
