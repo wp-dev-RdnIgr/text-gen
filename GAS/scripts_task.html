@@ -457,20 +457,20 @@ function taskImportAcceptRow() {
   if (!task) return;
 
   var row = _taskImportData.rows[_taskImportSelectedRow];
-  var headers = _taskImportData.headers;
+  var headers = _taskImportData.headers || [];
 
   // Собрать список полей задачи для AI-маппинга
   var taskFieldNames = [
-    { key: 'url', label: 'URL сторінки' },
-    { key: 'keywords', label: 'Анкор (ключове слово для посилання)' },
+    { key: 'url', label: 'URL сторінки (одна конкретна URL-адреса сторінки)' },
+    { key: 'keywords', label: 'Анкор (ключове слово для посилання, зазвичай 1-3 слова)' },
     { key: 'topic', label: 'Тема статті / заголовок H1' },
     { key: 'language', label: 'Мова (UA/RU/EN)' },
-    { key: 'volume', label: "Об'єм тексту в символах (збп)" }
+    { key: 'volume', label: "Об'єм тексту в символах (збп), наприклад 2000-2300" }
   ];
-  // Добавить flex blocks
-  (task.flex_blocks || []).forEach(function(b) {
-    taskFieldNames.push({ key: b.key, label: b.label });
-  });
+  var flexBlocks = task.flex_blocks || [];
+  for (var fi = 0; fi < flexBlocks.length; fi++) {
+    taskFieldNames.push({ key: flexBlocks[fi].key, label: flexBlocks[fi].label });
+  }
 
   // Показать лоадер
   document.getElementById('task-import-accept-btn').disabled = true;
@@ -478,13 +478,15 @@ function taskImportAcceptRow() {
 
   // Вызвать AI-маппинг на сервере
   google.script.run.withSuccessHandler(function(mapping) {
-    // mapping = { "url": "URL-адреса", "keywords": "Анкор", "topic": "Тема статті", ... }
     if (!task.field_values) task.field_values = {};
     if (!task.active_flex_blocks) task.active_flex_blocks = [];
 
     var mappedCount = 0;
+    var mappedColumns = {};
     for (var fieldKey in mapping) {
       var sheetColumn = mapping[fieldKey];
+      if (!sheetColumn) continue;
+      mappedColumns[sheetColumn] = true;
       var val = row.cells[sheetColumn];
       if (val === undefined || val === null) continue;
       val = String(val).trim();
@@ -494,31 +496,35 @@ function taskImportAcceptRow() {
       mappedCount++;
 
       // Активировать flex block если это flex
-      var isFlex = (task.flex_blocks || []).some(function(b) { return b.key === fieldKey; });
-      if (isFlex && task.active_flex_blocks.indexOf(fieldKey) === -1) {
-        task.active_flex_blocks.push(fieldKey);
+      for (var bfi = 0; bfi < flexBlocks.length; bfi++) {
+        if (flexBlocks[bfi].key === fieldKey && task.active_flex_blocks.indexOf(fieldKey) === -1) {
+          task.active_flex_blocks.push(fieldKey);
+          break;
+        }
       }
     }
 
-    // Данные из колонок, которые AI не маппил — создать новые flex блоки
-    var mappedColumns = {};
-    for (var mk in mapping) { mappedColumns[mapping[mk]] = true; }
-
-    headers.forEach(function(header) {
-      if (mappedColumns[header]) return;
-      var val = row.cells[header];
-      if (!val || !String(val).trim()) return;
-      // Пропустить служебные колонки (номер, ID)
-      if (header.match(/^(№|#|id|номер)$/i)) return;
+    // Данные из колонок, которые AI не замаппил — создать новые flex блоки
+    for (var hi = 0; hi < headers.length; hi++) {
+      var header = headers[hi];
+      if (mappedColumns[header]) continue;
+      var cellVal = row.cells[header];
+      if (!cellVal || !String(cellVal).trim()) continue;
+      if (header.match(/^(№|#|id|номер)$/i)) continue;
 
       var newKey = generateFlexKey(header);
-      var exists = (task.flex_blocks || []).some(function(b) { return b.key === newKey; });
-      if (exists) newKey = newKey + '_' + Date.now();
+      var keyExists = false;
+      for (var ci = 0; ci < flexBlocks.length; ci++) {
+        if (flexBlocks[ci].key === newKey) { keyExists = true; break; }
+      }
+      if (keyExists) newKey = newKey + '_' + Date.now();
 
-      task.flex_blocks.push({ key: newKey, label: header, type: 'textarea', enabled: true });
-      task.field_values[newKey] = String(val).trim();
+      flexBlocks.push({ key: newKey, label: header, type: 'textarea', enabled: true });
+      task.field_values[newKey] = String(cellVal).trim();
       task.active_flex_blocks.push(newKey);
-    });
+    }
+
+    task.flex_blocks = flexBlocks;
 
     // Обновить UI
     populateFieldValues();
