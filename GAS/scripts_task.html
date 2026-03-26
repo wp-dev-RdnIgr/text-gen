@@ -353,50 +353,26 @@ function startGeneration() {
   document.getElementById('gen-loading').style.display = 'block';
   document.getElementById('gen-send-btn').disabled = true;
 
-  // Сохранить текст на сервер
+  // Вызвать реальную генерацию через OpenAI
   google.script.run.withSuccessHandler(function(text) {
-    state.lastGeneratedText = text;
-    simulateGeneration(text, assembledPrompt, fv);
-  }).withFailureHandler(function(e) {
-    showToast(e.message, 'error');
-    resetGenUI();
-  }).generateText(state.currentTask.id, assembledPrompt, fv);
-}
-
-function simulateGeneration(text, assembledPrompt, fieldValues) {
-  setTimeout(function() {
-    var topic = (fieldValues && fieldValues.topic) || assembledPrompt.substring(0, 80);
-    var content = generateFakeContent(topic);
-    var blocks = parseContentToBlocks(content);
-
-    text.content = content;
-    text.blocks = blocks;
-    text.status = 'completed';
-    text.uniqueness_score = Math.floor(Math.random() * 15 + 85);
-    text.ai_score = Math.floor(Math.random() * 25 + 5);
-
-    google.script.run.updateGeneratedText(text.id, {
-      content: text.content,
-      blocks: text.blocks,
-      status: text.status,
-      uniqueness_score: text.uniqueness_score,
-      ai_score: text.ai_score
-    });
-
     state.lastGeneratedText = text;
 
     document.getElementById('gen-loading').style.display = 'none';
     document.getElementById('gen-result').style.display = 'block';
-    document.getElementById('gen-result-content').innerHTML = content;
+    document.getElementById('gen-result-content').innerHTML = text.content || '';
     document.getElementById('gen-send-btn').disabled = false;
 
+    // Обновить историю
     state.currentTexts.unshift(text);
     var countEl = document.getElementById('task-history-count');
     if (countEl) countEl.textContent = state.currentTexts.length;
     renderHistoryList();
 
     showToast('Текст згенеровано!', 'success');
-  }, 2000 + Math.random() * 2000);
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+    resetGenUI();
+  }).generateTextWithAI(state.currentTask.id, assembledPrompt, fv);
 }
 
 function clearGenResult() {
