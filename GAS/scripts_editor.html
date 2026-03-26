@@ -142,40 +142,25 @@ function regenerateBlock(index) {
   var t = state.editorText;
   if (!t || !t.blocks || !t.blocks[index]) return;
 
-  var block = t.blocks[index];
   var blockEl = document.querySelectorAll('.editor-block')[index];
   if (blockEl) {
     blockEl.classList.add('regenerating');
-    blockEl.innerHTML += '<div class="block-loader">Генерация блока...</div>';
+    blockEl.innerHTML += '<div class="block-loader">Генерація блоку через AI...</div>';
   }
 
-  showToast('Перегенерация блока...', 'info');
+  showToast('Перегенерація блоку...', 'info');
 
-  setTimeout(function() {
-    // Симуляция: генерируем новый контент для блока
-    if (block.type === 'heading') {
-      block.content = block.content + ' (обновлено)';
-    } else {
-      block.content = 'Обновлённый контент для этого блока. ' +
-        'Текст был перегенерирован с учётом контекста всей статьи. ' +
-        'Новая версия содержит более точные и актуальные данные.';
-    }
-
-    t.content = buildContentFromBlocks(t.blocks);
-    t.regeneration_count = (t.regeneration_count || 0) + 1;
-
-    // Сохранить на сервер
-    google.script.run.updateGeneratedText(t.id, {
-      content: t.content,
-      blocks: t.blocks,
-      regeneration_count: t.regeneration_count
-    });
-
+  google.script.run.withSuccessHandler(function(updated) {
+    state.editorText = updated;
     state.activeBlockIndex = -1;
     renderEditorBlocks();
     renderEditorStats();
-    showToast('Блок перегенерирован', 'success');
-  }, 1500 + Math.random() * 1500);
+    showToast('Блок перегенеровано', 'success');
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+    state.activeBlockIndex = -1;
+    renderEditorBlocks();
+  }).regenerateBlockWithAI(t.id, index, '');
 }
 
 // --- Регенерация блока с комментарием ---
@@ -209,28 +194,20 @@ function confirmBlockRegeneration() {
     blockEl.innerHTML += '<div class="block-loader">Генерация с комментарием...</div>';
   }
 
-  showToast('Перегенерация блока' + (comment ? ' с комментарием...' : '...'), 'info');
+  showToast('Перегенерація блоку' + (comment ? ' з коментарем...' : '...'), 'info');
 
-  setTimeout(function() {
-    block.content = 'Контент перегенерирован с учётом комментария' +
-      (comment ? ': «' + comment + '»' : '') +
-      '. Текст обновлён и улучшен.';
-
-    t.content = buildContentFromBlocks(t.blocks);
-    t.regeneration_count = (t.regeneration_count || 0) + 1;
-
-    google.script.run.updateGeneratedText(t.id, {
-      content: t.content,
-      blocks: t.blocks,
-      regeneration_count: t.regeneration_count
-    });
-
+  google.script.run.withSuccessHandler(function(updated) {
+    state.editorText = updated;
     state.activeBlockIndex = -1;
     state.regenBlockIndex = -1;
     renderEditorBlocks();
     renderEditorStats();
-    showToast('Блок перегенерирован', 'success');
-  }, 2000 + Math.random() * 1500);
+    showToast('Блок перегенеровано', 'success');
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+    state.activeBlockIndex = -1;
+    renderEditorBlocks();
+  }).regenerateBlockWithAI(t.id, index, comment);
 }
 
 // --- Полная перегенерация ---
@@ -248,27 +225,18 @@ function regenerateFullText() {
     '</div>';
   }
 
-  showToast('Полная перегенерация...', 'info');
+  showToast('Повна перегенерація через AI...', 'info');
 
-  setTimeout(function() {
-    var content = generateFakeContent(t.user_input || 'Текст');
-    t.content = content;
-    t.blocks = parseContentToBlocks(content);
-    t.regeneration_count = (t.regeneration_count || 0) + 1;
-
-    google.script.run.updateGeneratedText(t.id, {
-      content: t.content,
-      blocks: t.blocks,
-      regeneration_count: t.regeneration_count,
-      uniqueness_score: Math.floor(Math.random() * 15 + 85),
-      ai_score: Math.floor(Math.random() * 25 + 5)
-    });
-
+  google.script.run.withSuccessHandler(function(updated) {
+    state.editorText = updated;
     state.activeBlockIndex = -1;
     renderEditorBlocks();
     renderEditorStats();
-    showToast('Текст полностью перегенерирован', 'success');
-  }, 3000 + Math.random() * 2000);
+    showToast('Текст повністю перегенеровано', 'success');
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+    renderEditorBlocks();
+  }).regenerateFullTextWithAI(t.id, '');
 }
 
 // --- Перегенерация с комментарием ---
@@ -301,29 +269,18 @@ function regenerateFullTextWithComment() {
     '</div>';
   }
 
-  showToast('Перегенерация с комментарием...', 'info');
+  showToast('Перегенерація з коментарем через AI...', 'info');
 
-  setTimeout(function() {
-    var content = generateFakeContent(t.user_input || 'Текст');
-    t.content = content;
-    t.blocks = parseContentToBlocks(content);
-    t.regeneration_count = (t.regeneration_count || 0) + 1;
-    t.comment = comment;
-
-    google.script.run.updateGeneratedText(t.id, {
-      content: t.content,
-      blocks: t.blocks,
-      regeneration_count: t.regeneration_count,
-      comment: t.comment,
-      uniqueness_score: Math.floor(Math.random() * 15 + 85),
-      ai_score: Math.floor(Math.random() * 25 + 5)
-    });
-
+  google.script.run.withSuccessHandler(function(updated) {
+    state.editorText = updated;
     state.activeBlockIndex = -1;
     renderEditorBlocks();
     renderEditorStats();
-    showToast('Текст перегенерирован с комментарием', 'success');
-  }, 3000 + Math.random() * 2000);
+    showToast('Текст перегенеровано з коментарем', 'success');
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+    renderEditorBlocks();
+  }).regenerateFullTextWithAI(t.id, comment);
 }
 
 // --- Объединение блоков ---
