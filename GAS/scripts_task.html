@@ -68,10 +68,10 @@ function renderCoreFields() {
   var cf = task.core_fields || { url: true, keywords: true, topic: true, language: true, volume: true };
 
   var fields = ['url', 'keywords', 'topic', 'language', 'volume'];
-  fields.forEach(function(f) {
-    var el = document.getElementById('cf-' + f);
-    if (el) el.style.display = cf[f] ? '' : 'none';
-  });
+  for (var fi = 0; fi < fields.length; fi++) {
+    var el = document.getElementById('cf-' + fields[fi]);
+    if (el) el.style.display = cf[fields[fi]] ? '' : 'none';
+  }
 }
 
 function populateFieldValues() {
@@ -96,12 +96,13 @@ function renderFlexToggleBar() {
   var active = state.currentTask.active_flex_blocks || [];
 
   var h = '';
-  blocks.forEach(function(b) {
+  for (var bi = 0; bi < blocks.length; bi++) {
+    var b = blocks[bi];
     var isActive = active.indexOf(b.key) !== -1;
     h += '<button class="flex-toggle-btn' + (isActive ? ' active' : '') + '" onclick="toggleFlexBlock(\'' + b.key + '\')">' +
       (isActive ? '✓ ' : '+ ') + escapeHtml(b.label) +
     '</button>';
-  });
+  }
 
   // Кнопка "Додати свій блок"
   h += '<button class="flex-toggle-btn flex-toggle-btn-add" onclick="openModal(\'modal-add-flex-block\')">+ Свій блок...</button>';
@@ -118,8 +119,9 @@ function renderActiveFlexBlocks() {
   var fv = state.currentTask.field_values || {};
 
   var h = '';
-  blocks.forEach(function(b) {
-    if (active.indexOf(b.key) === -1) return;
+  for (var bi = 0; bi < blocks.length; bi++) {
+    var b = blocks[bi];
+    if (active.indexOf(b.key) === -1) continue;
 
     h += '<div class="flex-block-item" id="flex-block-' + b.key + '">';
     h += '<div class="flex-block-header">';
@@ -133,14 +135,15 @@ function renderActiveFlexBlocks() {
 
     if (b.type === 'repeatable') {
       var items = fv[b.key] || [''];
+      if (!Array.isArray(items)) items = [String(items)];
       h += '<div class="repeatable-list" id="rep-' + b.key + '">';
-      items.forEach(function(item, i) {
+      for (var ri = 0; ri < items.length; ri++) {
         h += '<div class="repeatable-item">';
-        h += '<span class="repeatable-item-prefix">' + (i + 1) + '.</span>';
-        h += '<input type="text" value="' + escapeHtml(item) + '" onchange="updateRepeatableItem(\'' + b.key + '\',' + i + ',this.value)" placeholder="...">';
-        h += '<button class="repeatable-remove" onclick="removeRepeatableItem(\'' + b.key + '\',' + i + ')">&times;</button>';
+        h += '<span class="repeatable-item-prefix">' + (ri + 1) + '.</span>';
+        h += '<input type="text" value="' + escapeHtml(items[ri]) + '" onchange="updateRepeatableItem(\'' + b.key + '\',' + ri + ',this.value)" placeholder="...">';
+        h += '<button class="repeatable-remove" onclick="removeRepeatableItem(\'' + b.key + '\',' + ri + ')">&times;</button>';
         h += '</div>';
-      });
+      }
       h += '</div>';
       h += '<button class="repeatable-add" onclick="addRepeatableItem(\'' + b.key + '\')">+ Ще</button>';
     } else {
@@ -150,7 +153,7 @@ function renderActiveFlexBlocks() {
     }
 
     h += '</div></div>';
-  });
+  }
 
   container.innerHTML = h;
 }
@@ -425,15 +428,17 @@ function taskImportLoadRows() {
     document.getElementById('task-import-accept-btn').style.display = 'inline-block';
 
     var h = '';
-    data.rows.forEach(function(row, i) {
+    var rows = data.rows || [];
+    for (var ri = 0; ri < rows.length; ri++) {
+      var row = rows[ri];
       h += '<label class="checkbox-label" style="padding:8px 0;border-bottom:1px solid #F0F0EC;align-items:flex-start;">' +
-        '<input type="radio" name="task-import-row" value="' + i + '" onchange="onTaskImportRowSelect(' + i + ')" style="margin-top:2px;">' +
+        '<input type="radio" name="task-import-row" value="' + ri + '" onchange="onTaskImportRowSelect(' + ri + ')" style="margin-top:2px;">' +
         '<div>' +
           '<strong style="font-size:13px;">#' + row.rowNum + '</strong> ' +
           '<span style="font-size:12px;color:#555;">' + escapeHtml(row.topic) + '</span>' +
         '</div>' +
       '</label>';
-    });
+    }
     document.getElementById('task-import-rows-list').innerHTML = h;
     showToast('Знайдено ' + data.rows.length + ' рядків', 'success');
   }).withFailureHandler(function(e) {
@@ -558,10 +563,11 @@ function renderHistoryList() {
   }
   empty.style.display = 'none';
 
+  var statusLabel = { pending: 'Очікує', processing: 'Генерація...', completed: 'Готово', failed: 'Помилка' };
+  var statusClass = { pending: 'badge-neutral', processing: 'badge-warning', completed: 'badge-success', failed: 'badge-danger' };
   var h = '';
-  texts.forEach(function(t) {
-    var statusLabel = { pending: 'Очікує', processing: 'Генерація...', completed: 'Готово', failed: 'Помилка' };
-    var statusClass = { pending: 'badge-neutral', processing: 'badge-warning', completed: 'badge-success', failed: 'badge-danger' };
+  for (var ti = 0; ti < texts.length; ti++) {
+    var t = texts[ti];
     var regenBadge = t.regeneration_count ? ' <span class="badge badge-info" style="font-size:9px;">x' + t.regeneration_count + '</span>' : '';
 
     var preview = '';
@@ -585,7 +591,7 @@ function renderHistoryList() {
         '<span class="text-secondary">' + escapeHtml(t.used_llm_model || '') + '</span>' +
       '</div>' +
     '</div>';
-  });
+  }
   list.innerHTML = h;
 }
 
