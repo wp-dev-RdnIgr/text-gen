@@ -51,6 +51,9 @@ function loadTaskScreen(taskId) {
     // Заполнить field values
     populateFieldValues();
 
+    // Обновить превью промптов
+    updatePromptPreviews();
+
     // Сбросить UI генерации
     document.getElementById('gen-result').style.display = 'none';
     document.getElementById('gen-loading').style.display = 'none';
@@ -257,6 +260,53 @@ function saveFieldValues() {
   task.field_values.volume = document.getElementById('fv-volume').value;
 
   autoSaveTask();
+}
+
+// --- Компактная правая панель ---
+var _promptModalType = '';
+
+function updatePromptPreviews() {
+  var sp = document.getElementById('task-system-prompt').value || '';
+  var up = document.getElementById('task-user-prompt').value || '';
+  var spPreview = document.getElementById('task-system-prompt-preview');
+  var upPreview = document.getElementById('task-user-prompt-preview');
+  if (spPreview) spPreview.textContent = sp ? (sp.length > 150 ? sp.substring(0, 150) + '...' : sp) : '(порожньо)';
+  if (upPreview) upPreview.textContent = up ? (up.length > 150 ? up.substring(0, 150) + '...' : up) : '(порожньо)';
+}
+
+function toggleSettingsSection(sectionId) {
+  var el = document.getElementById(sectionId);
+  var chevron = document.getElementById('chevron-' + sectionId);
+  if (!el) return;
+  var isHidden = el.style.display === 'none';
+  el.style.display = isHidden ? 'block' : 'none';
+  if (chevron) chevron.classList.toggle('open', isHidden);
+}
+
+function openPromptModal(type) {
+  _promptModalType = type;
+  var title = type === 'system' ? 'Системний промт' : 'Шаблон промту';
+  var hint = type === 'system' ? 'Задає роль і стиль генерації' : 'Змінні: {{url}}, {{keywords}}, {{topic}}, {{language}}, {{volume}} + ключі блоків';
+  var value = type === 'system' ? document.getElementById('task-system-prompt').value : document.getElementById('task-user-prompt').value;
+
+  document.getElementById('prompt-modal-title').textContent = title;
+  document.getElementById('prompt-modal-hint').textContent = hint;
+  document.getElementById('prompt-modal-textarea').value = value || '';
+  openModal('modal-prompt-editor');
+  setTimeout(function() { document.getElementById('prompt-modal-textarea').focus(); }, 100);
+}
+
+function savePromptFromModal() {
+  var value = document.getElementById('prompt-modal-textarea').value;
+  if (_promptModalType === 'system') {
+    document.getElementById('task-system-prompt').value = value;
+  } else {
+    document.getElementById('task-user-prompt').value = value;
+  }
+  saveTaskPrompts();
+  updatePromptPreviews();
+  closeModal('modal-prompt-editor');
+  showToast('Промт збережено', 'success');
 }
 
 function loadTaskHistory(taskId) {

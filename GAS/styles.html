@@ -347,10 +347,7 @@ textarea.input-field { resize: vertical; }
    =========================================== */
 .task-layout { display: flex; gap: 0; height: calc(100vh - 48px); }
 .task-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.task-settings-panel {
-  width: 300px; flex-shrink: 0; background: #FAFAF8;
-  border-left: 1px solid #E5E5E0; padding: 20px; overflow-y: auto;
-}
+/* task-settings-panel defined below with compact styles */
 .task-header {
   padding: 16px 24px; border-bottom: 1px solid #E5E5E0;
 }
@@ -387,6 +384,37 @@ textarea.input-field { resize: vertical; }
 }
 
 /* --- История генераций --- */
+.task-settings-panel {
+  width: 280px; flex-shrink: 0; background: #FAFAF8;
+  border-left: 1px solid #E5E5E0; padding: 16px; overflow-y: auto;
+  font-size: 12px;
+}
+
+/* --- Compact settings blocks --- */
+.settings-compact-block {
+  border: 1px solid #E5E5E0; border-radius: 8px;
+  background: #fff; margin-bottom: 8px; overflow: hidden;
+}
+.settings-compact-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 10px; cursor: pointer; transition: background 0.15s;
+}
+.settings-compact-header:hover { background: #F5F5F0; }
+.settings-chevron {
+  font-size: 9px; color: #888; transition: transform 0.2s;
+  display: inline-block;
+}
+.settings-chevron.open { transform: rotate(90deg); }
+.settings-compact-preview {
+  padding: 0 10px 8px; border-top: 1px solid #F0F0EC;
+}
+.prompt-preview-text {
+  font-family: 'DM Mono', monospace; font-size: 10px;
+  line-height: 1.5; color: #666; max-height: 60px;
+  overflow: hidden; white-space: pre-wrap; margin-top: 6px;
+}
+
+/* --- History list --- */
 .history-list { display: flex; flex-direction: column; gap: 12px; }
 .history-item {
   background: #FFFFFF; border: 1px solid #E5E5E0; border-radius: 12px;
