@@ -544,24 +544,85 @@ function deleteTaskTemplate(id) {
  */
 function getSheetHeaders(sheetUrl) {
   try {
-    // Извлечь spreadsheet ID из URL
     var match = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
     if (!match) throw new Error('Невірне посилання на Google Sheets');
-    var spreadsheetId = match[1];
-
-    var ss = SpreadsheetApp.openById(spreadsheetId);
-    var sheet = ss.getSheets()[0]; // Первый лист
+    var ss = SpreadsheetApp.openById(match[1]);
+    var sheet = ss.getSheets()[0];
     var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-
-    // Фильтруем пустые ячейки
     var headers = [];
     for (var i = 0; i < headerRow.length; i++) {
       var val = String(headerRow[i]).trim();
       if (val) headers.push(val);
     }
-
     if (!headers.length) throw new Error('Не знайдено заголовків у першому рядку таблиці');
     return headers;
+  } catch (e) {
+    throw new Error('Помилка зчитування таблиці: ' + e.message);
+  }
+}
+
+/**
+ * Зчитати всі рядки з Google Sheets (заголовки + дані)
+ * Повертає { headers: [...], rows: [ { rowNum, topic, cells: {header: value} }, ... ] }
+ */
+function getSheetRows(sheetUrl) {
+  try {
+    var match = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (!match) throw new Error('Невірне посилання на Google Sheets');
+    var ss = SpreadsheetApp.openById(match[1]);
+    var sheet = ss.getSheets()[0];
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+    if (lastRow < 2) throw new Error('Таблиця не містить рядків з даними');
+
+    var allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+    var headers = [];
+    for (var c = 0; c < allData[0].length; c++) {
+      var h = String(allData[0][c]).trim();
+      headers.push(h || ('Колонка ' + (c + 1)));
+    }
+
+    // Определить колонку "Тема" для отображения в списке
+    var topicCol = -1;
+    var topicKeywords = ['тема', 'topic', 'h1', 'заголовок', 'назва', 'название'];
+    for (var i = 0; i < headers.length; i++) {
+      var hLower = headers[i].toLowerCase();
+      for (var k = 0; k < topicKeywords.length; k++) {
+        if (hLower.indexOf(topicKeywords[k]) !== -1) { topicCol = i; break; }
+      }
+      if (topicCol !== -1) break;
+    }
+
+    var rows = [];
+    for (var r = 1; r < allData.length; r++) {
+      // Пропускаем полностью пустые строки
+      var hasData = false;
+      var cells = {};
+      for (var c2 = 0; c2 < headers.length; c2++) {
+        var val = String(allData[r][c2]).trim();
+        cells[headers[c2]] = val;
+        if (val) hasData = true;
+      }
+      if (!hasData) continue;
+
+      var topic = topicCol !== -1 ? String(allData[r][topicCol]).trim() : '';
+      if (!topic) {
+        // Берём первую непустую ячейку как тему
+        for (var c3 = 0; c3 < allData[r].length; c3++) {
+          var v = String(allData[r][c3]).trim();
+          if (v && v.length > 3) { topic = v; break; }
+        }
+      }
+
+      rows.push({
+        rowNum: r + 1,
+        topic: topic ? (topic.length > 80 ? topic.substring(0, 80) + '...' : topic) : 'Рядок ' + (r + 1),
+        cells: cells
+      });
+    }
+
+    if (!rows.length) throw new Error('Таблиця не містить рядків з даними');
+    return { headers: headers, rows: rows };
   } catch (e) {
     throw new Error('Помилка зчитування таблиці: ' + e.message);
   }

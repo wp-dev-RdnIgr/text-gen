@@ -63,9 +63,14 @@
             </div>
           </div>
 
+          <!-- Импорт данных из таблицы -->
+          <div style="margin-bottom:12px;">
+            <button class="btn btn-sm" onclick="openTaskImportModal()" style="font-size:11px;">Імпорт даних з Google Sheets</button>
+          </div>
+
           <!-- Гибкие блоки: кнопки тоглов -->
           <div id="flex-toggle-bar" class="flex-toggle-bar">
-            <!-- Заполняется динамически: кнопки [+ Структура H2] [+ Посилання] и т.д. -->
+            <!-- Заполняется динамически -->
           </div>
 
           <!-- Гибкие блоки: раскрытые -->
@@ -207,6 +212,42 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-add-flex-block')">Скасувати</button>
       <button class="btn btn-primary" onclick="confirmAddFlexBlock()">Додати</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка: Імпорт даних з Google Sheets -->
+<div id="modal-task-import" class="modal-overlay" style="display:none;">
+  <div class="modal-card" style="max-width:650px;">
+    <div class="modal-header">
+      <h3>Імпорт даних з Google Sheets</h3>
+      <button class="modal-close" onclick="closeModal('modal-task-import')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- Шаг 1: ввод ссылки -->
+      <div id="task-import-step-url">
+        <div class="field-group">
+          <label class="field-label">Посилання на Google таблицю</label>
+          <input type="text" id="task-import-url" class="input-field" placeholder="https://docs.google.com/spreadsheets/d/...">
+        </div>
+        <p class="text-secondary" style="margin-bottom:12px;">Система зчитає рядки таблиці. Оберіть рядок, дані з якого заповнять поля задачі.</p>
+        <button class="btn btn-primary btn-block" id="task-import-btn" onclick="taskImportLoadRows()">Зчитати таблицю</button>
+        <div id="task-import-loading" style="display:none;text-align:center;padding:16px;">
+          <div class="loader-inline">Зчитування таблиці...</div>
+        </div>
+      </div>
+
+      <!-- Шаг 2: выбор строки -->
+      <div id="task-import-step-select" style="display:none;">
+        <p class="text-secondary" style="margin-bottom:12px;">Оберіть рядок для заповнення полів задачі:</p>
+        <div id="task-import-rows-list" style="max-height:350px;overflow-y:auto;">
+          <!-- Заполняется динамически -->
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-task-import')">Скасувати</button>
+      <button class="btn btn-primary" id="task-import-accept-btn" style="display:none;" onclick="taskImportAcceptRow()">Заповнити поля</button>
     </div>
   </div>
 </div>
