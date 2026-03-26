@@ -105,7 +105,12 @@ function getOpenAIKey() {
  */
 function setOpenAIKey(key) {
   PropertiesService.getScriptProperties().setProperty('OPENAI_API_KEY', key);
-  return 'OpenAI API key установлен';
+  return 'OK';
+}
+
+function hasOpenAIKey() {
+  var key = PropertiesService.getScriptProperties().getProperty('OPENAI_API_KEY');
+  return !!key;
 }
 
 /**
