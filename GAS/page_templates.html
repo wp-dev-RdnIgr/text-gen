@@ -73,12 +73,13 @@
 
         <!-- Гибкие блоки -->
         <div class="field-group">
-          <div class="field-label">
+          <div class="field-label" style="display:flex;align-items:center;gap:8px;">
             Гнучкі блоки
             <span class="tooltip-wrap">
               <span class="tooltip-icon">?</span>
               <span class="tooltip-text">Блоки, які копірайтер може вмикати/вимикати. Використовуйте {{ключ}} у промті для підстановки.</span>
             </span>
+            <button class="btn btn-sm" style="font-size:10px;padding:2px 8px;" onclick="openImportSheetModal()">Імпорт з Google Sheets</button>
           </div>
           <div class="tpl-flex-list" id="tpl-flex-blocks-list">
             <!-- Заполняется динамически -->
@@ -137,5 +138,41 @@
         </div>
       </div>
     </main>
+  </div>
+</div>
+
+<!-- Модалка: Імпорт колонок з Google Sheets -->
+<div id="modal-import-sheet" class="modal-overlay" style="display:none;">
+  <div class="modal-card" style="max-width:550px;">
+    <div class="modal-header">
+      <h3>Імпорт з Google Sheets</h3>
+      <button class="modal-close" onclick="closeModal('modal-import-sheet')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- Шаг 1: ввод ссылки -->
+      <div id="import-step-url">
+        <div class="field-group">
+          <label class="field-label">Посилання на Google таблицю</label>
+          <input type="text" id="import-sheet-url" class="input-field" placeholder="https://docs.google.com/spreadsheets/d/...">
+        </div>
+        <p class="text-secondary" style="margin-top:-8px;margin-bottom:12px;">Вставте посилання на таблицю з ТЗ. Система зчитає назви колонок (перший рядок).</p>
+        <button class="btn btn-primary btn-block" id="import-sheet-btn" onclick="importSheetHeaders()">Зчитати колонки</button>
+        <div id="import-sheet-loading" style="display:none;text-align:center;padding:16px;">
+          <div class="loader-inline">Зчитування таблиці...</div>
+        </div>
+      </div>
+
+      <!-- Шаг 2: выбор колонок -->
+      <div id="import-step-select" style="display:none;">
+        <p class="text-secondary" style="margin-bottom:12px;">Оберіть колонки, які стануть гнучкими блоками:</p>
+        <div id="import-columns-list" style="max-height:300px;overflow-y:auto;">
+          <!-- Заполняется динамически -->
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-import-sheet')">Скасувати</button>
+      <button class="btn btn-primary" id="import-accept-btn" style="display:none;" onclick="acceptImportedColumns()">Прийняти</button>
+    </div>
   </div>
 </div>

@@ -537,6 +537,36 @@ function deleteTaskTemplate(id) {
   }
 }
 
+// --- Google Sheets Import ---
+
+/**
+ * Зчитати заголовки колонок (перший рядок) з Google Sheets
+ */
+function getSheetHeaders(sheetUrl) {
+  try {
+    // Извлечь spreadsheet ID из URL
+    var match = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (!match) throw new Error('Невірне посилання на Google Sheets');
+    var spreadsheetId = match[1];
+
+    var ss = SpreadsheetApp.openById(spreadsheetId);
+    var sheet = ss.getSheets()[0]; // Первый лист
+    var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+    // Фильтруем пустые ячейки
+    var headers = [];
+    for (var i = 0; i < headerRow.length; i++) {
+      var val = String(headerRow[i]).trim();
+      if (val) headers.push(val);
+    }
+
+    if (!headers.length) throw new Error('Не знайдено заголовків у першому рядку таблиці');
+    return headers;
+  } catch (e) {
+    throw new Error('Помилка зчитування таблиці: ' + e.message);
+  }
+}
+
 // --- Утилиты ---
 
 function getAllDataForDashboard(clientId) {
