@@ -193,6 +193,74 @@ function removeTplFlexBlock(index) {
   renderTplFlexBlocksList();
 }
 
+// --- Імпорт з Google Sheets ---
+var _importedHeaders = [];
+
+function openImportSheetModal() {
+  document.getElementById('import-step-url').style.display = 'block';
+  document.getElementById('import-step-select').style.display = 'none';
+  document.getElementById('import-accept-btn').style.display = 'none';
+  document.getElementById('import-sheet-url').value = '';
+  document.getElementById('import-sheet-loading').style.display = 'none';
+  document.getElementById('import-sheet-btn').style.display = 'block';
+  _importedHeaders = [];
+  openModal('modal-import-sheet');
+}
+
+function importSheetHeaders() {
+  var url = document.getElementById('import-sheet-url').value.trim();
+  if (!url) { showToast('Вставте посилання', 'error'); return; }
+
+  document.getElementById('import-sheet-btn').style.display = 'none';
+  document.getElementById('import-sheet-loading').style.display = 'block';
+
+  google.script.run.withSuccessHandler(function(headers) {
+    _importedHeaders = headers;
+    document.getElementById('import-sheet-loading').style.display = 'none';
+    document.getElementById('import-step-url').style.display = 'none';
+    document.getElementById('import-step-select').style.display = 'block';
+    document.getElementById('import-accept-btn').style.display = 'inline-block';
+
+    // Рендер чекбоксов
+    var h = '';
+    headers.forEach(function(header, i) {
+      h += '<label class="checkbox-label" style="padding:6px 0;border-bottom:1px solid #F0F0EC;">' +
+        '<input type="checkbox" checked value="' + i + '"> ' + escapeHtml(header) +
+      '</label>';
+    });
+    document.getElementById('import-columns-list').innerHTML = h;
+
+    showToast('Знайдено ' + headers.length + ' колонок', 'success');
+  }).withFailureHandler(function(e) {
+    document.getElementById('import-sheet-loading').style.display = 'none';
+    document.getElementById('import-sheet-btn').style.display = 'block';
+    showToast(e.message, 'error');
+  }).getSheetHeaders(url);
+}
+
+function acceptImportedColumns() {
+  var checkboxes = document.querySelectorAll('#import-columns-list input[type="checkbox"]');
+  var selected = [];
+  for (var i = 0; i < checkboxes.length; i++) {
+    if (checkboxes[i].checked) {
+      var idx = parseInt(checkboxes[i].value);
+      selected.push(_importedHeaders[idx]);
+    }
+  }
+
+  if (!selected.length) { showToast('Оберіть хоча б одну колонку', 'error'); return; }
+
+  // Заменить все текущие flex blocks на выбранные
+  _tplFlexBlocks = selected.map(function(header) {
+    var key = generateFlexKey(header);
+    return { key: key, label: header, type: 'textarea', enabled: true };
+  });
+
+  renderTplFlexBlocksList();
+  closeModal('modal-import-sheet');
+  showToast(selected.length + ' блоків імпортовано', 'success');
+}
+
 function addTplFlexBlock() {
   var label = prompt('Назва нового блоку:');
   if (!label || !label.trim()) return;
