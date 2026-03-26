@@ -64,14 +64,20 @@
             </div>
           </div>
 
-          <!-- Гибкие блоки: кнопки тоглов -->
-          <div id="flex-toggle-bar" class="flex-toggle-bar">
+          <!-- Гибкие блоки: toggle-кнопки + аккордеон -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span class="field-label" style="margin:0;">Додаткові блоки ТЗ</span>
+            <button class="btn btn-sm" style="font-size:10px;padding:2px 8px;" onclick="openTaskImportModal()">Імпорт з Sheets</button>
+          </div>
+
+          <!-- Toggle кнопки — маленькие, в ряд -->
+          <div id="flex-toggle-bar" class="flex-toggle-bar" style="margin-bottom:8px;">
             <!-- Заполняется динамически -->
           </div>
 
-          <!-- Гибкие блоки: раскрытые -->
+          <!-- Аккордеон flex-блоков -->
           <div id="flex-blocks-container">
-            <!-- Заполняется динамически -->
+            <!-- Заполняется динамически: компактные раскрывающиеся строки -->
           </div>
 
           <!-- Результат генерации -->
