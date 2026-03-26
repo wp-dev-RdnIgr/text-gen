@@ -64,20 +64,36 @@
             </div>
           </div>
 
-          <!-- Гибкие блоки: toggle-кнопки + аккордеон -->
+          <!-- Додаткові блоки ТЗ -->
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <span class="field-label" style="margin:0;">Додаткові блоки ТЗ</span>
-            <button class="btn btn-sm" style="font-size:10px;padding:2px 8px;" onclick="openTaskImportModal()">Імпорт з Sheets</button>
+            <div style="display:flex;gap:4px;">
+              <button class="btn btn-sm" style="font-size:10px;padding:2px 8px;" onclick="openTaskImportModal()">Імпорт</button>
+              <button class="btn btn-sm flex-toggle-btn-add" style="font-size:10px;padding:2px 8px;border-radius:5px;" onclick="openModal('modal-add-flex-block')">+ Блок</button>
+            </div>
           </div>
 
-          <!-- Toggle кнопки — маленькие, в ряд -->
-          <div id="flex-toggle-bar" class="flex-toggle-bar" style="margin-bottom:8px;">
-            <!-- Заполняется динамически -->
+          <!-- 2-табовый переключатель: Вибрані | Усі блоки -->
+          <div class="flex-tabs-container">
+            <button class="flex-tab-btn active" id="flex-tab-selected" onclick="switchFlexTab('selected')">Активні блоки</button>
+            <button class="flex-tab-btn" id="flex-tab-all" onclick="switchFlexTab('all')">Вибір блоків</button>
           </div>
 
-          <!-- Аккордеон flex-блоков -->
-          <div id="flex-blocks-container">
-            <!-- Заполняется динамически: компактные раскрывающиеся строки -->
+          <!-- Таб 1: Аккордеон активных блоков -->
+          <div id="flex-panel-selected" class="flex-tab-panel active">
+            <div id="flex-blocks-container">
+              <!-- Заполняется динамически -->
+            </div>
+            <div id="flex-empty-hint" style="display:none;text-align:center;padding:16px;color:#AAA;font-size:12px;">
+              Немає активних блоків. Перейдіть у «Вибір блоків», щоб увімкнути.
+            </div>
+          </div>
+
+          <!-- Таб 2: Все toggle-кнопки -->
+          <div id="flex-panel-all" class="flex-tab-panel">
+            <div id="flex-toggle-bar" class="flex-toggle-bar">
+              <!-- Заполняется динамически -->
+            </div>
           </div>
 
           <!-- Результат генерации -->

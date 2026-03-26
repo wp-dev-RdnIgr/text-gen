@@ -113,8 +113,17 @@ function renderFlexToggleBar() {
   bar.innerHTML = h;
 }
 
-// --- Хранилище раскрытых блоков ---
+// --- Хранилище раскрытых блоков и режимов ---
 var _expandedFlexBlocks = {};
+var _editingFlexBlocks = {};
+
+function switchFlexTab(tab) {
+  document.getElementById('flex-tab-selected').classList.toggle('active', tab === 'selected');
+  document.getElementById('flex-tab-all').classList.toggle('active', tab === 'all');
+  document.getElementById('flex-panel-selected').classList.toggle('active', tab === 'selected');
+  document.getElementById('flex-panel-all').classList.toggle('active', tab === 'all');
+  if (tab === 'all') renderFlexToggleBar();
+}
 
 function renderActiveFlexBlocks() {
   var container = document.getElementById('flex-blocks-container');
@@ -164,10 +173,13 @@ function renderActiveFlexBlocks() {
 
     // Раскрывающееся тело
     if (isExpanded) {
+      var isEditing = !hasValue || !!_editingFlexBlocks[b.key];
       h += '<div class="flex-accordion-body">';
+
       if (b.type === 'repeatable') {
+        // Repeatable всегда в режиме редактирования
         var repItems = fv[b.key] || [''];
-        if (!Array.isArray(repItems)) repItems = [String(repItems)];
+        if (!Array.isArray(repItems)) repItems = val ? [String(val)] : [''];
         h += '<div class="repeatable-list" id="rep-' + b.key + '">';
         for (var ri = 0; ri < repItems.length; ri++) {
           h += '<div class="repeatable-item">';
@@ -178,8 +190,15 @@ function renderActiveFlexBlocks() {
         }
         h += '</div>';
         h += '<button class="repeatable-add" onclick="addRepeatableItem(\'' + b.key + '\')">+ Ще</button>';
+      } else if (hasValue && !isEditing) {
+        // Readonly mode — показать текст + кнопка "Редагувати"
+        h += '<div class="flex-readonly-value">' + escapeHtml(String(val)) + '</div>';
+        h += '<div class="flex-readonly-actions">';
+        h += '<button class="flex-edit-btn" onclick="event.stopPropagation();enableFlexEdit(\'' + b.key + '\')">Редагувати</button>';
+        h += '</div>';
       } else {
-        h += '<textarea onchange="updateFlexValue(\'' + b.key + '\',this.value)" placeholder="...">' + escapeHtml(val) + '</textarea>';
+        // Edit mode — textarea
+        h += '<textarea id="flex-ta-' + b.key + '" onchange="updateFlexValue(\'' + b.key + '\',this.value)" placeholder="Введіть текст...">' + escapeHtml(val) + '</textarea>';
       }
       h += '</div>';
     }
@@ -188,11 +207,32 @@ function renderActiveFlexBlocks() {
   }
 
   container.innerHTML = h;
+
+  // Show/hide empty hint
+  var emptyHint = document.getElementById('flex-empty-hint');
+  if (emptyHint) {
+    var activeCount = 0;
+    for (var ci = 0; ci < blocks.length; ci++) {
+      if (active.indexOf(blocks[ci].key) !== -1) activeCount++;
+    }
+    emptyHint.style.display = activeCount === 0 ? 'block' : 'none';
+  }
 }
 
 function toggleFlexExpand(key) {
   _expandedFlexBlocks[key] = !_expandedFlexBlocks[key];
+  if (!_expandedFlexBlocks[key]) _editingFlexBlocks[key] = false;
   renderActiveFlexBlocks();
+}
+
+function enableFlexEdit(key) {
+  _editingFlexBlocks[key] = true;
+  renderActiveFlexBlocks();
+  // Focus textarea after render
+  setTimeout(function() {
+    var ta = document.getElementById('flex-ta-' + key);
+    if (ta) ta.focus();
+  }, 50);
 }
 
 function toggleFlexBlock(key) {
