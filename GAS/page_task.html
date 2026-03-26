@@ -69,31 +69,22 @@
             <span class="field-label" style="margin:0;">Додаткові блоки ТЗ</span>
             <div style="display:flex;gap:4px;">
               <button class="btn btn-sm" style="font-size:10px;padding:2px 8px;" onclick="openTaskImportModal()">Імпорт</button>
-              <button class="btn btn-sm flex-toggle-btn-add" style="font-size:10px;padding:2px 8px;border-radius:5px;" onclick="openModal('modal-add-flex-block')">+ Блок</button>
+              <button class="btn btn-sm" style="font-size:10px;padding:2px 8px;color:#16A34A;border-color:#16A34A;" onclick="openModal('modal-add-flex-block')">+ Блок</button>
             </div>
           </div>
 
-          <!-- 2-табовый переключатель: Вибрані | Усі блоки -->
-          <div class="flex-tabs-container">
-            <button class="flex-tab-btn active" id="flex-tab-selected" onclick="switchFlexTab('selected')">Активні блоки</button>
-            <button class="flex-tab-btn" id="flex-tab-all" onclick="switchFlexTab('all')">Вибір блоків</button>
+          <!-- Dropdown-чекбокс для вибору активних блоків -->
+          <div class="flex-dropdown-toggle" onclick="toggleFlexDropdown()">
+            <span id="flex-dropdown-label" style="color:#555;font-size:12px;">Обрати блоки...</span>
+            <span style="font-size:10px;color:#888;">&#9662;</span>
+          </div>
+          <div id="flex-dropdown-list" class="flex-dropdown-panel" style="display:none;">
+            <!-- Заполняется динамически: чекбоксы -->
           </div>
 
-          <!-- Таб 1: Аккордеон активных блоков -->
-          <div id="flex-panel-selected" class="flex-tab-panel active">
-            <div id="flex-blocks-container">
-              <!-- Заполняется динамически -->
-            </div>
-            <div id="flex-empty-hint" style="display:none;text-align:center;padding:16px;color:#AAA;font-size:12px;">
-              Немає активних блоків. Перейдіть у «Вибір блоків», щоб увімкнути.
-            </div>
-          </div>
-
-          <!-- Таб 2: Все toggle-кнопки -->
-          <div id="flex-panel-all" class="flex-tab-panel">
-            <div id="flex-toggle-bar" class="flex-toggle-bar">
-              <!-- Заполняется динамически -->
-            </div>
+          <!-- Аккордеон активних блоків -->
+          <div id="flex-blocks-container" style="margin-top:8px;">
+            <!-- Заполняется динамически -->
           </div>
 
           <!-- Результат генерации -->
