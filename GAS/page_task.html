@@ -42,8 +42,8 @@
               <input type="text" id="fv-url" class="input-field" placeholder="https://example.com/page" onchange="saveFieldValues()">
             </div>
             <div class="core-field" id="cf-keywords" style="grid-column:1/-1;">
-              <label class="field-label">Ключові слова</label>
-              <input type="text" id="fv-keywords" class="input-field" placeholder="ключ1; ключ2; ключ3" onchange="saveFieldValues()">
+              <label class="field-label">Анкор</label>
+              <input type="text" id="fv-keywords" class="input-field" placeholder="анкор1; анкор2; анкор3" onchange="saveFieldValues()">
             </div>
             <div class="core-field" id="cf-topic" style="grid-column:1/-1;">
               <label class="field-label">Тема / H1</label>
@@ -154,7 +154,7 @@
         </div>
         <textarea id="task-user-prompt" class="input-field textarea-mono" rows="8" placeholder="Напиши SEO-статтю.&#10;URL: {{url}}&#10;Ключі: {{keywords}}&#10;Тема: {{topic}}..." onchange="saveTaskPrompts()"></textarea>
         <div style="margin-top:4px;">
-          <span class="text-secondary" style="font-size:10px;">Доступні змінні: {{url}}, {{keywords}}, {{topic}}, {{language}}, {{volume}} + ключі гнучких блоків</span>
+          <span class="text-secondary" style="font-size:10px;">Змінні: {{url}}, {{keywords}} (анкор), {{topic}}, {{language}}, {{volume}} + ключі блоків</span>
         </div>
       </div>
 
