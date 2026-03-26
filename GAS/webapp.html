@@ -14,7 +14,8 @@
       <button class="nav-tab" data-hash="#templates" onclick="navigateTo('#templates')">Шаблоны</button>
       <button class="nav-tab" data-hash="#clients" onclick="navigateTo('#clients')">Клиенты</button>
     </div>
-    <div>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <input type="password" id="api-key-input" class="input-field" style="width:220px;font-size:11px;padding:4px 8px;" placeholder="OpenAI API Key (sk-...)" onchange="saveApiKey(this.value)">
       <button class="btn btn-sm" onclick="seedDemoData()">Демо-данные</button>
     </div>
   </nav>

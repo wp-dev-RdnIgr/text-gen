@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function loadInitialData() {
+  loadApiKeyHint();
   google.script.run.withSuccessHandler(function(clients) {
     state.clients = clients || [];
     renderClientList();
@@ -272,6 +273,28 @@ document.addEventListener('click', function(e) {
     }
   }
 });
+
+// --- API Key ---
+function saveApiKey(key) {
+  if (!key || !key.trim()) return;
+  google.script.run.withSuccessHandler(function() {
+    showToast('API ключ збережено', 'success');
+    document.getElementById('api-key-input').value = '••••••••' + key.slice(-4);
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+  }).setOpenAIKey(key.trim());
+}
+
+function loadApiKeyHint() {
+  google.script.run.withSuccessHandler(function(hasKey) {
+    var input = document.getElementById('api-key-input');
+    if (input && hasKey) {
+      input.value = '';
+      input.placeholder = 'API Key встановлено ✓';
+      input.style.borderColor = '#16A34A';
+    }
+  }).hasOpenAIKey();
+}
 
 // --- Демо-данные ---
 function seedDemoData() {
