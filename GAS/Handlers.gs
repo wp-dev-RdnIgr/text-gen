@@ -628,6 +628,55 @@ function getSheetRows(sheetUrl) {
   }
 }
 
+/**
+ * AI-маппинг: сопоставить колонки таблицы с полями задачи
+ * Отправляет GPT список колонок таблицы + поля задачи, AI возвращает JSON-маппинг
+ */
+function mapSheetRowToFields(sheetHeaders, rowCells, taskFieldNames) {
+  try {
+    var prompt = 'У тебя есть данные из строки Google-таблицы (ТЗ для копирайтера) и набор полей в системе генерации текстов.\n\n';
+    prompt += 'КОЛОНКИ ТАБЛИЦЫ и их значения:\n';
+    for (var i = 0; i < sheetHeaders.length; i++) {
+      var val = rowCells[sheetHeaders[i]] || '';
+      var preview = val.length > 100 ? val.substring(0, 100) + '...' : val;
+      prompt += (i + 1) + '. "' + sheetHeaders[i] + '": "' + preview + '"\n';
+    }
+
+    prompt += '\nПОЛЯ СИСТЕМЫ (куда нужно распределить данные):\n';
+    for (var j = 0; j < taskFieldNames.length; j++) {
+      prompt += '- ' + taskFieldNames[j].key + ' (label: "' + taskFieldNames[j].label + '")\n';
+    }
+
+    prompt += '\nЗАДАЧА: Определи, какая колонка таблицы соответствует какому полю системы. ';
+    prompt += 'Анализируй названия колонок И содержимое ячеек для точного определения.\n';
+    prompt += 'Например: колонка "Обов\'язкові посилання" с URLs внутри = поле для ссылок, а НЕ поле URL страницы.\n';
+    prompt += 'Колонка "Анкор" с ключевыми словами = поле анкора/ключей.\n';
+    prompt += 'Колонка "URL-адреса" с одним URL = поле URL страницы.\n\n';
+    prompt += 'Верни ТОЛЬКО JSON-объект (без markdown, без пояснений) в формате:\n';
+    prompt += '{"field_key": "Название колонки таблицы", ...}\n';
+    prompt += 'Если для какого-то поля нет подходящей колонки — не включай его в ответ.\n';
+    prompt += 'Каждая колонка может быть назначена только одному полю.';
+
+    var result = callOpenAI(
+      'Ты — точный инструмент маппинга данных. Отвечай ТОЛЬКО валидным JSON без markdown-обёртки.',
+      prompt,
+      'gpt-4o-mini'
+    );
+
+    // Парсинг JSON из ответа
+    result = result.trim();
+    // Убрать markdown если есть
+    if (result.indexOf('```') !== -1) {
+      result = result.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+    }
+
+    var mapping = JSON.parse(result);
+    return mapping;
+  } catch (e) {
+    throw new Error('Помилка AI-маппінгу: ' + e.message);
+  }
+}
+
 // --- Утилиты ---
 
 function getAllDataForDashboard(clientId) {

@@ -457,92 +457,86 @@ function taskImportAcceptRow() {
   if (!task) return;
 
   var row = _taskImportData.rows[_taskImportSelectedRow];
-  var cells = row.cells; // { "Мова": "RU", "URL-адреса": "https://...", ... }
   var headers = _taskImportData.headers;
 
-  if (!task.field_values) task.field_values = {};
+  // Собрать список полей задачи для AI-маппинга
+  var taskFieldNames = [
+    { key: 'url', label: 'URL сторінки' },
+    { key: 'keywords', label: 'Анкор (ключове слово для посилання)' },
+    { key: 'topic', label: 'Тема статті / заголовок H1' },
+    { key: 'language', label: 'Мова (UA/RU/EN)' },
+    { key: 'volume', label: "Об'єм тексту в символах (збп)" }
+  ];
+  // Добавить flex blocks
+  (task.flex_blocks || []).forEach(function(b) {
+    taskFieldNames.push({ key: b.key, label: b.label });
+  });
 
-  // Маппинг названий колонок на core fields
-  var coreMapping = {
-    url: ['url', 'url-адреса', 'url-адрес', 'url адреса', 'url адрес', 'адреса', 'адрес', 'посилання', 'ссылка', 'link'],
-    keywords: ['анкор', 'anchor', 'анкоры', 'ключ', 'ключевое', 'keyword'],
-    topic: ['тема', 'тема статті', 'тема статьи', 'topic', 'h1', 'заголовок', 'назва', 'название'],
-    language: ['мова', 'язык', 'lang', 'language'],
-    volume: ["об'єм", 'обсяг', 'объем', 'объём', 'volume', 'збп', 'символів', 'символов']
-  };
+  // Показать лоадер
+  document.getElementById('task-import-accept-btn').disabled = true;
+  document.getElementById('task-import-accept-btn').textContent = 'AI визначає поля...';
 
-  // Пройтись по каждой колонке таблицы и заполнить поля
-  var usedHeaders = {};
+  // Вызвать AI-маппинг на сервере
+  google.script.run.withSuccessHandler(function(mapping) {
+    // mapping = { "url": "URL-адреса", "keywords": "Анкор", "topic": "Тема статті", ... }
+    if (!task.field_values) task.field_values = {};
+    if (!task.active_flex_blocks) task.active_flex_blocks = [];
 
-  for (var coreKey in coreMapping) {
-    var synonyms = coreMapping[coreKey];
-    for (var h = 0; h < headers.length; h++) {
-      var headerLower = headers[h].toLowerCase().trim();
-      for (var s = 0; s < synonyms.length; s++) {
-        if (headerLower.indexOf(synonyms[s]) !== -1) {
-          var val = cells[headers[h]] || '';
-          if (val) {
-            task.field_values[coreKey] = val;
-            usedHeaders[headers[h]] = true;
-          }
-          break;
-        }
-      }
-    }
-  }
+    var mappedCount = 0;
+    for (var fieldKey in mapping) {
+      var sheetColumn = mapping[fieldKey];
+      var val = row.cells[sheetColumn];
+      if (val === undefined || val === null) continue;
+      val = String(val).trim();
+      if (!val) continue;
 
-  // Остальные колонки → маппинг на flex blocks по похожести названий
-  var flexBlocks = task.flex_blocks || [];
-  for (var hi = 0; hi < headers.length; hi++) {
-    if (usedHeaders[headers[hi]]) continue;
-    var cellVal = cells[headers[hi]] || '';
-    if (!cellVal) continue;
+      task.field_values[fieldKey] = val;
+      mappedCount++;
 
-    var headerLower2 = headers[hi].toLowerCase().trim();
-    var matched = false;
-
-    // Поиск по существующим flex blocks
-    for (var fi = 0; fi < flexBlocks.length; fi++) {
-      var flexLabel = flexBlocks[fi].label.toLowerCase().trim();
-      // Проверяем совпадение (содержит друг друга)
-      if (headerLower2.indexOf(flexLabel) !== -1 || flexLabel.indexOf(headerLower2) !== -1 ||
-          headerLower2 === flexLabel) {
-        task.field_values[flexBlocks[fi].key] = cellVal;
-        // Активировать блок
-        if (!task.active_flex_blocks) task.active_flex_blocks = [];
-        if (task.active_flex_blocks.indexOf(flexBlocks[fi].key) === -1) {
-          task.active_flex_blocks.push(flexBlocks[fi].key);
-        }
-        usedHeaders[headers[hi]] = true;
-        matched = true;
-        break;
+      // Активировать flex block если это flex
+      var isFlex = (task.flex_blocks || []).some(function(b) { return b.key === fieldKey; });
+      if (isFlex && task.active_flex_blocks.indexOf(fieldKey) === -1) {
+        task.active_flex_blocks.push(fieldKey);
       }
     }
 
-    // Если не нашли match — создаём новый flex block
-    if (!matched) {
-      var newKey = generateFlexKey(headers[hi]);
-      var exists = flexBlocks.some(function(b) { return b.key === newKey; });
+    // Данные из колонок, которые AI не маппил — создать новые flex блоки
+    var mappedColumns = {};
+    for (var mk in mapping) { mappedColumns[mapping[mk]] = true; }
+
+    headers.forEach(function(header) {
+      if (mappedColumns[header]) return;
+      var val = row.cells[header];
+      if (!val || !String(val).trim()) return;
+      // Пропустить служебные колонки (номер, ID)
+      if (header.match(/^(№|#|id|номер)$/i)) return;
+
+      var newKey = generateFlexKey(header);
+      var exists = (task.flex_blocks || []).some(function(b) { return b.key === newKey; });
       if (exists) newKey = newKey + '_' + Date.now();
 
-      flexBlocks.push({ key: newKey, label: headers[hi], type: 'textarea', enabled: true });
-      task.field_values[newKey] = cellVal;
-      if (!task.active_flex_blocks) task.active_flex_blocks = [];
+      task.flex_blocks.push({ key: newKey, label: header, type: 'textarea', enabled: true });
+      task.field_values[newKey] = String(val).trim();
       task.active_flex_blocks.push(newKey);
-    }
-  }
+    });
 
-  task.flex_blocks = flexBlocks;
+    // Обновить UI
+    populateFieldValues();
+    renderCoreFields();
+    renderFlexToggleBar();
+    renderActiveFlexBlocks();
+    autoSaveTask();
 
-  // Обновить UI
-  populateFieldValues();
-  renderCoreFields();
-  renderFlexToggleBar();
-  renderActiveFlexBlocks();
-  autoSaveTask();
+    closeModal('modal-task-import');
+    document.getElementById('task-import-accept-btn').disabled = false;
+    document.getElementById('task-import-accept-btn').textContent = 'Заповнити поля';
+    showToast('Заповнено ' + mappedCount + ' полів з рядка #' + row.rowNum, 'success');
 
-  closeModal('modal-task-import');
-  showToast('Дані з рядка #' + row.rowNum + ' заповнено', 'success');
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+    document.getElementById('task-import-accept-btn').disabled = false;
+    document.getElementById('task-import-accept-btn').textContent = 'Заповнити поля';
+  }).mapSheetRowToFields(headers, row.cells, taskFieldNames);
 }
 
 function renderHistoryList() {
