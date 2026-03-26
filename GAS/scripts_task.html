@@ -392,6 +392,159 @@ function openEditorForLastGen() {
 }
 
 // --- История ---
+// ===========================================
+// Імпорт даних з Google Sheets
+// ===========================================
+var _taskImportData = null;
+var _taskImportSelectedRow = -1;
+
+function openTaskImportModal() {
+  document.getElementById('task-import-step-url').style.display = 'block';
+  document.getElementById('task-import-step-select').style.display = 'none';
+  document.getElementById('task-import-accept-btn').style.display = 'none';
+  document.getElementById('task-import-url').value = '';
+  document.getElementById('task-import-loading').style.display = 'none';
+  document.getElementById('task-import-btn').style.display = 'block';
+  _taskImportData = null;
+  _taskImportSelectedRow = -1;
+  openModal('modal-task-import');
+}
+
+function taskImportLoadRows() {
+  var url = document.getElementById('task-import-url').value.trim();
+  if (!url) { showToast('Вставте посилання', 'error'); return; }
+
+  document.getElementById('task-import-btn').style.display = 'none';
+  document.getElementById('task-import-loading').style.display = 'block';
+
+  google.script.run.withSuccessHandler(function(data) {
+    _taskImportData = data;
+    document.getElementById('task-import-loading').style.display = 'none';
+    document.getElementById('task-import-step-url').style.display = 'none';
+    document.getElementById('task-import-step-select').style.display = 'block';
+    document.getElementById('task-import-accept-btn').style.display = 'inline-block';
+
+    var h = '';
+    data.rows.forEach(function(row, i) {
+      h += '<label class="checkbox-label" style="padding:8px 0;border-bottom:1px solid #F0F0EC;align-items:flex-start;">' +
+        '<input type="radio" name="task-import-row" value="' + i + '" onchange="onTaskImportRowSelect(' + i + ')" style="margin-top:2px;">' +
+        '<div>' +
+          '<strong style="font-size:13px;">#' + row.rowNum + '</strong> ' +
+          '<span style="font-size:12px;color:#555;">' + escapeHtml(row.topic) + '</span>' +
+        '</div>' +
+      '</label>';
+    });
+    document.getElementById('task-import-rows-list').innerHTML = h;
+    showToast('Знайдено ' + data.rows.length + ' рядків', 'success');
+  }).withFailureHandler(function(e) {
+    document.getElementById('task-import-loading').style.display = 'none';
+    document.getElementById('task-import-btn').style.display = 'block';
+    showToast(e.message, 'error');
+  }).getSheetRows(url);
+}
+
+function onTaskImportRowSelect(index) {
+  _taskImportSelectedRow = index;
+}
+
+function taskImportAcceptRow() {
+  if (_taskImportSelectedRow < 0 || !_taskImportData) {
+    showToast('Оберіть рядок', 'error');
+    return;
+  }
+
+  var task = state.currentTask;
+  if (!task) return;
+
+  var row = _taskImportData.rows[_taskImportSelectedRow];
+  var cells = row.cells; // { "Мова": "RU", "URL-адреса": "https://...", ... }
+  var headers = _taskImportData.headers;
+
+  if (!task.field_values) task.field_values = {};
+
+  // Маппинг названий колонок на core fields
+  var coreMapping = {
+    url: ['url', 'url-адреса', 'url-адрес', 'url адреса', 'url адрес', 'адреса', 'адрес', 'посилання', 'ссылка', 'link'],
+    keywords: ['анкор', 'anchor', 'анкоры', 'ключ', 'ключевое', 'keyword'],
+    topic: ['тема', 'тема статті', 'тема статьи', 'topic', 'h1', 'заголовок', 'назва', 'название'],
+    language: ['мова', 'язык', 'lang', 'language'],
+    volume: ["об'єм", 'обсяг', 'объем', 'объём', 'volume', 'збп', 'символів', 'символов']
+  };
+
+  // Пройтись по каждой колонке таблицы и заполнить поля
+  var usedHeaders = {};
+
+  for (var coreKey in coreMapping) {
+    var synonyms = coreMapping[coreKey];
+    for (var h = 0; h < headers.length; h++) {
+      var headerLower = headers[h].toLowerCase().trim();
+      for (var s = 0; s < synonyms.length; s++) {
+        if (headerLower.indexOf(synonyms[s]) !== -1) {
+          var val = cells[headers[h]] || '';
+          if (val) {
+            task.field_values[coreKey] = val;
+            usedHeaders[headers[h]] = true;
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  // Остальные колонки → маппинг на flex blocks по похожести названий
+  var flexBlocks = task.flex_blocks || [];
+  for (var hi = 0; hi < headers.length; hi++) {
+    if (usedHeaders[headers[hi]]) continue;
+    var cellVal = cells[headers[hi]] || '';
+    if (!cellVal) continue;
+
+    var headerLower2 = headers[hi].toLowerCase().trim();
+    var matched = false;
+
+    // Поиск по существующим flex blocks
+    for (var fi = 0; fi < flexBlocks.length; fi++) {
+      var flexLabel = flexBlocks[fi].label.toLowerCase().trim();
+      // Проверяем совпадение (содержит друг друга)
+      if (headerLower2.indexOf(flexLabel) !== -1 || flexLabel.indexOf(headerLower2) !== -1 ||
+          headerLower2 === flexLabel) {
+        task.field_values[flexBlocks[fi].key] = cellVal;
+        // Активировать блок
+        if (!task.active_flex_blocks) task.active_flex_blocks = [];
+        if (task.active_flex_blocks.indexOf(flexBlocks[fi].key) === -1) {
+          task.active_flex_blocks.push(flexBlocks[fi].key);
+        }
+        usedHeaders[headers[hi]] = true;
+        matched = true;
+        break;
+      }
+    }
+
+    // Если не нашли match — создаём новый flex block
+    if (!matched) {
+      var newKey = generateFlexKey(headers[hi]);
+      var exists = flexBlocks.some(function(b) { return b.key === newKey; });
+      if (exists) newKey = newKey + '_' + Date.now();
+
+      flexBlocks.push({ key: newKey, label: headers[hi], type: 'textarea', enabled: true });
+      task.field_values[newKey] = cellVal;
+      if (!task.active_flex_blocks) task.active_flex_blocks = [];
+      task.active_flex_blocks.push(newKey);
+    }
+  }
+
+  task.flex_blocks = flexBlocks;
+
+  // Обновить UI
+  populateFieldValues();
+  renderCoreFields();
+  renderFlexToggleBar();
+  renderActiveFlexBlocks();
+  autoSaveTask();
+
+  closeModal('modal-task-import');
+  showToast('Дані з рядка #' + row.rowNum + ' заповнено', 'success');
+}
+
 function renderHistoryList() {
   var list = document.getElementById('history-list');
   var empty = document.getElementById('history-empty');
