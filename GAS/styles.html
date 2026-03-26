@@ -604,39 +604,24 @@ textarea.input-field { resize: vertical; }
 .core-field { }
 .core-field.hidden { display: none; }
 
-/* --- Flex blocks pill-tabs (segmented control) --- */
-.flex-tabs-container {
-  background: #F0F0EC; border-radius: 10px; padding: 4px;
-  display: flex; gap: 2px; margin-bottom: 12px;
+/* --- Flex dropdown selector --- */
+.flex-dropdown-toggle {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; border: 1px solid #DDD; border-radius: 8px;
+  background: #fff; cursor: pointer; transition: border-color 0.15s;
+  margin-bottom: 0;
 }
-.flex-tab-btn {
-  flex: 1; padding: 8px 4px; border: none; border-radius: 8px;
-  background: none; font-family: 'DM Sans', sans-serif; font-size: 11px;
-  font-weight: 500; color: #888; cursor: pointer; transition: all 0.2s;
-  text-align: center; white-space: nowrap;
+.flex-dropdown-toggle:hover { border-color: #1A5FB4; }
+.flex-dropdown-panel {
+  border: 1px solid #DDD; border-top: none; border-radius: 0 0 8px 8px;
+  background: #fff; padding: 6px 0; max-height: 220px; overflow-y: auto;
 }
-.flex-tab-btn:hover { color: #555; }
-.flex-tab-btn.active { background: #fff; color: #1A1A1A; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-.flex-tab-panel { display: none; }
-.flex-tab-panel.active { display: block; }
-
-/* --- Flex toggle bar (inside tab panels) --- */
-.flex-toggle-bar {
-  display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px;
+.flex-dropdown-panel label {
+  display: flex; align-items: center; gap: 8px; padding: 5px 12px;
+  font-size: 12px; cursor: pointer; transition: background 0.1s;
 }
-.flex-toggle-btn {
-  padding: 4px 10px; border: 1px solid #DDD; border-radius: 20px;
-  background: #fff; font-family: 'DM Sans', sans-serif; font-size: 11px;
-  color: #888; cursor: pointer; transition: all 0.15s;
-}
-.flex-toggle-btn:hover { border-color: #1A5FB4; color: #1A5FB4; }
-.flex-toggle-btn.active {
-  border-color: #1A5FB4; background: #EBF5FF; color: #1A5FB4; font-weight: 500;
-}
-.flex-toggle-btn-add {
-  border-color: #16A34A; color: #16A34A; border-style: dashed;
-}
-.flex-toggle-btn-add:hover { background: #ECFDF5; }
+.flex-dropdown-panel label:hover { background: #F5F5F0; }
+.flex-dropdown-panel input[type="checkbox"] { accent-color: #1A5FB4; }
 
 /* --- Flex block close button --- */
 .flex-block-close {
@@ -661,7 +646,7 @@ textarea.input-field { resize: vertical; }
 }
 .flex-accordion-chevron.open { transform: rotate(90deg); }
 .flex-accordion-label {
-  font-size: 12px; font-weight: 600; color: #444; white-space: nowrap; flex-shrink: 0;
+  font-size: 12px; font-weight: 600; color: #1A1A1A; white-space: nowrap; flex-shrink: 0;
 }
 .flex-accordion-preview {
   font-size: 11px; color: #999; margin-left: 8px;
@@ -677,19 +662,20 @@ textarea.input-field { resize: vertical; }
 
 /* --- Readonly display for flex block values --- */
 .flex-readonly-value {
-  font-size: 12px; line-height: 1.6; color: #555; padding: 8px 10px;
-  background: #FAFAF8; border: 1px solid #E5E5E0; border-radius: 6px;
+  font-size: 12px; line-height: 1.7; color: #1A1A1A; padding: 10px 14px;
+  background: #F8FAFC; border-left: 3px solid #1A5FB4; border-radius: 0 6px 6px 0;
   white-space: pre-wrap; word-break: break-word;
+  margin: 4px 0;
 }
 .flex-readonly-actions {
   display: flex; justify-content: flex-end; margin-top: 6px;
 }
 .flex-edit-btn {
-  padding: 3px 10px; border: 1px solid #DDD; border-radius: 5px;
-  background: #fff; font-family: 'DM Sans', sans-serif; font-size: 10px;
-  color: #1A5FB4; cursor: pointer; transition: all 0.15s;
+  padding: 4px 14px; border: 1px solid #1A5FB4; border-radius: 6px;
+  background: #EBF5FF; font-family: 'DM Sans', sans-serif; font-size: 11px;
+  font-weight: 500; color: #1A5FB4; cursor: pointer; transition: all 0.15s;
 }
-.flex-edit-btn:hover { background: #EBF5FF; border-color: #1A5FB4; }
+.flex-edit-btn:hover { background: #D0E4FF; }
 
 /* --- Repeatable items --- */
 .repeatable-list { display: flex; flex-direction: column; gap: 6px; }

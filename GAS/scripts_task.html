@@ -92,37 +92,66 @@ function populateFieldValues() {
 
 // --- Flex Blocks ---
 function renderFlexToggleBar() {
-  var bar = document.getElementById('flex-toggle-bar');
-  if (!bar || !state.currentTask) return;
-
-  var blocks = state.currentTask.flex_blocks || [];
-  var active = state.currentTask.active_flex_blocks || [];
-
-  var h = '';
-  for (var bi = 0; bi < blocks.length; bi++) {
-    var b = blocks[bi];
-    var isActive = active.indexOf(b.key) !== -1;
-    h += '<button class="flex-toggle-btn' + (isActive ? ' active' : '') + '" onclick="toggleFlexBlock(\'' + b.key + '\')">' +
-      (isActive ? '✓ ' : '+ ') + escapeHtml(b.label) +
-    '</button>';
-  }
-
-  // Кнопка "Додати свій блок"
-  h += '<button class="flex-toggle-btn flex-toggle-btn-add" onclick="openModal(\'modal-add-flex-block\')">+ Свій блок...</button>';
-
-  bar.innerHTML = h;
+  // Now uses dropdown instead — render dropdown list
+  renderFlexDropdownList();
 }
 
 // --- Хранилище раскрытых блоков и режимов ---
 var _expandedFlexBlocks = {};
 var _editingFlexBlocks = {};
 
-function switchFlexTab(tab) {
-  document.getElementById('flex-tab-selected').classList.toggle('active', tab === 'selected');
-  document.getElementById('flex-tab-all').classList.toggle('active', tab === 'all');
-  document.getElementById('flex-panel-selected').classList.toggle('active', tab === 'selected');
-  document.getElementById('flex-panel-all').classList.toggle('active', tab === 'all');
-  if (tab === 'all') renderFlexToggleBar();
+function toggleFlexDropdown() {
+  var dd = document.getElementById('flex-dropdown-list');
+  if (!dd) return;
+  var isHidden = dd.style.display === 'none';
+  dd.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) renderFlexDropdownList();
+}
+
+function renderFlexDropdownList() {
+  var dd = document.getElementById('flex-dropdown-list');
+  if (!dd || !state.currentTask) return;
+  var blocks = state.currentTask.flex_blocks || [];
+  var active = state.currentTask.active_flex_blocks || [];
+
+  var h = '';
+  for (var i = 0; i < blocks.length; i++) {
+    var b = blocks[i];
+    var checked = active.indexOf(b.key) !== -1 ? ' checked' : '';
+    h += '<label><input type="checkbox" value="' + b.key + '"' + checked + ' onchange="onFlexDropdownChange(\'' + b.key + '\',this.checked)"> ' + escapeHtml(b.label) + '</label>';
+  }
+  dd.innerHTML = h || '<div style="padding:8px 12px;color:#AAA;font-size:12px;">Немає блоків</div>';
+  updateFlexDropdownLabel();
+}
+
+function onFlexDropdownChange(key, checked) {
+  var task = state.currentTask;
+  if (!task) return;
+  if (!task.active_flex_blocks) task.active_flex_blocks = [];
+  var idx = task.active_flex_blocks.indexOf(key);
+  if (checked && idx === -1) task.active_flex_blocks.push(key);
+  if (!checked && idx !== -1) task.active_flex_blocks.splice(idx, 1);
+  updateFlexDropdownLabel();
+  renderActiveFlexBlocks();
+  autoSaveTask();
+}
+
+function updateFlexDropdownLabel() {
+  var label = document.getElementById('flex-dropdown-label');
+  if (!label || !state.currentTask) return;
+  var active = state.currentTask.active_flex_blocks || [];
+  var blocks = state.currentTask.flex_blocks || [];
+  if (active.length === 0) {
+    label.textContent = 'Обрати блоки...';
+    label.style.color = '#888';
+  } else {
+    var names = [];
+    for (var i = 0; i < blocks.length; i++) {
+      if (active.indexOf(blocks[i].key) !== -1) names.push(blocks[i].label);
+    }
+    label.textContent = names.join(', ');
+    label.style.color = '#1A1A1A';
+  }
 }
 
 function renderActiveFlexBlocks() {
