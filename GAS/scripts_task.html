@@ -233,8 +233,12 @@ function renderActiveFlexBlocks() {
         h += '<button class="flex-edit-btn" onclick="event.stopPropagation();enableFlexEdit(\'' + b.key + '\')">Редагувати</button>';
         h += '</div>';
       } else {
-        // Edit mode — textarea
-        h += '<textarea id="flex-ta-' + b.key + '" onchange="updateFlexValue(\'' + b.key + '\',this.value)" placeholder="Введіть текст...">' + escapeHtml(val) + '</textarea>';
+        // Edit mode — textarea + кнопки підтвердження
+        h += '<textarea id="flex-ta-' + b.key + '" placeholder="Введіть текст...">' + escapeHtml(val) + '</textarea>';
+        h += '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:6px;">';
+        h += '<button class="btn btn-sm" style="font-size:10px;" onclick="event.stopPropagation();cancelFlexEdit(\'' + b.key + '\')">Скасувати</button>';
+        h += '<button class="btn btn-sm btn-primary" style="font-size:10px;" onclick="event.stopPropagation();confirmFlexEdit(\'' + b.key + '\')">Зберегти</button>';
+        h += '</div>';
       }
       h += '</div>';
     }
@@ -264,11 +268,25 @@ function toggleFlexExpand(key) {
 function enableFlexEdit(key) {
   _editingFlexBlocks[key] = true;
   renderActiveFlexBlocks();
-  // Focus textarea after render
   setTimeout(function() {
     var ta = document.getElementById('flex-ta-' + key);
     if (ta) ta.focus();
   }, 50);
+}
+
+function confirmFlexEdit(key) {
+  var ta = document.getElementById('flex-ta-' + key);
+  if (ta) {
+    updateFlexValue(key, ta.value);
+  }
+  _editingFlexBlocks[key] = false;
+  renderActiveFlexBlocks();
+  showToast('Збережено', 'success');
+}
+
+function cancelFlexEdit(key) {
+  _editingFlexBlocks[key] = false;
+  renderActiveFlexBlocks();
 }
 
 function toggleFlexBlock(key) {
