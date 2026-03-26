@@ -108,6 +108,16 @@ function toggleFlexDropdown() {
   if (isHidden) renderFlexDropdownList();
 }
 
+// Close flex dropdown on outside click
+document.addEventListener('click', function(e) {
+  var dd = document.getElementById('flex-dropdown-list');
+  var toggle = document.querySelector('.flex-dropdown-toggle');
+  if (dd && toggle && dd.style.display === 'block' &&
+      !dd.contains(e.target) && !toggle.contains(e.target)) {
+    dd.style.display = 'none';
+  }
+});
+
 function renderFlexDropdownList() {
   var dd = document.getElementById('flex-dropdown-list');
   if (!dd || !state.currentTask) return;
@@ -141,15 +151,12 @@ function updateFlexDropdownLabel() {
   if (!label || !state.currentTask) return;
   var active = state.currentTask.active_flex_blocks || [];
   var blocks = state.currentTask.flex_blocks || [];
+  var total = blocks.length;
   if (active.length === 0) {
-    label.textContent = 'Обрати блоки...';
+    label.textContent = 'Обрати блоки (' + total + ' доступно)';
     label.style.color = '#888';
   } else {
-    var names = [];
-    for (var i = 0; i < blocks.length; i++) {
-      if (active.indexOf(blocks[i].key) !== -1) names.push(blocks[i].label);
-    }
-    label.textContent = names.join(', ');
+    label.textContent = 'Додаткові блоки: ' + active.length + ' з ' + total;
     label.style.color = '#1A1A1A';
   }
 }
