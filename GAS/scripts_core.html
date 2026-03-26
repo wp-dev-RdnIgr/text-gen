@@ -20,7 +20,8 @@ var state = {
   activeBlockIndex: -1,
   regenBlockIndex: -1,
   // Шаблоны
-  selectedTemplateId: null
+  selectedTemplateId: null,
+  tplClientIds: []
 };
 
 // --- Инициализация ---
@@ -35,10 +36,14 @@ function loadInitialData() {
     state.clients = clients || [];
     renderClientList();
     renderClientsTable();
+  }).withFailureHandler(function(e) {
+    console.error('loadClients error:', e);
   }).getClients();
 
   google.script.run.withSuccessHandler(function(tt) {
     state.taskTemplates = tt || [];
+  }).withFailureHandler(function(e) {
+    console.error('loadTaskTemplates error:', e);
   }).getTaskTemplates();
 }
 
@@ -201,6 +206,37 @@ function generateFakeContent(userInput) {
     '<p>Используйте наши рекомендации для достижения лучших результатов. Каждый совет проверен на практике.</p>\n' +
     '<h2>Заключение</h2>\n' +
     '<p>Используйте информацию из этой статьи для оптимального выбора. Мы уверены, что наши советы помогут вам принять правильное решение.</p>';
+}
+
+// --- Сборка промпта из полей ---
+function assemblePrompt(promptTemplate, fieldValues) {
+  if (!promptTemplate) return '';
+  var result = promptTemplate;
+  for (var key in fieldValues) {
+    var val = fieldValues[key];
+    // Массивы (repeatable) — каждый элемент с новой строки
+    if (Array.isArray(val)) {
+      val = val.filter(function(v) { return v && v.trim(); }).join('\n');
+    }
+    result = result.replace(new RegExp('\\{\\{' + key + '\\}\\}', 'g'), val || '');
+  }
+  // Удалить оставшиеся незамененные переменные
+  result = result.replace(/\{\{\w+\}\}/g, '');
+  return result.trim();
+}
+
+// --- Генерация ключа из названия ---
+function generateFlexKey(label) {
+  var cyr = {'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'e','ж':'zh','з':'z','и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh','щ':'shch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya','і':'i','ї':'yi','є':'ye','ґ':'g'};
+  var r = label.toLowerCase().trim(), out = '';
+  for (var i = 0; i < r.length; i++) {
+    var c = r[i];
+    if (cyr[c]) out += cyr[c];
+    else if (/[a-z0-9]/.test(c)) out += c;
+    else if (c === ' ' || c === '-' || c === '_') out += '_';
+  }
+  out = out.replace(/_+/g, '_').replace(/^_|_$/g, '');
+  return out || ('block_' + Date.now());
 }
 
 // --- Мультиселект ---

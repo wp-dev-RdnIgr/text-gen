@@ -124,11 +124,19 @@ function onNewTaskClientFilterChange() {
 
 function createTaskFromScratch() {
   closeModal('modal-new-task');
+  var defaultFlexBlocks = [
+    { key: 'h2_structure', label: 'Структура H2', type: 'repeatable', enabled: true },
+    { key: 'notes', label: 'Примітки', type: 'textarea', enabled: false }
+  ];
   var task = {
     client_id: state.selectedClientId,
-    name: 'Новая задача',
+    name: 'Нова задача',
     system_prompt: '',
     user_prompt: '',
+    core_fields: { url: true, keywords: true, topic: true, language: true, volume: true },
+    flex_blocks: defaultFlexBlocks,
+    active_flex_blocks: ['h2_structure'],
+    field_values: {},
     llm_provider: 'anthropic',
     llm_model: 'Claude Sonnet',
     options: { humanize: false, uniqueness: true, factcheck: false, ai_detector: false },
@@ -147,19 +155,36 @@ function createTaskFromTemplate(ttId) {
   var tt = (state.taskTemplates || []).find(function(x) { return x.id === ttId; });
   if (!tt) { createTaskFromScratch(); return; }
 
+  // Копировать flex_blocks с enabled → active_flex_blocks
+  var flexBlocks = (tt.flex_blocks || []).map(function(b) {
+    return { key: b.key, label: b.label, type: b.type, enabled: b.enabled };
+  });
+  var activeFlexBlocks = flexBlocks.filter(function(b) { return b.enabled; }).map(function(b) { return b.key; });
+
+  // Инициализировать field_values для repeatable блоков
+  var fieldValues = {};
+  flexBlocks.forEach(function(b) {
+    if (b.type === 'repeatable') fieldValues[b.key] = [''];
+    else fieldValues[b.key] = '';
+  });
+
   var task = {
     client_id: state.selectedClientId,
     name: tt.name,
     system_prompt: tt.system_prompt || '',
     user_prompt: tt.user_prompt || '',
     template_id: tt.id,
+    core_fields: tt.core_fields || { url: true, keywords: true, topic: true, language: true, volume: true },
+    flex_blocks: flexBlocks,
+    active_flex_blocks: activeFlexBlocks,
+    field_values: fieldValues,
     llm_provider: tt.llm_provider || 'anthropic',
     llm_model: tt.llm_model || 'Claude Sonnet',
     options: tt.options || {},
     status: 'active'
   };
   google.script.run.withSuccessHandler(function(s) {
-    showToast('Задача создана из шаблона', 'success');
+    showToast('Задачу створено з шаблону', 'success');
     navigateTo('#task/' + s.id);
   }).withFailureHandler(function(e) {
     showToast(e.message, 'error');

@@ -3,19 +3,17 @@
 // scripts_templates.html - Шаблоны задач
 // ===========================================
 
-// --- Хранилище client_ids для текущего шаблона ---
-var _tplClientIds = [];
+// --- Temp storage for editing ---
+var _tplFlexBlocks = [];
 
 function renderTemplateList() {
   var c = document.getElementById('template-list');
   if (!c) return;
-
   var tts = state.taskTemplates || [];
   if (!tts.length) {
-    c.innerHTML = '<div class="placeholder-message" style="height:100px"><p>Нет шаблонов</p></div>';
+    c.innerHTML = '<div class="placeholder-message" style="height:100px"><p>Немає шаблонів</p></div>';
     return;
   }
-
   var h = '';
   tts.forEach(function(tt) {
     var active = tt.id === state.selectedTemplateId ? ' active' : '';
@@ -62,14 +60,34 @@ function selectTemplate(ttId) {
   document.getElementById('tpl-opt-factcheck').checked = !!opts.factcheck;
   document.getElementById('tpl-opt-ai-detector').checked = !!opts.ai_detector;
 
-  // Клиенты
-  _tplClientIds = (tt.client_ids || []).slice();
+  // Client IDs
+  state.tplClientIds = (tt.client_ids || []).slice();
   renderTplClientMultiselect();
+
+  // Core fields config
+  var cf = tt.core_fields || { url: true, keywords: true, topic: true, language: true, volume: true };
+  document.getElementById('tpl-cf-url').checked = !!cf.url;
+  document.getElementById('tpl-cf-keywords').checked = !!cf.keywords;
+  document.getElementById('tpl-cf-topic').checked = !!cf.topic;
+  document.getElementById('tpl-cf-language').checked = !!cf.language;
+  document.getElementById('tpl-cf-volume').checked = !!cf.volume;
+
+  // Flex blocks
+  _tplFlexBlocks = (tt.flex_blocks || []).map(function(b) { return { key: b.key, label: b.label, type: b.type, enabled: b.enabled }; });
+  renderTplFlexBlocksList();
 }
 
 function createNewTemplate() {
   state.selectedTemplateId = null;
-  _tplClientIds = [];
+  state.tplClientIds = [];
+  _tplFlexBlocks = [
+    { key: 'h2_structure', label: 'Структура H2', type: 'repeatable', enabled: true },
+    { key: 'links', label: 'Обов\'язкові посилання', type: 'repeatable', enabled: false },
+    { key: 'company_block', label: 'Блок про компанію', type: 'textarea', enabled: false },
+    { key: 'expert_block', label: 'Блок про експерта', type: 'textarea', enabled: false },
+    { key: 'notes', label: 'Примітки редактору', type: 'textarea', enabled: false }
+  ];
+
   renderTemplateList();
   document.getElementById('template-placeholder').style.display = 'none';
   document.getElementById('template-editor-content').style.display = 'block';
@@ -84,36 +102,43 @@ function createNewTemplate() {
   document.getElementById('tpl-opt-factcheck').checked = false;
   document.getElementById('tpl-opt-ai-detector').checked = false;
 
+  document.getElementById('tpl-cf-url').checked = true;
+  document.getElementById('tpl-cf-keywords').checked = true;
+  document.getElementById('tpl-cf-topic').checked = true;
+  document.getElementById('tpl-cf-language').checked = true;
+  document.getElementById('tpl-cf-volume').checked = true;
+
   renderTplClientMultiselect();
+  renderTplFlexBlocksList();
 }
 
-// --- Мультиселект клиентов в шаблоне ---
+// --- Client multiselect ---
 function renderTplClientMultiselect() {
   var opts = document.getElementById('tpl-client-ms-options');
   if (!opts) return;
   var h = '';
   (state.clients || []).forEach(function(cl) {
-    var checked = _tplClientIds.indexOf(cl.id) !== -1 ? ' checked' : '';
+    var checked = state.tplClientIds.indexOf(cl.id) !== -1 ? ' checked' : '';
     h += '<label class="multiselect-option"><input type="checkbox" value="' + cl.id + '"' + checked + ' onchange="onTplClientChange()">' + escapeHtml(cl.name) + '</label>';
   });
-  if (!state.clients.length) h = '<div style="padding:8px 12px;color:#888;font-size:12px;">Нет клиентов</div>';
+  if (!state.clients.length) h = '<div style="padding:8px 12px;color:#888;font-size:12px;">Немає клієнтів</div>';
   opts.innerHTML = h;
   updateTplClientLabel();
 }
 
 function onTplClientChange() {
-  _tplClientIds = getMultiselectSelected('tpl-client-ms-options');
+  state.tplClientIds = getMultiselectSelected('tpl-client-ms-options');
   updateTplClientLabel();
 }
 
 function updateTplClientLabel() {
   var label = document.getElementById('tpl-client-ms-label');
   if (!label) return;
-  if (_tplClientIds.length === 0) {
-    label.textContent = 'Все клиенты';
+  if (state.tplClientIds.length === 0) {
+    label.textContent = 'Всі клієнти';
     label.className = 'multiselect-placeholder';
   } else {
-    var names = _tplClientIds.map(function(id) {
+    var names = state.tplClientIds.map(function(id) {
       var cl = (state.clients || []).find(function(c) { return c.id === id; });
       return cl ? cl.name : '';
     }).join(', ');
@@ -122,9 +147,71 @@ function updateTplClientLabel() {
   }
 }
 
+// --- Core fields config ---
+function onTplCoreFieldChange() {
+  // just stored in checkboxes, read at save time
+}
+
+function getTplCoreFields() {
+  return {
+    url: document.getElementById('tpl-cf-url').checked,
+    keywords: document.getElementById('tpl-cf-keywords').checked,
+    topic: document.getElementById('tpl-cf-topic').checked,
+    language: document.getElementById('tpl-cf-language').checked,
+    volume: document.getElementById('tpl-cf-volume').checked
+  };
+}
+
+// --- Flex blocks config ---
+function renderTplFlexBlocksList() {
+  var c = document.getElementById('tpl-flex-blocks-list');
+  if (!c) return;
+  if (!_tplFlexBlocks.length) {
+    c.innerHTML = '<div class="text-secondary" style="padding:8px 0;">Немає блоків</div>';
+    return;
+  }
+  var typeLabels = { textarea: 'текст', repeatable: 'список' };
+  var h = '';
+  _tplFlexBlocks.forEach(function(b, i) {
+    h += '<div class="tpl-flex-item">' +
+      '<label class="checkbox-label" style="margin:0;padding:0;"><input type="checkbox"' + (b.enabled ? ' checked' : '') + ' onchange="toggleTplFlexEnabled(' + i + ',this.checked)"></label>' +
+      '<span class="tpl-flex-item-name">' + escapeHtml(b.label) + '</span>' +
+      '<span class="tpl-flex-item-type">' + (typeLabels[b.type] || b.type) + '</span>' +
+      '<span class="tpl-flex-item-var">{{' + b.key + '}}</span>' +
+      '<button class="tpl-flex-remove" onclick="removeTplFlexBlock(' + i + ')" title="Видалити">&times;</button>' +
+    '</div>';
+  });
+  c.innerHTML = h;
+}
+
+function toggleTplFlexEnabled(index, checked) {
+  if (_tplFlexBlocks[index]) _tplFlexBlocks[index].enabled = checked;
+}
+
+function removeTplFlexBlock(index) {
+  _tplFlexBlocks.splice(index, 1);
+  renderTplFlexBlocksList();
+}
+
+function addTplFlexBlock() {
+  var label = prompt('Назва нового блоку:');
+  if (!label || !label.trim()) return;
+  label = label.trim();
+  var type = prompt('Тип блоку: textarea (текст) або repeatable (список):', 'textarea');
+  if (type !== 'textarea' && type !== 'repeatable') type = 'textarea';
+
+  var key = generateFlexKey(label);
+  var exists = _tplFlexBlocks.some(function(b) { return b.key === key; });
+  if (exists) key = key + '_' + Date.now();
+
+  _tplFlexBlocks.push({ key: key, label: label, type: type, enabled: true });
+  renderTplFlexBlocksList();
+}
+
+// --- Save / Delete / Duplicate ---
 function saveCurrentTemplate() {
   var name = document.getElementById('tpl-name').value.trim();
-  if (!name) { showToast('Укажите название', 'error'); return; }
+  if (!name) { showToast('Вкажіть назву', 'error'); return; }
 
   var lSel = document.getElementById('tpl-llm-select');
   var parts = lSel.value.split('|');
@@ -134,7 +221,9 @@ function saveCurrentTemplate() {
     description: document.getElementById('tpl-description').value.trim(),
     system_prompt: document.getElementById('tpl-system-prompt').value,
     user_prompt: document.getElementById('tpl-user-prompt').value,
-    client_ids: _tplClientIds,
+    client_ids: state.tplClientIds,
+    core_fields: getTplCoreFields(),
+    flex_blocks: _tplFlexBlocks,
     llm_provider: parts[0] || '',
     llm_model: parts[1] || '',
     options: {
@@ -148,7 +237,7 @@ function saveCurrentTemplate() {
   if (state.selectedTemplateId) data.id = state.selectedTemplateId;
 
   google.script.run.withSuccessHandler(function(s) {
-    showToast('Шаблон сохранён', 'success');
+    showToast('Шаблон збережено', 'success');
     state.selectedTemplateId = s.id;
     google.script.run.withSuccessHandler(function(list) {
       state.taskTemplates = list || [];
@@ -162,10 +251,9 @@ function saveCurrentTemplate() {
 
 function deleteCurrentTemplate() {
   if (!state.selectedTemplateId) return;
-  if (!confirm('Удалить шаблон?')) return;
-
+  if (!confirm('Видалити шаблон?')) return;
   google.script.run.withSuccessHandler(function() {
-    showToast('Шаблон удалён', 'success');
+    showToast('Шаблон видалено', 'success');
     state.selectedTemplateId = null;
     document.getElementById('template-editor-content').style.display = 'none';
     document.getElementById('template-placeholder').style.display = 'block';
@@ -182,20 +270,20 @@ function duplicateTemplate() {
   if (!state.selectedTemplateId) return;
   var tt = (state.taskTemplates || []).find(function(x) { return x.id === state.selectedTemplateId; });
   if (!tt) return;
-
   var data = {
-    name: tt.name + ' (копия)',
+    name: tt.name + ' (копія)',
     description: tt.description || '',
     system_prompt: tt.system_prompt || '',
     user_prompt: tt.user_prompt || '',
     client_ids: (tt.client_ids || []).slice(),
+    core_fields: tt.core_fields || {},
+    flex_blocks: (tt.flex_blocks || []).map(function(b) { return { key: b.key, label: b.label, type: b.type, enabled: b.enabled }; }),
     llm_provider: tt.llm_provider || '',
     llm_model: tt.llm_model || '',
     options: tt.options || {}
   };
-
   google.script.run.withSuccessHandler(function(s) {
-    showToast('Шаблон скопирован', 'success');
+    showToast('Шаблон скопійовано', 'success');
     google.script.run.withSuccessHandler(function(list) {
       state.taskTemplates = list || [];
       renderTemplateList();
