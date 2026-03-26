@@ -90,7 +90,7 @@ function updateTask(taskId, updates) {
 
 // --- Генерация текста ---
 
-function generateText(taskId, userInput) {
+function generateText(taskId, userInput, fieldValues) {
   try {
     var task = _findById('tasks', taskId);
     if (!task) throw new Error('Задача не найдена');
@@ -102,6 +102,7 @@ function generateText(taskId, userInput) {
       used_system_prompt: task.system_prompt || '',
       used_user_prompt: task.user_prompt || '',
       used_llm_model: task.llm_model || '',
+      used_field_values: fieldValues || {},
       content: '',
       blocks: [],
       status: 'pending',

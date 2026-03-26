@@ -42,23 +42,48 @@
 
         <!-- Привязка к клиентам -->
         <div class="field-group">
-          <div class="field-label">
-            Привязка к клиентам
-            <span class="tooltip-wrap">
-              <span class="tooltip-icon">?</span>
-              <span class="tooltip-text">Шаблон будет доступен только для выбранных клиентов. Если не выбрано — доступен всем.</span>
-            </span>
-          </div>
+          <div class="field-label">Прив'язка до клієнтів</div>
           <div class="multiselect-box" id="tpl-client-ms" onclick="toggleMultiselect('tpl-client-ms')">
-            <span class="multiselect-placeholder" id="tpl-client-ms-label">Все клиенты</span>
+            <span class="multiselect-placeholder" id="tpl-client-ms-label">Всі клієнти</span>
             <span class="multiselect-arrow">&#9662;</span>
           </div>
           <div class="multiselect-dropdown" id="tpl-client-ms-dropdown" style="display:none;">
-            <input type="text" class="multiselect-search" placeholder="Поиск клиента..." oninput="filterMultiselectOptions('tpl-client-ms-dropdown', this.value)">
-            <div class="multiselect-options" id="tpl-client-ms-options">
-              <!-- Заполняется динамически -->
-            </div>
+            <input type="text" class="multiselect-search" placeholder="Пошук клієнта..." oninput="filterMultiselectOptions('tpl-client-ms-dropdown', this.value)">
+            <div class="multiselect-options" id="tpl-client-ms-options"></div>
           </div>
+        </div>
+
+        <!-- Ядровые поля -->
+        <div class="field-group">
+          <div class="field-label">
+            Ядрові поля (відображаються в задачі)
+            <span class="tooltip-wrap">
+              <span class="tooltip-icon">?</span>
+              <span class="tooltip-text">Оберіть які поля будуть видимі копірайтеру при заповненні ТЗ</span>
+            </span>
+          </div>
+          <div class="tpl-core-fields-grid" id="tpl-core-fields-config">
+            <label class="checkbox-label"><input type="checkbox" id="tpl-cf-url" checked onchange="onTplCoreFieldChange()"> URL сторінки</label>
+            <label class="checkbox-label"><input type="checkbox" id="tpl-cf-keywords" checked onchange="onTplCoreFieldChange()"> Ключові слова</label>
+            <label class="checkbox-label"><input type="checkbox" id="tpl-cf-topic" checked onchange="onTplCoreFieldChange()"> Тема / H1</label>
+            <label class="checkbox-label"><input type="checkbox" id="tpl-cf-language" checked onchange="onTplCoreFieldChange()"> Мова</label>
+            <label class="checkbox-label"><input type="checkbox" id="tpl-cf-volume" checked onchange="onTplCoreFieldChange()"> Об'єм</label>
+          </div>
+        </div>
+
+        <!-- Гибкие блоки -->
+        <div class="field-group">
+          <div class="field-label">
+            Гнучкі блоки
+            <span class="tooltip-wrap">
+              <span class="tooltip-icon">?</span>
+              <span class="tooltip-text">Блоки, які копірайтер може вмикати/вимикати. Використовуйте {{ключ}} у промті для підстановки.</span>
+            </span>
+          </div>
+          <div class="tpl-flex-list" id="tpl-flex-blocks-list">
+            <!-- Заполняется динамически -->
+          </div>
+          <button class="btn btn-sm mt-8" onclick="addTplFlexBlock()">+ Додати блок</button>
         </div>
 
         <!-- Промпты -->

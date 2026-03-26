@@ -13,6 +13,7 @@ function loadTaskScreen(taskId) {
     document.getElementById('task-name-input').value = task.name || '';
     document.getElementById('task-breadcrumb-name').textContent = task.name || '';
     document.getElementById('task-system-prompt').value = task.system_prompt || '';
+    document.getElementById('task-user-prompt').value = task.user_prompt || '';
 
     // Шаблон
     var tplName = '—';
@@ -40,16 +41,219 @@ function loadTaskScreen(taskId) {
       document.getElementById('task-breadcrumb-client').textContent = cl ? cl.name : '';
     }).getClients();
 
+    // Рендер core fields
+    renderCoreFields();
+
+    // Рендер flex blocks
+    renderFlexToggleBar();
+    renderActiveFlexBlocks();
+
+    // Заполнить field values
+    populateFieldValues();
+
     // Сбросить UI генерации
-    document.getElementById('gen-empty').style.display = 'flex';
     document.getElementById('gen-result').style.display = 'none';
     document.getElementById('gen-loading').style.display = 'none';
-    // Подставить пользовательский промпт в поле ввода
-    document.getElementById('gen-user-input').value = task.user_prompt || '';
+    document.getElementById('gen-user-input').value = '';
 
     switchTaskTab('generate');
     loadTaskHistory(taskId);
   }).getTask(taskId);
+}
+
+// --- Core Fields ---
+function renderCoreFields() {
+  var task = state.currentTask;
+  if (!task) return;
+  var cf = task.core_fields || { url: true, keywords: true, topic: true, language: true, volume: true };
+
+  var fields = ['url', 'keywords', 'topic', 'language', 'volume'];
+  fields.forEach(function(f) {
+    var el = document.getElementById('cf-' + f);
+    if (el) el.style.display = cf[f] ? '' : 'none';
+  });
+}
+
+function populateFieldValues() {
+  var task = state.currentTask;
+  if (!task) return;
+  var fv = task.field_values || {};
+
+  // Core fields
+  if (fv.url) document.getElementById('fv-url').value = fv.url;
+  if (fv.keywords) document.getElementById('fv-keywords').value = fv.keywords;
+  if (fv.topic) document.getElementById('fv-topic').value = fv.topic;
+  if (fv.language) document.getElementById('fv-language').value = fv.language;
+  if (fv.volume) document.getElementById('fv-volume').value = fv.volume;
+}
+
+// --- Flex Blocks ---
+function renderFlexToggleBar() {
+  var bar = document.getElementById('flex-toggle-bar');
+  if (!bar || !state.currentTask) return;
+
+  var blocks = state.currentTask.flex_blocks || [];
+  var active = state.currentTask.active_flex_blocks || [];
+
+  var h = '';
+  blocks.forEach(function(b) {
+    var isActive = active.indexOf(b.key) !== -1;
+    h += '<button class="flex-toggle-btn' + (isActive ? ' active' : '') + '" onclick="toggleFlexBlock(\'' + b.key + '\')">' +
+      (isActive ? '✓ ' : '+ ') + escapeHtml(b.label) +
+    '</button>';
+  });
+
+  // Кнопка "Додати свій блок"
+  h += '<button class="flex-toggle-btn flex-toggle-btn-add" onclick="openModal(\'modal-add-flex-block\')">+ Свій блок...</button>';
+
+  bar.innerHTML = h;
+}
+
+function renderActiveFlexBlocks() {
+  var container = document.getElementById('flex-blocks-container');
+  if (!container || !state.currentTask) return;
+
+  var blocks = state.currentTask.flex_blocks || [];
+  var active = state.currentTask.active_flex_blocks || [];
+  var fv = state.currentTask.field_values || {};
+
+  var h = '';
+  blocks.forEach(function(b) {
+    if (active.indexOf(b.key) === -1) return;
+
+    h += '<div class="flex-block-item" id="flex-block-' + b.key + '">';
+    h += '<div class="flex-block-header">';
+    h += '<span class="flex-block-title">' + escapeHtml(b.label) + '</span>';
+    h += '<span style="display:flex;align-items:center;gap:8px;">';
+    h += '<span style="font-family:\'DM Mono\',monospace;font-size:10px;color:#1A5FB4;">{{' + b.key + '}}</span>';
+    h += '<button class="flex-block-close" onclick="toggleFlexBlock(\'' + b.key + '\')" title="Сховати блок">&times;</button>';
+    h += '</span></div>';
+
+    h += '<div class="flex-block-body">';
+
+    if (b.type === 'repeatable') {
+      var items = fv[b.key] || [''];
+      h += '<div class="repeatable-list" id="rep-' + b.key + '">';
+      items.forEach(function(item, i) {
+        h += '<div class="repeatable-item">';
+        h += '<span class="repeatable-item-prefix">' + (i + 1) + '.</span>';
+        h += '<input type="text" value="' + escapeHtml(item) + '" onchange="updateRepeatableItem(\'' + b.key + '\',' + i + ',this.value)" placeholder="...">';
+        h += '<button class="repeatable-remove" onclick="removeRepeatableItem(\'' + b.key + '\',' + i + ')">&times;</button>';
+        h += '</div>';
+      });
+      h += '</div>';
+      h += '<button class="repeatable-add" onclick="addRepeatableItem(\'' + b.key + '\')">+ Ще</button>';
+    } else {
+      // textarea
+      var val = fv[b.key] || '';
+      h += '<textarea onchange="updateFlexValue(\'' + b.key + '\',this.value)" placeholder="...">' + escapeHtml(val) + '</textarea>';
+    }
+
+    h += '</div></div>';
+  });
+
+  container.innerHTML = h;
+}
+
+function toggleFlexBlock(key) {
+  var task = state.currentTask;
+  if (!task) return;
+
+  if (!task.active_flex_blocks) task.active_flex_blocks = [];
+  var idx = task.active_flex_blocks.indexOf(key);
+  if (idx !== -1) {
+    task.active_flex_blocks.splice(idx, 1);
+  } else {
+    task.active_flex_blocks.push(key);
+  }
+
+  renderFlexToggleBar();
+  renderActiveFlexBlocks();
+  autoSaveTask();
+}
+
+// --- Repeatable items ---
+function updateRepeatableItem(key, index, value) {
+  var task = state.currentTask;
+  if (!task) return;
+  if (!task.field_values) task.field_values = {};
+  if (!task.field_values[key]) task.field_values[key] = [];
+  task.field_values[key][index] = value;
+  autoSaveTask();
+}
+
+function addRepeatableItem(key) {
+  var task = state.currentTask;
+  if (!task) return;
+  if (!task.field_values) task.field_values = {};
+  if (!task.field_values[key]) task.field_values[key] = [];
+  task.field_values[key].push('');
+  renderActiveFlexBlocks();
+  autoSaveTask();
+}
+
+function removeRepeatableItem(key, index) {
+  var task = state.currentTask;
+  if (!task || !task.field_values || !task.field_values[key]) return;
+  task.field_values[key].splice(index, 1);
+  if (task.field_values[key].length === 0) task.field_values[key] = [''];
+  renderActiveFlexBlocks();
+  autoSaveTask();
+}
+
+function updateFlexValue(key, value) {
+  var task = state.currentTask;
+  if (!task) return;
+  if (!task.field_values) task.field_values = {};
+  task.field_values[key] = value;
+  autoSaveTask();
+}
+
+// --- Добавление пользовательского блока ---
+function confirmAddFlexBlock() {
+  var label = document.getElementById('new-flex-label').value.trim();
+  var type = document.getElementById('new-flex-type').value;
+  if (!label) { showToast('Вкажіть назву блоку', 'error'); return; }
+
+  var key = generateFlexKey(label);
+  var task = state.currentTask;
+  if (!task) return;
+  if (!task.flex_blocks) task.flex_blocks = [];
+
+  // Проверить уникальность ключа
+  var exists = task.flex_blocks.some(function(b) { return b.key === key; });
+  if (exists) key = key + '_' + Date.now();
+
+  task.flex_blocks.push({ key: key, label: label, type: type, enabled: true });
+  if (!task.active_flex_blocks) task.active_flex_blocks = [];
+  task.active_flex_blocks.push(key);
+
+  // Init value
+  if (!task.field_values) task.field_values = {};
+  task.field_values[key] = type === 'repeatable' ? [''] : '';
+
+  closeModal('modal-add-flex-block');
+  document.getElementById('new-flex-label').value = '';
+
+  renderFlexToggleBar();
+  renderActiveFlexBlocks();
+  autoSaveTask();
+  showToast('Блок «' + label + '» додано', 'success');
+}
+
+// --- Сохранение field values ---
+function saveFieldValues() {
+  var task = state.currentTask;
+  if (!task) return;
+  if (!task.field_values) task.field_values = {};
+
+  task.field_values.url = document.getElementById('fv-url').value;
+  task.field_values.keywords = document.getElementById('fv-keywords').value;
+  task.field_values.topic = document.getElementById('fv-topic').value;
+  task.field_values.language = document.getElementById('fv-language').value;
+  task.field_values.volume = document.getElementById('fv-volume').value;
+
+  autoSaveTask();
 }
 
 function loadTaskHistory(taskId) {
@@ -83,6 +287,7 @@ function saveTaskName() {
 function saveTaskPrompts() {
   if (!state.currentTask) return;
   state.currentTask.system_prompt = document.getElementById('task-system-prompt').value;
+  state.currentTask.user_prompt = document.getElementById('task-user-prompt').value;
   autoSaveTask();
 }
 
@@ -110,9 +315,9 @@ function autoSaveTask() {
 
 function deleteCurrentTask() {
   if (!state.currentTask) return;
-  if (!confirm('Удалить задачу и все её тексты?')) return;
+  if (!confirm('Видалити задачу та всі її тексти?')) return;
   google.script.run.withSuccessHandler(function() {
-    showToast('Задача удалена', 'success');
+    showToast('Задачу видалено', 'success');
     navigateTo('#dashboard');
   }).withFailureHandler(function(e) {
     showToast(e.message, 'error');
@@ -122,11 +327,28 @@ function deleteCurrentTask() {
 // --- Генерация ---
 function startGeneration() {
   if (!state.currentTask) return;
-  var input = document.getElementById('gen-user-input').value.trim();
-  if (!input) { showToast('Введите запрос для генерации', 'error'); return; }
+
+  // Собрать все field values
+  saveFieldValues(); // сохранить актуальные значения core fields
+
+  var task = state.currentTask;
+  var fv = task.field_values || {};
+
+  // Собрать промпт
+  var assembledPrompt = assemblePrompt(task.user_prompt || '', fv);
+
+  // Дополнительные инструкции
+  var extra = document.getElementById('gen-user-input').value.trim();
+  if (extra) {
+    assembledPrompt += '\n\nДодаткові інструкції:\n' + extra;
+  }
+
+  if (!assembledPrompt.trim()) {
+    showToast('Заповніть поля або додайте промт', 'error');
+    return;
+  }
 
   // Показать лоадер
-  document.getElementById('gen-empty').style.display = 'none';
   document.getElementById('gen-result').style.display = 'none';
   document.getElementById('gen-loading').style.display = 'block';
   document.getElementById('gen-send-btn').disabled = true;
@@ -134,18 +356,17 @@ function startGeneration() {
   // Сохранить текст на сервер
   google.script.run.withSuccessHandler(function(text) {
     state.lastGeneratedText = text;
-    // Симуляция генерации
-    simulateGeneration(text, input);
+    simulateGeneration(text, assembledPrompt, fv);
   }).withFailureHandler(function(e) {
     showToast(e.message, 'error');
     resetGenUI();
-  }).generateText(state.currentTask.id, input);
+  }).generateText(state.currentTask.id, assembledPrompt, fv);
 }
 
-function simulateGeneration(text, userInput) {
+function simulateGeneration(text, assembledPrompt, fieldValues) {
   setTimeout(function() {
-    // Генерация фейкового контента
-    var content = generateFakeContent(userInput);
+    var topic = (fieldValues && fieldValues.topic) || assembledPrompt.substring(0, 80);
+    var content = generateFakeContent(topic);
     var blocks = parseContentToBlocks(content);
 
     text.content = content;
@@ -154,7 +375,6 @@ function simulateGeneration(text, userInput) {
     text.uniqueness_score = Math.floor(Math.random() * 15 + 85);
     text.ai_score = Math.floor(Math.random() * 25 + 5);
 
-    // Сохранить на сервер
     google.script.run.updateGeneratedText(text.id, {
       content: text.content,
       blocks: text.blocks,
@@ -165,24 +385,21 @@ function simulateGeneration(text, userInput) {
 
     state.lastGeneratedText = text;
 
-    // Показать результат
     document.getElementById('gen-loading').style.display = 'none';
     document.getElementById('gen-result').style.display = 'block';
     document.getElementById('gen-result-content').innerHTML = content;
     document.getElementById('gen-send-btn').disabled = false;
 
-    // Обновить историю
     state.currentTexts.unshift(text);
     var countEl = document.getElementById('task-history-count');
     if (countEl) countEl.textContent = state.currentTexts.length;
     renderHistoryList();
 
-    showToast('Текст сгенерирован!', 'success');
+    showToast('Текст згенеровано!', 'success');
   }, 2000 + Math.random() * 2000);
 }
 
 function clearGenResult() {
-  document.getElementById('gen-empty').style.display = 'flex';
   document.getElementById('gen-result').style.display = 'none';
   document.getElementById('gen-user-input').value = '';
   state.lastGeneratedText = null;
@@ -190,7 +407,6 @@ function clearGenResult() {
 
 function resetGenUI() {
   document.getElementById('gen-loading').style.display = 'none';
-  document.getElementById('gen-empty').style.display = 'flex';
   document.getElementById('gen-send-btn').disabled = false;
 }
 
@@ -215,11 +431,10 @@ function renderHistoryList() {
 
   var h = '';
   texts.forEach(function(t) {
-    var statusLabel = { pending: 'Ожидает', processing: 'Генерация...', completed: 'Готово', failed: 'Ошибка' };
+    var statusLabel = { pending: 'Очікує', processing: 'Генерація...', completed: 'Готово', failed: 'Помилка' };
     var statusClass = { pending: 'badge-neutral', processing: 'badge-warning', completed: 'badge-success', failed: 'badge-danger' };
     var regenBadge = t.regeneration_count ? ' <span class="badge badge-info" style="font-size:9px;">x' + t.regeneration_count + '</span>' : '';
 
-    // Превью текста
     var preview = '';
     if (t.content) {
       var div = document.createElement('div');
@@ -234,10 +449,9 @@ function renderHistoryList() {
         regenBadge +
         '<span class="text-secondary">' + formatDateTime(t.created_at) + '</span>' +
       '</div>' +
-      '<div class="history-item-input">' + escapeHtml(truncate(t.user_input, 100)) + '</div>' +
       '<div class="history-item-preview">' + escapeHtml(preview) + '</div>' +
       '<div class="history-item-meta">' +
-        (t.uniqueness_score != null ? '<span class="badge badge-success">Уник: ' + t.uniqueness_score + '%</span>' : '') +
+        (t.uniqueness_score != null ? '<span class="badge badge-success">Унік: ' + t.uniqueness_score + '%</span>' : '') +
         (t.ai_score != null ? '<span class="badge badge-neutral">AI: ' + t.ai_score + '%</span>' : '') +
         '<span class="text-secondary">' + escapeHtml(t.used_llm_model || '') + '</span>' +
       '</div>' +

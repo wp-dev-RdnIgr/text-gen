@@ -7,27 +7,9 @@ function seedData() {
 
   // --- Клиенты ---
   var clients = [
-    {
-      id: 'c1',
-      name: '220.ua',
-      website: 'https://220.ua',
-      niche: 'Электроника и бытовая техника',
-      notes: ''
-    },
-    {
-      id: 'c2',
-      name: 'Technolex',
-      website: 'https://technolex.com.ua',
-      niche: 'Юридические услуги',
-      notes: 'Важно: юридическая точность формулировок'
-    },
-    {
-      id: 'c3',
-      name: 'MedService',
-      website: 'https://medservice.ua',
-      niche: 'Медицинские услуги',
-      notes: 'Не давать медицинских рекомендаций'
-    }
+    { id: 'c1', name: '220Volt', website: 'https://220volt.com.ua', niche: 'Электроника и бытовая техника', notes: '' },
+    { id: 'c2', name: 'Technolex', website: 'https://technolex.com.ua', niche: 'Юридические услуги', notes: 'Важно: юридическая точность формулировок' },
+    { id: 'c3', name: 'MedService', website: 'https://medservice.ua', niche: 'Медицинские услуги', notes: 'Не давать медицинских рекомендаций' }
   ];
 
   // --- Шаблоны задач ---
@@ -35,24 +17,34 @@ function seedData() {
     {
       id: 'tt_1',
       name: 'SEO-статья для блога',
-      description: 'Генерация экспертных SEO-статей для блога. Структурированный текст с заголовками и ключевыми словами.',
-      icon: 'article',
-      system_prompt: 'Ты — опытный SEO-копирайтер с 10-летним стажем. Пишешь экспертные статьи для блогов. Твои тексты информативные, структурированные, оптимизированные под поисковые системы. Используй H1, H2, H3 заголовки. Абзацы по 2-4 предложения.',
-      user_prompt: 'Напиши SEO-статью на тему, которую укажет пользователь. Структура: H1 (1 шт), H2 (3-5 шт), H3 при необходимости. Уникальность не менее 90%. Естественное вхождение ключей.',
-      llm_provider: 'anthropic',
-      llm_model: 'Claude Sonnet',
+      description: 'Генерация экспертных SEO-статей для блога с ключевыми словами, структурой H2, обязательными ссылками.',
+      client_ids: ['c1'],
+      system_prompt: 'Ты — опытный SEO-копирайтер с 10-летним стажем. Пишешь экспертные статьи для блогов. Тексты информативные, структурированные, оптимизированные под поисковые системы. Абзацы по 2-4 предложения.',
+      user_prompt: 'Напиши SEO-статью.\n\nURL страницы: {{url}}\nЯзык: {{language}}\nТема / H1: {{topic}}\nОсновные ключевые слова: {{keywords}}\nОбъём: {{volume}} збп\n\nСтруктура статьи (H2):\n{{h2_structure}}\n\nОбязательные ссылки для вставки в текст:\n{{links}}\n\n{{company_block}}\n\n{{notes}}',
+      core_fields: { url: true, keywords: true, topic: true, language: true, volume: true },
+      flex_blocks: [
+        { key: 'h2_structure', label: 'Структура H2', type: 'repeatable', enabled: true },
+        { key: 'links', label: 'Обов\'язкові посилання', type: 'repeatable', enabled: true },
+        { key: 'company_block', label: 'Блок про компанію', type: 'textarea', enabled: true },
+        { key: 'expert_block', label: 'Блок про експерта', type: 'textarea', enabled: false },
+        { key: 'notes', label: 'Примітки редактору / SEO', type: 'textarea', enabled: true }
+      ],
+      llm_provider: 'anthropic', llm_model: 'Claude Sonnet',
       options: { humanize: true, uniqueness: true, factcheck: false, ai_detector: true },
       created_at: '2026-03-10T10:00:00.000Z'
     },
     {
       id: 'tt_2',
       name: 'Карточка товара',
-      description: 'Продающее описание товара для интернет-магазина с характеристиками и преимуществами.',
-      icon: 'product',
-      system_prompt: 'Ты — копирайтер для интернет-магазинов. Создаёшь продающие описания товаров. Текст должен быть информативным, содержать ключевые характеристики и преимущества.',
-      user_prompt: 'Напиши описание товара. Структура: 1) Краткое описание, 2) Характеристики (список), 3) Преимущества (3-5), 4) Для кого подходит.',
-      llm_provider: 'openai',
-      llm_model: 'ChatGPT (GPT-4o)',
+      description: 'Продающее описание товара для интернет-магазина.',
+      client_ids: ['c1'],
+      system_prompt: 'Ты — копирайтер для интернет-магазинов. Создаёшь продающие описания товаров.',
+      user_prompt: 'Напиши описание товара.\n\nURL: {{url}}\nНазвание товара: {{topic}}\nКлючевые слова: {{keywords}}\nОбъём: {{volume}} збп\n\nСтруктура:\n1. Краткое описание\n2. Характеристики (список)\n3. Преимущества (3-5)\n4. Для кого подходит\n\n{{notes}}',
+      core_fields: { url: true, keywords: true, topic: true, language: false, volume: true },
+      flex_blocks: [
+        { key: 'notes', label: 'Примітки', type: 'textarea', enabled: false }
+      ],
+      llm_provider: 'openai', llm_model: 'ChatGPT (GPT-4o)',
       options: { humanize: false, uniqueness: true, factcheck: false, ai_detector: false },
       created_at: '2026-03-12T12:00:00.000Z'
     },
@@ -60,25 +52,18 @@ function seedData() {
       id: 'tt_3',
       name: 'Описание услуги',
       description: 'Убедительное описание услуги для сервисных компаний.',
-      icon: 'service',
-      system_prompt: 'Ты — копирайтер для сервисных компаний. Создаёшь убедительные описания услуг. Текст должен быть заботливым, профессиональным и понятным.',
-      user_prompt: 'Напиши описание услуги. Структура: 1) Что это за услуга (H1 + описание), 2) Что включает (список), 3) Процесс работы, 4) FAQ (3-4 вопроса).',
-      llm_provider: 'anthropic',
-      llm_model: 'Claude Sonnet',
+      client_ids: ['c2', 'c3'],
+      system_prompt: 'Ты — копирайтер для сервисных компаний. Создаёшь убедительные описания услуг.',
+      user_prompt: 'Напиши описание услуги.\n\nURL: {{url}}\nУслуга: {{topic}}\nКлючевые слова: {{keywords}}\nОбъём: {{volume}} збп\n\nСтруктура (H2):\n{{h2_structure}}\n\n{{expert_block}}\n\n{{notes}}',
+      core_fields: { url: true, keywords: true, topic: true, language: true, volume: true },
+      flex_blocks: [
+        { key: 'h2_structure', label: 'Структура H2', type: 'repeatable', enabled: true },
+        { key: 'expert_block', label: 'Блок про експерта', type: 'textarea', enabled: true },
+        { key: 'notes', label: 'Примітки', type: 'textarea', enabled: false }
+      ],
+      llm_provider: 'anthropic', llm_model: 'Claude Sonnet',
       options: { humanize: true, uniqueness: true, factcheck: true, ai_detector: false },
       created_at: '2026-03-15T09:00:00.000Z'
-    },
-    {
-      id: 'tt_4',
-      name: 'Лендинг',
-      description: 'Текст для лендинга с высокой конверсией. Проблема → решение → CTA.',
-      icon: 'landing',
-      system_prompt: 'Ты — копирайтер-маркетолог. Создаёшь тексты для лендингов с высокой конверсией. Используй эмоциональные триггеры, конкретные цифры и чёткие CTA.',
-      user_prompt: 'Напиши текст для лендинга. Структура: 1) Заголовок + подзаголовок, 2) Проблема (боли ЦА), 3) Решение, 4) Преимущества, 5) CTA.',
-      llm_provider: 'anthropic',
-      llm_model: 'Claude Opus',
-      options: { humanize: true, uniqueness: true, factcheck: false, ai_detector: true },
-      created_at: '2026-03-16T14:00:00.000Z'
     }
   ];
 
@@ -87,12 +72,30 @@ function seedData() {
     {
       id: 'task_1',
       client_id: 'c1',
-      name: 'Блог 220.ua — Статьи о технике',
-      system_prompt: 'Ты — опытный SEO-копирайтер для интернет-магазина электроники 220.ua. Пишешь экспертные статьи для блога. Тон: экспертный, дружелюбный, без воды.',
-      user_prompt: 'Напиши SEO-статью для блога 220.ua. Структура: H1, H2 (3-5 шт). Уникальность не менее 90%.',
+      name: 'Блог 220Volt — Сонячні станції',
+      system_prompt: 'Ты — опытный SEO-копирайтер для интернет-магазина электроники 220Volt. Тон: экспертный, дружелюбный, без воды.',
+      user_prompt: 'Напиши SEO-статью.\n\nURL страницы: {{url}}\nЯзык: {{language}}\nТема / H1: {{topic}}\nОсновные ключевые слова: {{keywords}}\nОбъём: {{volume}} збп\n\nСтруктура статьи (H2):\n{{h2_structure}}\n\nОбязательные ссылки:\n{{links}}\n\n{{company_block}}\n\n{{notes}}',
       template_id: 'tt_1',
-      llm_provider: 'anthropic',
-      llm_model: 'Claude Sonnet',
+      core_fields: { url: true, keywords: true, topic: true, language: true, volume: true },
+      flex_blocks: [
+        { key: 'h2_structure', label: 'Структура H2', type: 'repeatable', enabled: true },
+        { key: 'links', label: 'Обов\'язкові посилання', type: 'repeatable', enabled: true },
+        { key: 'company_block', label: 'Блок про компанію', type: 'textarea', enabled: true },
+        { key: 'notes', label: 'Примітки редактору / SEO', type: 'textarea', enabled: true }
+      ],
+      active_flex_blocks: ['h2_structure', 'links', 'company_block', 'notes'],
+      field_values: {
+        url: 'https://220volt.com.ua/solnechnaya-energetika/solnechnye-stancii/',
+        keywords: 'солнечные станции; солнечная электростанция для дома; как выбрать солнечную станцию',
+        topic: 'Солнечные станции: как выбрать решение для дома, бизнеса и резервного электро',
+        language: 'RU',
+        volume: '2000-2300',
+        h2_structure: ['Что такое солнечная станция', 'Как выбрать систему под задачу', 'Где заказать решение под ключ'],
+        links: ['https://220volt.com.ua/solnechnaya-energetika/solnechnye-stancii/', 'https://220volt.com.ua/information/uslugi/', 'https://220volt.com.ua/contact/o-nas/'],
+        company_block: 'Короткий блок 2-3 речення: 220Volt / Комел-Електро - українська компанія з 1996 року; спеціалізується на рішеннях для електроживлення, продажі обладнання, монтажі та сервісі.',
+        notes: 'Посилання ставити в 1/3 тексту, без переспаму; ключі розподіляти природно; 1 H1, 5-6 коротких H2; абзаци до 5-6 рядків; 1-2 списки; конкретика без води.'
+      },
+      llm_provider: 'anthropic', llm_model: 'Claude Sonnet',
       options: { humanize: true, uniqueness: true, factcheck: false, ai_detector: true },
       status: 'active',
       created_at: '2026-03-19T10:00:00'
@@ -101,27 +104,22 @@ function seedData() {
       id: 'task_2',
       client_id: 'c1',
       name: 'Карточки товаров — Ноутбуки',
-      system_prompt: 'Ты — копирайтер для интернет-магазина 220.ua. Создаёшь продающие описания ноутбуков.',
-      user_prompt: 'Напиши описание для карточки товара ноутбука. Укажи характеристики, преимущества и для кого подходит.',
+      system_prompt: 'Ты — копирайтер для интернет-магазина 220Volt. Создаёшь продающие описания ноутбуков.',
+      user_prompt: 'Напиши описание товара.\n\nURL: {{url}}\nНазвание: {{topic}}\nКлючевые слова: {{keywords}}\nОбъём: {{volume}} збп\n\n{{notes}}',
       template_id: 'tt_2',
-      llm_provider: 'openai',
-      llm_model: 'ChatGPT (GPT-4o)',
+      core_fields: { url: true, keywords: true, topic: true, language: false, volume: true },
+      flex_blocks: [{ key: 'notes', label: 'Примітки', type: 'textarea', enabled: false }],
+      active_flex_blocks: [],
+      field_values: {
+        url: '/laptops/macbook-air-m4',
+        keywords: 'macbook air m4 купить, macbook air цена',
+        topic: 'MacBook Air M4',
+        volume: '1500-2000'
+      },
+      llm_provider: 'openai', llm_model: 'ChatGPT (GPT-4o)',
       options: { humanize: false, uniqueness: true, factcheck: false, ai_detector: true },
       status: 'active',
       created_at: '2026-03-20T14:00:00'
-    },
-    {
-      id: 'task_3',
-      client_id: 'c2',
-      name: 'Юридические статьи Technolex',
-      system_prompt: 'Ты — юридический копирайтер. Пишешь экспертные статьи для юридического сайта Technolex. Тон: профессиональный, строгий, доверительный. Точность формулировок обязательна.',
-      user_prompt: 'Напиши юридическую статью. Обязательно ссылайся на действующее законодательство. Структура: H1, H2, списки, FAQ.',
-      template_id: 'tt_1',
-      llm_provider: 'anthropic',
-      llm_model: 'Claude Sonnet',
-      options: { humanize: true, uniqueness: true, factcheck: true, ai_detector: false },
-      status: 'active',
-      created_at: '2026-03-18T09:00:00'
     }
   ];
 
@@ -130,80 +128,32 @@ function seedData() {
     {
       id: 'gt_1',
       task_id: 'task_1',
-      user_input: 'Напиши статью "Лучшие ноутбуки 2026 года". Ключевые слова: лучшие ноутбуки 2026, рейтинг ноутбуков. 3000-4000 знаков. Топ-10 моделей по категориям.',
-      used_system_prompt: 'Ты — опытный SEO-копирайтер для интернет-магазина электроники 220.ua.',
-      used_user_prompt: 'Напиши SEO-статью для блога 220.ua.',
+      user_input: '',
+      used_system_prompt: 'Ты — опытный SEO-копирайтер для интернет-магазина электроники 220Volt.',
+      used_user_prompt: 'Напиши SEO-статью...',
       used_llm_model: 'Claude Sonnet',
-      content: '<h1>Лучшие ноутбуки 2026 года: рейтинг по категориям</h1>\n<p>Рынок ноутбуков в 2026 году предлагает множество интересных моделей на любой бюджет и задачу. Мы составили рейтинг лучших ноутбуков, разделив их по категориям.</p>\n<h2>Лучшие ноутбуки для работы</h2>\n<p>Для офисной работы и фриланса важны автономность, качество клавиатуры и вес. MacBook Air M4 остаётся лидером благодаря 18 часам автономной работы и мощному чипу Apple M4.</p>\n<p>Dell XPS 15 — отличный выбор для тех, кто предпочитает Windows. OLED-дисплей и процессор Intel Core Ultra 7 обеспечивают комфорт в любых задачах.</p>\n<h2>Лучшие игровые ноутбуки</h2>\n<p>ASUS ROG Strix G16 с видеокартой NVIDIA RTX 5070 — лучший выбор для геймеров. Экран 240 Гц и мощная система охлаждения позволяют играть в самые требовательные игры.</p>\n<h2>Лучшие бюджетные ноутбуки</h2>\n<p>Acer Aspire 5 и Lenovo IdeaPad 3 — проверенные варианты до 20 000 грн. Подходят для учёбы, работы с документами и мультимедиа.</p>\n<h2>Как выбрать ноутбук</h2>\n<p>Определитесь с задачами, бюджетом и предпочтениями по операционной системе. Обратите внимание на процессор, объём оперативной памяти и тип накопителя.</p>',
+      used_field_values: {
+        url: 'https://220volt.com.ua/solnechnaya-energetika/solnechnye-stancii/',
+        keywords: 'солнечные станции; солнечная электростанция для дома',
+        topic: 'Солнечные станции: как выбрать решение для дома',
+        language: 'RU',
+        volume: '2000-2300'
+      },
+      content: '<h1>Солнечные станции: как выбрать решение для дома</h1>\n<p>Солнечная энергетика становится всё более доступной для частных домовладельцев. Рассмотрим, как правильно выбрать солнечную станцию.</p>\n<h2>Что такое солнечная станция</h2>\n<p>Солнечная электростанция — это комплекс оборудования для преобразования солнечной энергии в электрическую. Основные компоненты: панели, инвертор, аккумуляторы.</p>\n<h2>Как выбрать систему под задачу</h2>\n<p>Выбор зависит от потребностей: для резервного питания достаточно 5 кВт, для полной автономии — от 10 кВт. Учитывайте площадь крыши и бюджет.</p>\n<h2>Где заказать решение под ключ</h2>\n<p>220Volt / Комел-Электро — украинская компания с 1996 года, специализирующаяся на решениях для электроснабжения. Подбор, монтаж и сервис.</p>',
       blocks: [
-        { id: 'b1', type: 'heading', tag: 'h1', content: 'Лучшие ноутбуки 2026 года: рейтинг по категориям' },
-        { id: 'b2', type: 'paragraph', tag: 'p', content: 'Рынок ноутбуков в 2026 году предлагает множество интересных моделей на любой бюджет и задачу. Мы составили рейтинг лучших ноутбуков, разделив их по категориям.' },
-        { id: 'b3', type: 'heading', tag: 'h2', content: 'Лучшие ноутбуки для работы' },
-        { id: 'b4', type: 'paragraph', tag: 'p', content: 'Для офисной работы и фриланса важны автономность, качество клавиатуры и вес. MacBook Air M4 остаётся лидером благодаря 18 часам автономной работы и мощному чипу Apple M4.' },
-        { id: 'b5', type: 'paragraph', tag: 'p', content: 'Dell XPS 15 — отличный выбор для тех, кто предпочитает Windows. OLED-дисплей и процессор Intel Core Ultra 7 обеспечивают комфорт в любых задачах.' },
-        { id: 'b6', type: 'heading', tag: 'h2', content: 'Лучшие игровые ноутбуки' },
-        { id: 'b7', type: 'paragraph', tag: 'p', content: 'ASUS ROG Strix G16 с видеокартой NVIDIA RTX 5070 — лучший выбор для геймеров. Экран 240 Гц и мощная система охлаждения позволяют играть в самые требовательные игры.' },
-        { id: 'b8', type: 'heading', tag: 'h2', content: 'Лучшие бюджетные ноутбуки' },
-        { id: 'b9', type: 'paragraph', tag: 'p', content: 'Acer Aspire 5 и Lenovo IdeaPad 3 — проверенные варианты до 20 000 грн. Подходят для учёбы, работы с документами и мультимедиа.' },
-        { id: 'b10', type: 'heading', tag: 'h2', content: 'Как выбрать ноутбук' },
-        { id: 'b11', type: 'paragraph', tag: 'p', content: 'Определитесь с задачами, бюджетом и предпочтениями по операционной системе. Обратите внимание на процессор, объём оперативной памяти и тип накопителя.' }
+        { id: 'b1', type: 'heading', tag: 'h1', content: 'Солнечные станции: как выбрать решение для дома' },
+        { id: 'b2', type: 'paragraph', tag: 'p', content: 'Солнечная энергетика становится всё более доступной для частных домовладельцев. Рассмотрим, как правильно выбрать солнечную станцию.' },
+        { id: 'b3', type: 'heading', tag: 'h2', content: 'Что такое солнечная станция' },
+        { id: 'b4', type: 'paragraph', tag: 'p', content: 'Солнечная электростанция — это комплекс оборудования для преобразования солнечной энергии в электрическую. Основные компоненты: панели, инвертор, аккумуляторы.' },
+        { id: 'b5', type: 'heading', tag: 'h2', content: 'Как выбрать систему под задачу' },
+        { id: 'b6', type: 'paragraph', tag: 'p', content: 'Выбор зависит от потребностей: для резервного питания достаточно 5 кВт, для полной автономии — от 10 кВт. Учитывайте площадь крыши и бюджет.' },
+        { id: 'b7', type: 'heading', tag: 'h2', content: 'Где заказать решение под ключ' },
+        { id: 'b8', type: 'paragraph', tag: 'p', content: '220Volt / Комел-Электро — украинская компания с 1996 года, специализирующаяся на решениях для электроснабжения. Подбор, монтаж и сервис.' }
       ],
       status: 'completed',
-      uniqueness_score: 94,
-      ai_score: 12,
-      regeneration_count: 0,
-      comment: '',
+      uniqueness_score: 94, ai_score: 12,
+      regeneration_count: 0, comment: '',
       created_at: '2026-03-19T10:05:00'
-    },
-    {
-      id: 'gt_2',
-      task_id: 'task_1',
-      user_input: 'Напиши статью "Как выбрать телевизор в 2026 году". Ключевые слова: как выбрать телевизор, выбор телевизора. 2500-3500 знаков. Гайд для покупателей.',
-      used_system_prompt: 'Ты — опытный SEO-копирайтер для интернет-магазина электроники 220.ua.',
-      used_user_prompt: 'Напиши SEO-статью для блога 220.ua.',
-      used_llm_model: 'Claude Sonnet',
-      content: '<h1>Как выбрать телевизор в 2026 году</h1>\n<p>Выбор телевизора — задача, к которой стоит подойти внимательно. В этом гайде разберём основные критерии.</p>\n<h2>Размер экрана</h2>\n<p>Для комнаты 15-20 м² оптимальная диагональ — 55-65 дюймов. Расстояние до экрана должно составлять 1.5-2.5 диагонали.</p>\n<h2>Технология матрицы</h2>\n<p>OLED обеспечивает идеальный чёрный и широкие углы обзора. QLED — яркие цвета и долговечность. Mini-LED — золотая середина.</p>\n<h2>Заключение</h2>\n<p>Определите бюджет и потребности, затем выбирайте подходящую модель.</p>',
-      blocks: [
-        { id: 'b1', type: 'heading', tag: 'h1', content: 'Как выбрать телевизор в 2026 году' },
-        { id: 'b2', type: 'paragraph', tag: 'p', content: 'Выбор телевизора — задача, к которой стоит подойти внимательно. В этом гайде разберём основные критерии.' },
-        { id: 'b3', type: 'heading', tag: 'h2', content: 'Размер экрана' },
-        { id: 'b4', type: 'paragraph', tag: 'p', content: 'Для комнаты 15-20 м² оптимальная диагональ — 55-65 дюймов. Расстояние до экрана должно составлять 1.5-2.5 диагонали.' },
-        { id: 'b5', type: 'heading', tag: 'h2', content: 'Технология матрицы' },
-        { id: 'b6', type: 'paragraph', tag: 'p', content: 'OLED обеспечивает идеальный чёрный и широкие углы обзора. QLED — яркие цвета и долговечность. Mini-LED — золотая середина.' },
-        { id: 'b7', type: 'heading', tag: 'h2', content: 'Заключение' },
-        { id: 'b8', type: 'paragraph', tag: 'p', content: 'Определите бюджет и потребности, затем выбирайте подходящую модель.' }
-      ],
-      status: 'completed',
-      uniqueness_score: 91,
-      ai_score: 18,
-      regeneration_count: 1,
-      comment: 'Добавить раздел про Smart TV',
-      created_at: '2026-03-19T10:12:00'
-    },
-    {
-      id: 'gt_3',
-      task_id: 'task_3',
-      user_input: 'Напиши статью "Регистрация ООО в 2026 году: пошаговая инструкция". 4000-5000 знаков. Пошаговая инструкция с актуальными ценами и сроками.',
-      used_system_prompt: 'Ты — юридический копирайтер для сайта Technolex.',
-      used_user_prompt: 'Напиши юридическую статью.',
-      used_llm_model: 'Claude Sonnet',
-      content: '<h1>Регистрация ООО в 2026 году: пошаговая инструкция</h1>\n<p>Регистрация общества с ограниченной ответственностью — один из самых популярных способов начать бизнес. Рассмотрим актуальный порядок действий.</p>\n<h2>Шаг 1: Подготовка документов</h2>\n<p>Для регистрации ООО необходимо подготовить устав, решение учредителей и заявление установленного образца.</p>\n<h2>Шаг 2: Подача документов</h2>\n<p>Документы подаются в Центр предоставления административных услуг или онлайн через портал "Дія".</p>\n<h2>Шаг 3: Получение выписки</h2>\n<p>Срок регистрации составляет 24 часа. Стоимость — бесплатно при онлайн-подаче.</p>',
-      blocks: [
-        { id: 'b1', type: 'heading', tag: 'h1', content: 'Регистрация ООО в 2026 году: пошаговая инструкция' },
-        { id: 'b2', type: 'paragraph', tag: 'p', content: 'Регистрация общества с ограниченной ответственностью — один из самых популярных способов начать бизнес. Рассмотрим актуальный порядок действий.' },
-        { id: 'b3', type: 'heading', tag: 'h2', content: 'Шаг 1: Подготовка документов' },
-        { id: 'b4', type: 'paragraph', tag: 'p', content: 'Для регистрации ООО необходимо подготовить устав, решение учредителей и заявление установленного образца.' },
-        { id: 'b5', type: 'heading', tag: 'h2', content: 'Шаг 2: Подача документов' },
-        { id: 'b6', type: 'paragraph', tag: 'p', content: 'Документы подаются в Центр предоставления административных услуг или онлайн через портал "Дія".' },
-        { id: 'b7', type: 'heading', tag: 'h2', content: 'Шаг 3: Получение выписки' },
-        { id: 'b8', type: 'paragraph', tag: 'p', content: 'Срок регистрации составляет 24 часа. Стоимость — бесплатно при онлайн-подаче.' }
-      ],
-      status: 'completed',
-      uniqueness_score: 89,
-      ai_score: 22,
-      regeneration_count: 0,
-      comment: '',
-      created_at: '2026-03-18T09:10:00'
     }
   ];
 
