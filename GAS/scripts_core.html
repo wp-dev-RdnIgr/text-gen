@@ -211,18 +211,45 @@ function generateFakeContent(userInput) {
 
 // --- Сборка промпта из полей ---
 function assemblePrompt(promptTemplate, fieldValues) {
-  if (!promptTemplate) return '';
-  var result = promptTemplate;
+  if (!promptTemplate && !fieldValues) return '';
+  var result = promptTemplate || '';
+  var usedKeys = {};
+  var fieldLabels = {
+    url: 'URL сторінки', keywords: 'Ключові слова', topic: 'Тема / H1',
+    language: 'Мова', volume: "Об'єм (збп)"
+  };
+
+  // 1. Подставить {{переменные}} в шаблон
   for (var key in fieldValues) {
     var val = fieldValues[key];
-    // Массивы (repeatable) — каждый элемент с новой строки
     if (Array.isArray(val)) {
       val = val.filter(function(v) { return v && v.trim(); }).join('\n');
     }
-    result = result.replace(new RegExp('\\{\\{' + key + '\\}\\}', 'g'), val || '');
+    var regex = new RegExp('\\{\\{' + key + '\\}\\}', 'g');
+    if (regex.test(result)) {
+      result = result.replace(regex, val || '');
+      usedKeys[key] = true;
+    }
   }
   // Удалить оставшиеся незамененные переменные
   result = result.replace(/\{\{\w+\}\}/g, '');
+
+  // 2. Все поля, которые НЕ попали через {{переменные}} — добавить в конец
+  var extras = [];
+  for (var k in fieldValues) {
+    if (usedKeys[k]) continue;
+    var v = fieldValues[k];
+    if (Array.isArray(v)) {
+      v = v.filter(function(x) { return x && x.trim(); }).join('; ');
+    }
+    if (!v || !String(v).trim()) continue;
+    var label = fieldLabels[k] || k;
+    extras.push(label + ': ' + v);
+  }
+  if (extras.length) {
+    result += '\n\nДодаткові дані:\n' + extras.join('\n');
+  }
+
   return result.trim();
 }
 
