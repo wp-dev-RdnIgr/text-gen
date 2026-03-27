@@ -162,22 +162,19 @@
         </div>
       </div>
 
-      <!-- LLM + Постобробка — складная секция -->
-      <div class="settings-compact-block">
-        <div class="settings-compact-header" onclick="toggleSettingsSection('llm-options-section')">
-          <span class="field-label" style="margin:0;">LLM та постобробка</span>
-          <span class="settings-chevron" id="chevron-llm-options-section">&#9654;</span>
+      <!-- LLM + Постобробка — всегда видимы -->
+      <div style="margin-top:8px;">
+        <div class="field-group" style="margin-bottom:8px;">
+          <span class="field-label" style="margin:0;">LLM</span>
+          <select id="task-llm-select" class="input-field" style="font-size:11px;padding:4px 8px;" onchange="saveTaskSettings()">
+            <option value="openai|ChatGPT (GPT-4o)">GPT-4o</option>
+            <option value="openai|ChatGPT (GPT-4o-mini)">GPT-4o-mini</option>
+            <option value="anthropic|Claude Sonnet" selected>Claude Sonnet</option>
+            <option value="anthropic|Claude Opus">Claude Opus</option>
+            <option value="perplexity|Perplexity Online">Perplexity</option>
+          </select>
         </div>
-        <div id="llm-options-section" style="display:none;padding:8px 0 0;">
-          <div class="field-group" style="margin-bottom:8px;">
-            <select id="task-llm-select" class="input-field" style="font-size:11px;padding:4px 8px;" onchange="saveTaskSettings()">
-              <option value="openai|ChatGPT (GPT-4o)">GPT-4o</option>
-              <option value="openai|ChatGPT (GPT-4o-mini)">GPT-4o-mini</option>
-              <option value="anthropic|Claude Sonnet" selected>Claude Sonnet</option>
-              <option value="anthropic|Claude Opus">Claude Opus</option>
-              <option value="perplexity|Perplexity Online">Perplexity</option>
-            </select>
-          </div>
+        <div style="display:flex;flex-wrap:wrap;gap:2px 12px;">
           <label class="checkbox-label" style="font-size:11px;padding:2px 0;"><input type="checkbox" id="task-opt-humanize" onchange="saveTaskSettings()"> Гуманізація</label>
           <label class="checkbox-label" style="font-size:11px;padding:2px 0;"><input type="checkbox" id="task-opt-uniqueness" checked onchange="saveTaskSettings()"> Унікальність</label>
           <label class="checkbox-label" style="font-size:11px;padding:2px 0;"><input type="checkbox" id="task-opt-factcheck" onchange="saveTaskSettings()"> Фактчекінг</label>
