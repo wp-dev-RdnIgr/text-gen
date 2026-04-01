@@ -260,7 +260,7 @@ function saveToGoogleDoc(textId) {
     if (code !== 200 || !body) throw new Error('n8n error (' + code + '): ' + (body || 'empty').substring(0, 200));
 
     var result = JSON.parse(body);
-    var url = Array.isArray(result) ? (result[0] && result[0].url) : result.url;
+    var url = result.url || (Array.isArray(result) ? (result[0] && result[0].url) : null);
     if (!url) throw new Error('Не отримано URL документа');
 
     // Зберегти URL в БД
