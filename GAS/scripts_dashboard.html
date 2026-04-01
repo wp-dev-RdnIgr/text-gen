@@ -16,7 +16,7 @@ function renderTaskCards() {
   sorted.forEach(function(t) {
     var tplName = '—';
     if (t.template_id) {
-      var tpl = (state.taskTemplates || []).find(function(x) { return x.id === t.template_id; });
+      var tpl = (state.taskTemplates || []).find(function(x) { return x.id == t.template_id; });
       if (tpl) tplName = tpl.name;
     }
     h += '<div class="task-card" onclick="navigateTo(\'#task/' + t.id + '\')">' +
@@ -79,7 +79,7 @@ function renderNewTaskTemplateList() {
     // Show client tags
     var clientTags = '';
     (tt.client_ids || []).forEach(function(cid) {
-      var cl = (state.clients || []).find(function(c) { return c.id === cid; });
+      var cl = (state.clients || []).find(function(c) { return c.id == cid; });
       if (cl) clientTags += '<span class="task-template-card-tag">' + escapeHtml(cl.name) + '</span>';
     });
     h += '<div class="task-template-card" onclick="createTaskFromTemplate(\'' + tt.id + '\')">' +
@@ -113,7 +113,7 @@ function onNewTaskClientFilterChange() {
     label.className = 'multiselect-placeholder';
   } else {
     var names = selected.map(function(id) {
-      var cl = (state.clients || []).find(function(c) { return c.id === id; });
+      var cl = (state.clients || []).find(function(c) { return c.id == id; });
       return cl ? cl.name : '';
     }).join(', ');
     label.textContent = names;
@@ -152,7 +152,7 @@ function createTaskFromScratch() {
 
 function createTaskFromTemplate(ttId) {
   closeModal('modal-new-task');
-  var tt = (state.taskTemplates || []).find(function(x) { return x.id === ttId; });
+  var tt = (state.taskTemplates || []).find(function(x) { return String(x.id) === String(ttId); });
   if (!tt) { createTaskFromScratch(); return; }
 
   // Копировать flex_blocks с enabled → active_flex_blocks

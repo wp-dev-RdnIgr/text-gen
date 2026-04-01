@@ -12,7 +12,7 @@ function renderClientList() {
   }
   var h = '';
   state.clients.forEach(function(cl) {
-    var active = cl.id === state.selectedClientId ? ' active' : '';
+    var active = cl.id == state.selectedClientId ? ' active' : '';
     h += '<div class="client-item' + active + '" onclick="selectClient(\'' + cl.id + '\')">' +
       '<div class="client-item-name">' + escapeHtml(cl.name) + '</div>' +
     '</div>';
@@ -59,7 +59,7 @@ function openClientModal(clientId) {
 
   if (clientId) {
     t.textContent = 'Редактировать клиента';
-    var cl = state.clients.find(function(c) { return c.id === clientId; });
+    var cl = state.clients.find(function(c) { return c.id == clientId; });
     if (cl) {
       document.getElementById('mc-id').value = cl.id;
       document.getElementById('mc-name').value = cl.name || '';
