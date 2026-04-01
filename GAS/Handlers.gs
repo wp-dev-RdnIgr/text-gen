@@ -20,9 +20,12 @@ function callCrudApi(action, params) {
     var code = response.getResponseCode();
     var text = response.getContentText();
     if (code !== 200) throw new Error('API error ' + code + ': ' + text.substring(0, 200));
-    if (!text) return [];
-    return JSON.parse(text);
+    if (!text || text === '[]') return [];
+    var parsed = JSON.parse(text);
+    Logger.log('callCrudApi(' + action + ') → ' + text.substring(0, 200));
+    return parsed;
   } catch (e) {
+    Logger.log('callCrudApi(' + action + ') ERROR: ' + e.message);
     throw new Error('callCrudApi(' + action + '): ' + e.message);
   }
 }
@@ -77,7 +80,9 @@ function getClients() {
 
 function saveClient(d) {
   var rows = callCrudApi('saveClient', d);
-  return Array.isArray(rows) ? rows[0] : rows;
+  var result = Array.isArray(rows) ? (rows[0] || null) : rows;
+  if (!result || !result.id) throw new Error('Не вдалося зберегти клієнта');
+  return result;
 }
 
 function deleteClient(clientId) {
@@ -98,7 +103,9 @@ function getTask(taskId) {
 
 function saveTask(d) {
   var rows = callCrudApi('saveTask', d);
-  return Array.isArray(rows) ? rows[0] : rows;
+  var result = Array.isArray(rows) ? (rows[0] || null) : rows;
+  if (!result || !result.id) throw new Error('Не вдалося зберегти задачу');
+  return result;
 }
 
 function deleteTask(taskId) {
@@ -124,7 +131,13 @@ function getTaskTemplate(id) {
 
 function saveTaskTemplate(d) {
   var rows = callCrudApi('saveTaskTemplate', d);
-  return Array.isArray(rows) ? rows[0] : rows;
+  var result = Array.isArray(rows) ? (rows[0] || null) : rows;
+  if (!result || !result.id) {
+    // Fallback: вернуть объект с id из params если есть
+    if (d.id) { result = d; }
+    else { throw new Error('Не вдалося зберегти шаблон'); }
+  }
+  return result;
 }
 
 function deleteTaskTemplate(id) {
