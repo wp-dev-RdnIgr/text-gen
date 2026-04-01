@@ -18,7 +18,7 @@ function loadTaskScreen(taskId) {
     // Шаблон
     var tplName = '—';
     if (task.template_id) {
-      var tpl = (state.taskTemplates || []).find(function(x) { return x.id === task.template_id; });
+      var tpl = (state.taskTemplates || []).find(function(x) { return x.id == task.template_id; });
       if (tpl) tplName = tpl.name;
     }
     document.getElementById('task-template-name').textContent = tplName;
@@ -37,7 +37,7 @@ function loadTaskScreen(taskId) {
 
     // Клиент в хлебных крошках
     google.script.run.withSuccessHandler(function(clients) {
-      var cl = (clients || []).find(function(c) { return c.id === task.client_id; });
+      var cl = (clients || []).find(function(c) { return c.id == task.client_id; });
       document.getElementById('task-breadcrumb-client').textContent = cl ? cl.name : '';
     }).getClients();
 

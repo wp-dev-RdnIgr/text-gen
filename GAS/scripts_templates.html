@@ -16,7 +16,7 @@ function renderTemplateList() {
   }
   var h = '';
   tts.forEach(function(tt) {
-    var active = tt.id === state.selectedTemplateId ? ' active' : '';
+    var active = tt.id == state.selectedTemplateId ? ' active' : '';
     var clientCount = (tt.client_ids || []).length;
     var metaExtra = clientCount ? ' · ' + clientCount + ' кл.' : '';
     h += '<div class="template-item' + active + '" onclick="selectTemplate(\'' + tt.id + '\')">' +
@@ -38,7 +38,7 @@ function filterTemplates(q) {
 
 function selectTemplate(ttId) {
   state.selectedTemplateId = ttId;
-  var tt = (state.taskTemplates || []).find(function(x) { return x.id === ttId; });
+  var tt = (state.taskTemplates || []).find(function(x) { return x.id == ttId; });
   if (!tt) return;
 
   renderTemplateList();
@@ -139,7 +139,7 @@ function updateTplClientLabel() {
     label.className = 'multiselect-placeholder';
   } else {
     var names = state.tplClientIds.map(function(id) {
-      var cl = (state.clients || []).find(function(c) { return c.id === id; });
+      var cl = (state.clients || []).find(function(c) { return c.id == id; });
       return cl ? cl.name : '';
     }).join(', ');
     label.textContent = names;
@@ -336,7 +336,7 @@ function deleteCurrentTemplate() {
 
 function duplicateTemplate() {
   if (!state.selectedTemplateId) return;
-  var tt = (state.taskTemplates || []).find(function(x) { return x.id === state.selectedTemplateId; });
+  var tt = (state.taskTemplates || []).find(function(x) { return x.id == state.selectedTemplateId; });
   if (!tt) return;
   var data = {
     name: tt.name + ' (копія)',
