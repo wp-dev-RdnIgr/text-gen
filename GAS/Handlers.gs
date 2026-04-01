@@ -10,27 +10,39 @@ var N8N_GEN_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-generate';
 // --- Хелперы ---
 
 function callCrudApi(action, params) {
-  var response = UrlFetchApp.fetch(N8N_API_URL, {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify({ action: action, params: params || {} }),
-    muteHttpExceptions: true
-  });
-  var text = response.getContentText();
-  if (!text) return [];
-  return JSON.parse(text);
+  try {
+    var response = UrlFetchApp.fetch(N8N_API_URL, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ action: action, params: params || {} }),
+      muteHttpExceptions: true
+    });
+    var code = response.getResponseCode();
+    var text = response.getContentText();
+    if (code !== 200) throw new Error('API error ' + code + ': ' + text.substring(0, 200));
+    if (!text) return [];
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error('callCrudApi(' + action + '): ' + e.message);
+  }
 }
 
 function callSQL(query) {
-  var response = UrlFetchApp.fetch(N8N_SQL_URL, {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify({ query: query }),
-    muteHttpExceptions: true
-  });
-  var text = response.getContentText();
-  if (!text) return [];
-  return JSON.parse(text);
+  try {
+    var response = UrlFetchApp.fetch(N8N_SQL_URL, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ query: query }),
+      muteHttpExceptions: true
+    });
+    var code = response.getResponseCode();
+    var text = response.getContentText();
+    if (code !== 200) throw new Error('SQL error ' + code + ': ' + text.substring(0, 200));
+    if (!text) return [];
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error('callSQL: ' + e.message);
+  }
 }
 
 function callGenApi(action, params) {
