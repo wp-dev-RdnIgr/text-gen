@@ -1,22 +1,50 @@
 // ===========================================
-// Handlers.gs - Серверные обработчики
-// Все данные хранятся в PostgreSQL через n8n webhook
+// Handlers.gs - Все данные через n8n → PostgreSQL
+// OpenAI и AI-маппинг тоже через n8n
 // ===========================================
 
+var N8N_API_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-api';
 var N8N_SQL_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-sql';
+var N8N_GEN_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-generate';
 
-// --- SQL Helper ---
-function execSQL(query) {
+// --- Хелперы ---
+
+function callCrudApi(action, params) {
+  var response = UrlFetchApp.fetch(N8N_API_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({ action: action, params: params || {} }),
+    muteHttpExceptions: true
+  });
+  var text = response.getContentText();
+  if (!text) return [];
+  return JSON.parse(text);
+}
+
+function callSQL(query) {
   var response = UrlFetchApp.fetch(N8N_SQL_URL, {
     method: 'post',
     contentType: 'application/json',
     payload: JSON.stringify({ query: query }),
     muteHttpExceptions: true
   });
-  var code = response.getResponseCode();
   var text = response.getContentText();
-  if (code !== 200 || !text) throw new Error('DB error (' + code + ')');
+  if (!text) return [];
   return JSON.parse(text);
+}
+
+function callGenApi(action, params) {
+  var response = UrlFetchApp.fetch(N8N_GEN_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({ action: action, params: params || {} }),
+    muteHttpExceptions: true
+  });
+  var text = response.getContentText();
+  if (!text) throw new Error('Порожня відповідь від AI сервісу');
+  var data = JSON.parse(text);
+  if (Array.isArray(data)) return data[0] || {};
+  return data;
 }
 
 function escSQL(s) {
@@ -32,254 +60,123 @@ function jsonSQL(obj) {
 // --- Клиенты ---
 
 function getClients() {
-  return execSQL('SELECT * FROM textgen.clients ORDER BY name');
+  return callCrudApi('getClients');
 }
 
 function saveClient(d) {
-  if (d.id) {
-    var rows = execSQL("UPDATE textgen.clients SET name=" + escSQL(d.name) + ", website=" + escSQL(d.website) + ", niche=" + escSQL(d.niche) + ", notes=" + escSQL(d.notes) + " WHERE id=" + d.id + " RETURNING *");
-    return rows[0];
-  } else {
-    var rows = execSQL("INSERT INTO textgen.clients (name, website, niche, notes) VALUES (" + escSQL(d.name) + "," + escSQL(d.website) + "," + escSQL(d.niche) + "," + escSQL(d.notes) + ") RETURNING *");
-    return rows[0];
-  }
+  return callCrudApi('saveClient', d);
 }
 
 function deleteClient(clientId) {
-  execSQL("DELETE FROM textgen.clients WHERE id=" + clientId);
+  callCrudApi('deleteClient', { id: clientId });
   return true;
 }
 
-// --- Задачи ---
+// --- Задачі ---
 
 function getTasks(clientId) {
-  if (clientId) {
-    return execSQL("SELECT * FROM textgen.tasks WHERE client_id=" + clientId + " ORDER BY created_at DESC");
-  }
-  return execSQL("SELECT * FROM textgen.tasks ORDER BY created_at DESC");
+  return callCrudApi('getTasks', { clientId: clientId });
 }
 
 function getTask(taskId) {
-  var rows = execSQL("SELECT * FROM textgen.tasks WHERE id=" + taskId);
-  return rows[0] || null;
+  var rows = callCrudApi('getTask', { id: taskId });
+  return Array.isArray(rows) ? rows[0] || null : rows;
 }
 
 function saveTask(d) {
-  if (d.id) {
-    var rows = execSQL("UPDATE textgen.tasks SET client_id=" + d.client_id +
-      ", template_id=" + (d.template_id || 'NULL') +
-      ", name=" + escSQL(d.name) +
-      ", system_prompt=" + escSQL(d.system_prompt) +
-      ", user_prompt=" + escSQL(d.user_prompt) +
-      ", core_fields=" + jsonSQL(d.core_fields) +
-      ", flex_blocks=" + jsonSQL(d.flex_blocks) +
-      ", active_flex_blocks=" + jsonSQL(d.active_flex_blocks) +
-      ", field_values=" + jsonSQL(d.field_values) +
-      ", llm_provider=" + escSQL(d.llm_provider) +
-      ", llm_model=" + escSQL(d.llm_model) +
-      ", options=" + jsonSQL(d.options) +
-      ", status=" + escSQL(d.status || 'active') +
-      " WHERE id=" + d.id + " RETURNING *");
-    return rows[0];
-  } else {
-    var rows = execSQL("INSERT INTO textgen.tasks (client_id, template_id, name, system_prompt, user_prompt, core_fields, flex_blocks, active_flex_blocks, field_values, llm_provider, llm_model, options, status) VALUES (" +
-      d.client_id + "," +
-      (d.template_id || 'NULL') + "," +
-      escSQL(d.name) + "," +
-      escSQL(d.system_prompt) + "," +
-      escSQL(d.user_prompt) + "," +
-      jsonSQL(d.core_fields) + "," +
-      jsonSQL(d.flex_blocks) + "," +
-      jsonSQL(d.active_flex_blocks) + "," +
-      jsonSQL(d.field_values) + "," +
-      escSQL(d.llm_provider) + "," +
-      escSQL(d.llm_model) + "," +
-      jsonSQL(d.options) + "," +
-      escSQL(d.status || 'active') +
-      ") RETURNING *");
-    return rows[0];
-  }
+  return callCrudApi('saveTask', d);
 }
 
 function deleteTask(taskId) {
-  execSQL("DELETE FROM textgen.tasks WHERE id=" + taskId);
+  callCrudApi('deleteTask', { id: taskId });
   return true;
 }
 
 function updateTask(taskId, updates) {
-  var sets = [];
-  for (var k in updates) {
-    var v = updates[k];
-    if (typeof v === 'object' && v !== null) sets.push(k + "=" + jsonSQL(v));
-    else if (typeof v === 'number') sets.push(k + "=" + v);
-    else if (v === null) sets.push(k + "=NULL");
-    else sets.push(k + "=" + escSQL(v));
-  }
-  if (!sets.length) return null;
-  var rows = execSQL("UPDATE textgen.tasks SET " + sets.join(", ") + " WHERE id=" + taskId + " RETURNING *");
-  return rows[0] || null;
+  return callCrudApi('updateTask', { id: taskId, updates: updates });
 }
 
-// --- Шаблоны задач ---
+// --- Шаблони задач ---
 
 function getTaskTemplates() {
-  return execSQL("SELECT * FROM textgen.task_templates ORDER BY name");
+  return callCrudApi('getTaskTemplates');
 }
 
 function getTaskTemplate(id) {
-  var rows = execSQL("SELECT * FROM textgen.task_templates WHERE id=" + id);
-  return rows[0] || null;
+  var rows = callCrudApi('getTaskTemplate', { id: id });
+  return Array.isArray(rows) ? rows[0] || null : rows;
 }
 
 function saveTaskTemplate(d) {
-  if (d.id) {
-    var rows = execSQL("UPDATE textgen.task_templates SET name=" + escSQL(d.name) +
-      ", description=" + escSQL(d.description) +
-      ", client_ids=" + jsonSQL(d.client_ids) +
-      ", system_prompt=" + escSQL(d.system_prompt) +
-      ", user_prompt=" + escSQL(d.user_prompt) +
-      ", core_fields=" + jsonSQL(d.core_fields) +
-      ", flex_blocks=" + jsonSQL(d.flex_blocks) +
-      ", llm_provider=" + escSQL(d.llm_provider) +
-      ", llm_model=" + escSQL(d.llm_model) +
-      ", options=" + jsonSQL(d.options) +
-      " WHERE id=" + d.id + " RETURNING *");
-    return rows[0];
-  } else {
-    var rows = execSQL("INSERT INTO textgen.task_templates (name, description, client_ids, system_prompt, user_prompt, core_fields, flex_blocks, llm_provider, llm_model, options) VALUES (" +
-      escSQL(d.name) + "," +
-      escSQL(d.description) + "," +
-      jsonSQL(d.client_ids) + "," +
-      escSQL(d.system_prompt) + "," +
-      escSQL(d.user_prompt) + "," +
-      jsonSQL(d.core_fields) + "," +
-      jsonSQL(d.flex_blocks) + "," +
-      escSQL(d.llm_provider) + "," +
-      escSQL(d.llm_model) + "," +
-      jsonSQL(d.options) +
-      ") RETURNING *");
-    return rows[0];
-  }
+  return callCrudApi('saveTaskTemplate', d);
 }
 
 function deleteTaskTemplate(id) {
-  execSQL("DELETE FROM textgen.task_templates WHERE id=" + id);
+  callCrudApi('deleteTaskTemplate', { id: id });
   return true;
 }
 
-// --- Генерация текста (OpenAI) ---
+// --- Тексти ---
 
-function getOpenAIKey() {
-  var key = PropertiesService.getScriptProperties().getProperty('OPENAI_API_KEY');
-  if (!key) throw new Error('OpenAI API key не встановлено');
-  return key;
+function getGeneratedTexts(taskId) {
+  return callCrudApi('getGeneratedTexts', { taskId: taskId });
 }
 
-function setOpenAIKey(key) {
-  PropertiesService.getScriptProperties().setProperty('OPENAI_API_KEY', key);
-  return 'OK';
+function getGeneratedText(textId) {
+  var rows = callCrudApi('getGeneratedText', { id: textId });
+  return Array.isArray(rows) ? rows[0] || null : rows;
 }
 
-function hasOpenAIKey() {
-  return !!PropertiesService.getScriptProperties().getProperty('OPENAI_API_KEY');
+function updateGeneratedText(textId, updates) {
+  return callCrudApi('updateGeneratedText', { id: textId, updates: updates });
 }
 
-function callOpenAI(systemPrompt, userPrompt, model) {
-  model = model || 'gpt-4o-mini';
-  var payload = {
-    model: model,
-    messages: [
-      { role: 'system', content: systemPrompt || '' },
-      { role: 'user', content: userPrompt }
-    ],
-    temperature: 0.7,
-    max_tokens: 4000
-  };
-  var response = UrlFetchApp.fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { 'Authorization': 'Bearer ' + getOpenAIKey() },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  });
-  var code = response.getResponseCode();
-  var body = response.getContentText();
-  if (code !== 200) {
-    var err = '';
-    try { err = JSON.parse(body).error.message; } catch(e) { err = body.substring(0, 200); }
-    throw new Error('OpenAI error (' + code + '): ' + err);
-  }
-  return JSON.parse(body).choices[0].message.content;
+function deleteGeneratedText(textId) {
+  callCrudApi('deleteGeneratedText', { id: textId });
+  return true;
 }
 
-function parseContentToBlocksServer(html) {
-  if (!html) return [];
-  var blocks = [];
-  var tagRegex = /<(h[1-3]|p|ul|ol)[^>]*>([\s\S]*?)<\/\1>/gi;
-  var match;
-  var idx = 0;
-  while ((match = tagRegex.exec(html)) !== null) {
-    var tag = match[1].toLowerCase();
-    var content = match[2].trim();
-    if (!content) continue;
-    var type = 'paragraph';
-    if (tag === 'h1' || tag === 'h2' || tag === 'h3') type = 'heading';
-    if (tag === 'ul' || tag === 'ol') type = 'list';
-    blocks.push({ id: 'b_' + Date.now() + '_' + idx, type: type, tag: tag, content: type === 'list' ? match[0] : content });
-    idx++;
-  }
-  if (blocks.length === 0) {
-    var lines = html.split(/\n\n+/);
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i].trim();
-      if (!line) continue;
-      blocks.push({ id: 'b_' + Date.now() + '_' + i, type: 'paragraph', tag: 'p', content: line.replace(/<[^>]+>/g, '') });
-    }
-  }
-  return blocks;
-}
-
-function convertToHTML(rawContent) {
-  if (rawContent.indexOf('<') !== -1) return rawContent;
-  return rawContent.split(/\n\n+/).map(function(p) {
-    p = p.trim();
-    if (!p) return '';
-    if (p.match(/^#{1,3}\s/)) {
-      var level = p.match(/^(#{1,3})\s/)[1].length;
-      return '<h' + level + '>' + p.replace(/^#{1,3}\s/, '') + '</h' + level + '>';
-    }
-    return '<p>' + p + '</p>';
-  }).join('\n');
-}
+// --- Генерація через OpenAI (n8n) ---
 
 function generateTextWithAI(taskId, assembledPrompt, fieldValues) {
   try {
     var task = getTask(taskId);
-    if (!task) throw new Error('Задача не знайдена');
+    if (!task) throw new Error('Задачу не знайдено');
 
-    var systemPrompt = (task.system_prompt || '') +
-      '\n\nВАЖНО: Форматуй текст HTML-тегами: <h1>, <h2>, <h3>, <p>, <ul>, <li>. Не використовуй Markdown.';
+    // Викликаємо n8n AI генерацію
+    var aiResult = callGenApi('generateTextWithAI', {
+      taskId: taskId,
+      assembledPrompt: assembledPrompt,
+      fieldValues: fieldValues || {},
+      systemPrompt: task.system_prompt || '',
+      userPrompt: task.user_prompt || ''
+    });
 
-    var rawContent = callOpenAI(systemPrompt, assembledPrompt, 'gpt-4o-mini');
-    rawContent = convertToHTML(rawContent);
+    var rawContent = aiResult.content || '';
+
+    // Конвертація в HTML якщо потрібно
+    if (rawContent.indexOf('<') === -1) {
+      rawContent = rawContent.split(/\n\n+/).map(function(p) {
+        p = p.trim();
+        if (!p) return '';
+        if (p.match(/^#{1,3}\s/)) {
+          var level = p.match(/^(#{1,3})\s/)[1].length;
+          return '<h' + level + '>' + p.replace(/^#{1,3}\s/, '') + '</h' + level + '>';
+        }
+        return '<p>' + p + '</p>';
+      }).join('\n');
+    }
+
+    // Парсинг блоків
     var blocks = parseContentToBlocksServer(rawContent);
 
-    var rows = execSQL("INSERT INTO textgen.generated_texts (task_id, user_input, used_system_prompt, used_user_prompt, used_llm_model, used_field_values, content, blocks, status) VALUES (" +
-      taskId + "," +
-      escSQL(assembledPrompt) + "," +
-      escSQL(task.system_prompt) + "," +
-      escSQL(task.user_prompt) + "," +
-      "'GPT-4o-mini'," +
-      jsonSQL(fieldValues) + "," +
-      escSQL(rawContent) + "," +
-      jsonSQL(blocks) + "," +
-      "'completed'" +
-      ") RETURNING *");
+    // Зберегти в БД
+    var rows = callSQL("INSERT INTO textgen.generated_texts (task_id, user_input, used_system_prompt, used_user_prompt, used_llm_model, used_field_values, content, blocks, status) VALUES (" +
+      taskId + "," + escSQL(assembledPrompt) + "," + escSQL(task.system_prompt) + "," + escSQL(task.user_prompt) + ",'GPT-4o-mini'," + jsonSQL(fieldValues) + "," + escSQL(rawContent) + "," + jsonSQL(blocks) + ",'completed') RETURNING *");
     return rows[0];
   } catch (e) {
-    // Сохранить ошибку
     try {
-      execSQL("INSERT INTO textgen.generated_texts (task_id, user_input, used_llm_model, status, error_message) VALUES (" +
+      callSQL("INSERT INTO textgen.generated_texts (task_id, user_input, used_llm_model, status, error_message) VALUES (" +
         taskId + "," + escSQL(assembledPrompt) + ",'GPT-4o-mini','failed'," + escSQL(e.message) + ")");
     } catch(e2) {}
     throw new Error('Помилка генерації: ' + e.message);
@@ -293,30 +190,26 @@ function regenerateBlockWithAI(textId, blockIndex, comment) {
     var blocks = text.blocks || [];
     if (blockIndex >= blocks.length) throw new Error('Блок не знайдено');
 
-    var block = blocks[blockIndex];
-    var contextBlocks = [];
-    for (var i = 0; i < blocks.length; i++) {
-      contextBlocks.push((i === blockIndex ? '[ПЕРЕПИСАТИ]: ' : '') + blocks[i].content);
-    }
+    var aiResult = callGenApi('regenerateBlockWithAI', {
+      textId: textId,
+      blockIndex: blockIndex,
+      comment: comment || '',
+      usedSystemPrompt: text.used_system_prompt || '',
+      blocks: blocks,
+      regenerationCount: text.regeneration_count || 0
+    });
 
-    var prompt = 'Перепиши ТІЛЬКИ виділений блок.\n\nКонтекст:\n' + contextBlocks.join('\n\n') +
-      '\n\nБлок: "' + block.content + '"' +
-      (comment ? '\nКоментар: ' + comment : '') +
-      '\n\nВідповідай ТІЛЬКИ переписаним блоком, без HTML, без пояснень.';
-
-    var newContent = callOpenAI(text.used_system_prompt || '', prompt, 'gpt-4o-mini');
-    newContent = newContent.replace(/<[^>]+>/g, '').trim();
-
+    var newContent = (aiResult.content || '').replace(/<[^>]+>/g, '').trim();
     blocks[blockIndex].content = newContent;
+
     var fullContent = blocks.map(function(b) {
       if (b.type === 'heading') return '<' + b.tag + '>' + b.content + '</' + b.tag + '>';
       if (b.type === 'list') return b.content;
       return '<p>' + b.content + '</p>';
     }).join('\n');
 
-    var rows = execSQL("UPDATE textgen.generated_texts SET content=" + escSQL(fullContent) +
-      ", blocks=" + jsonSQL(blocks) +
-      ", regeneration_count=" + ((text.regeneration_count || 0) + 1) +
+    var rows = callSQL("UPDATE textgen.generated_texts SET content=" + escSQL(fullContent) +
+      ", blocks=" + jsonSQL(blocks) + ", regeneration_count=" + ((text.regeneration_count || 0) + 1) +
       " WHERE id=" + textId + " RETURNING *");
     return rows[0];
   } catch (e) {
@@ -329,19 +222,31 @@ function regenerateFullTextWithAI(textId, comment) {
     var text = getGeneratedText(textId);
     if (!text) throw new Error('Текст не знайдено');
 
-    var prompt = text.user_input || '';
-    if (comment) prompt += '\n\nДодаткові інструкції:\n' + comment;
+    var aiResult = callGenApi('regenerateFullTextWithAI', {
+      textId: textId,
+      comment: comment || '',
+      userInput: text.user_input || '',
+      usedSystemPrompt: text.used_system_prompt || '',
+      regenerationCount: text.regeneration_count || 0
+    });
 
-    var systemPrompt = (text.used_system_prompt || '') +
-      '\n\nВАЖНО: Форматуй HTML-тегами: <h1>, <h2>, <h3>, <p>, <ul>, <li>.';
+    var rawContent = aiResult.content || '';
+    if (rawContent.indexOf('<') === -1) {
+      rawContent = rawContent.split(/\n\n+/).map(function(p) {
+        p = p.trim();
+        if (!p) return '';
+        if (p.match(/^#{1,3}\s/)) {
+          var level = p.match(/^(#{1,3})\s/)[1].length;
+          return '<h' + level + '>' + p.replace(/^#{1,3}\s/, '') + '</h' + level + '>';
+        }
+        return '<p>' + p + '</p>';
+      }).join('\n');
+    }
 
-    var rawContent = callOpenAI(systemPrompt, prompt, 'gpt-4o-mini');
-    rawContent = convertToHTML(rawContent);
     var blocks = parseContentToBlocksServer(rawContent);
 
-    var rows = execSQL("UPDATE textgen.generated_texts SET content=" + escSQL(rawContent) +
-      ", blocks=" + jsonSQL(blocks) +
-      ", regeneration_count=" + ((text.regeneration_count || 0) + 1) +
+    var rows = callSQL("UPDATE textgen.generated_texts SET content=" + escSQL(rawContent) +
+      ", blocks=" + jsonSQL(blocks) + ", regeneration_count=" + ((text.regeneration_count || 0) + 1) +
       (comment ? ", comment=" + escSQL(comment) : '') +
       " WHERE id=" + textId + " RETURNING *");
     return rows[0];
@@ -350,150 +255,134 @@ function regenerateFullTextWithAI(textId, comment) {
   }
 }
 
-// --- Тексты ---
-
-function getGeneratedTexts(taskId) {
-  return execSQL("SELECT * FROM textgen.generated_texts WHERE task_id=" + taskId + " ORDER BY created_at DESC");
-}
-
-function getGeneratedText(textId) {
-  var rows = execSQL("SELECT * FROM textgen.generated_texts WHERE id=" + textId);
-  return rows[0] || null;
-}
-
-function updateGeneratedText(textId, updates) {
-  var sets = [];
-  for (var k in updates) {
-    var v = updates[k];
-    if (typeof v === 'object' && v !== null) sets.push(k + "=" + jsonSQL(v));
-    else if (typeof v === 'number') sets.push(k + "=" + v);
-    else if (v === null) sets.push(k + "=NULL");
-    else sets.push(k + "=" + escSQL(v));
-  }
-  if (!sets.length) return null;
-  var rows = execSQL("UPDATE textgen.generated_texts SET " + sets.join(", ") + " WHERE id=" + textId + " RETURNING *");
-  return rows[0] || null;
-}
-
-function deleteGeneratedText(textId) {
-  execSQL("DELETE FROM textgen.generated_texts WHERE id=" + textId);
-  return true;
-}
-
-// --- Google Sheets Import ---
-
-function getSheetHeaders(sheetUrl) {
-  try {
-    var match = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-    if (!match) throw new Error('Невірне посилання');
-    var ss = SpreadsheetApp.openById(match[1]);
-    var sheet = ss.getSheets()[0];
-    var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    var headers = [];
-    for (var i = 0; i < headerRow.length; i++) {
-      var val = String(headerRow[i]).trim();
-      if (val) headers.push(val);
-    }
-    if (!headers.length) throw new Error('Не знайдено заголовків');
-    return headers;
-  } catch (e) {
-    throw new Error('Помилка: ' + e.message);
-  }
-}
-
-function getSheetRows(sheetUrl) {
-  try {
-    var match = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-    if (!match) throw new Error('Невірне посилання');
-    var ss = SpreadsheetApp.openById(match[1]);
-    var sheet = ss.getSheets()[0];
-    var lastRow = sheet.getLastRow();
-    var lastCol = sheet.getLastColumn();
-    if (lastRow < 2) throw new Error('Немає рядків з даними');
-
-    var allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-    var headers = [];
-    for (var c = 0; c < allData[0].length; c++) {
-      headers.push(String(allData[0][c]).trim() || ('Колонка ' + (c + 1)));
-    }
-
-    var topicCol = -1;
-    var topicKW = ['тема', 'topic', 'h1', 'заголовок'];
-    for (var ti = 0; ti < headers.length; ti++) {
-      var hL = headers[ti].toLowerCase();
-      for (var tk = 0; tk < topicKW.length; tk++) {
-        if (hL.indexOf(topicKW[tk]) !== -1) { topicCol = ti; break; }
-      }
-      if (topicCol !== -1) break;
-    }
-
-    var rows = [];
-    for (var r = 1; r < allData.length; r++) {
-      var hasData = false;
-      var cells = {};
-      for (var c2 = 0; c2 < headers.length; c2++) {
-        var val = String(allData[r][c2]).trim();
-        cells[headers[c2]] = val;
-        if (val) hasData = true;
-      }
-      if (!hasData) continue;
-      var topic = topicCol !== -1 ? String(allData[r][topicCol]).trim() : '';
-      if (!topic) {
-        for (var c3 = 0; c3 < allData[r].length; c3++) {
-          var v = String(allData[r][c3]).trim();
-          if (v && v.length > 3) { topic = v; break; }
-        }
-      }
-      rows.push({
-        rowNum: r + 1,
-        topic: topic ? (topic.length > 80 ? topic.substring(0, 80) + '...' : topic) : 'Рядок ' + (r + 1),
-        cells: cells
-      });
-    }
-    if (!rows.length) throw new Error('Немає рядків з даними');
-    return { headers: headers, rows: rows };
-  } catch (e) {
-    throw new Error('Помилка: ' + e.message);
-  }
-}
+// --- AI маппінг колонок ---
 
 function mapSheetRowToFields(sheetHeaders, rowCells, taskFieldNames) {
   try {
-    var prompt = 'Дані з рядка Google-таблиці (ТЗ для копірайтера) та поля системи.\n\nКОЛОНКИ ТАБЛИЦІ:\n';
-    for (var i = 0; i < sheetHeaders.length; i++) {
-      var val = rowCells[sheetHeaders[i]] || '';
-      var preview = val.length > 100 ? val.substring(0, 100) + '...' : val;
-      prompt += (i + 1) + '. "' + sheetHeaders[i] + '": "' + preview + '"\n';
-    }
-    prompt += '\nПОЛЯ СИСТЕМИ:\n';
-    for (var j = 0; j < taskFieldNames.length; j++) {
-      prompt += '- ' + taskFieldNames[j].key + ' (label: "' + taskFieldNames[j].label + '")\n';
-    }
-    prompt += '\nВизнач відповідність колонок до полів. Аналізуй назви І вміст.\n';
-    prompt += 'Відповідай ТІЛЬКИ JSON: {"field_key": "Назва колонки", ...}\n';
-    prompt += 'Кожна колонка — тільки одному полю.';
+    var aiResult = callGenApi('mapSheetRowToFields', {
+      sheetHeaders: sheetHeaders,
+      rowCells: rowCells,
+      taskFieldNames: taskFieldNames
+    });
 
-    var result = callOpenAI('Точний інструмент маппінгу. Відповідай ТІЛЬКИ JSON.', prompt, 'gpt-4o-mini');
-    result = result.trim().replace(/```json\s*/g, '').replace(/```\s*/g, '');
-    return JSON.parse(result);
+    var content = aiResult.content || '';
+    content = content.trim().replace(/```json\s*/g, '').replace(/```\s*/g, '');
+    return JSON.parse(content);
   } catch (e) {
     throw new Error('Помилка маппінгу: ' + e.message);
   }
 }
 
-// --- Утилиты ---
+// --- Парсинг HTML → блоки ---
+
+function parseContentToBlocksServer(html) {
+  if (!html) return [];
+  var blocks = [];
+  var tagRegex = /<(h[1-3]|p|ul|ol)[^>]*>([\s\S]*?)<\/\1>/gi;
+  var match, idx = 0;
+  while ((match = tagRegex.exec(html)) !== null) {
+    var tag = match[1].toLowerCase();
+    var content = match[2].trim();
+    if (!content) continue;
+    var type = (tag === 'h1' || tag === 'h2' || tag === 'h3') ? 'heading' : (tag === 'ul' || tag === 'ol') ? 'list' : 'paragraph';
+    blocks.push({ id: 'b_' + Date.now() + '_' + idx, type: type, tag: tag, content: type === 'list' ? match[0] : content });
+    idx++;
+  }
+  if (!blocks.length) {
+    var lines = html.split(/\n\n+/);
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (line) blocks.push({ id: 'b_' + Date.now() + '_' + i, type: 'paragraph', tag: 'p', content: line.replace(/<[^>]+>/g, '') });
+    }
+  }
+  return blocks;
+}
+
+// --- Google Sheets Import (залишаємо в GAS — нативний доступ) ---
+
+function getSheetHeaders(sheetUrl) {
+  var match = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if (!match) throw new Error('Невірне посилання');
+  var ss = SpreadsheetApp.openById(match[1]);
+  var sheet = ss.getSheets()[0];
+  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var headers = [];
+  for (var i = 0; i < headerRow.length; i++) {
+    var val = String(headerRow[i]).trim();
+    if (val) headers.push(val);
+  }
+  if (!headers.length) throw new Error('Не знайдено заголовків');
+  return headers;
+}
+
+function getSheetRows(sheetUrl) {
+  var match = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if (!match) throw new Error('Невірне посилання');
+  var ss = SpreadsheetApp.openById(match[1]);
+  var sheet = ss.getSheets()[0];
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2) throw new Error('Немає рядків з даними');
+
+  var allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  var headers = [];
+  for (var c = 0; c < allData[0].length; c++) {
+    headers.push(String(allData[0][c]).trim() || ('Колонка ' + (c + 1)));
+  }
+
+  var topicCol = -1;
+  var topicKW = ['тема', 'topic', 'h1', 'заголовок'];
+  for (var ti = 0; ti < headers.length; ti++) {
+    var hL = headers[ti].toLowerCase();
+    for (var tk = 0; tk < topicKW.length; tk++) {
+      if (hL.indexOf(topicKW[tk]) !== -1) { topicCol = ti; break; }
+    }
+    if (topicCol !== -1) break;
+  }
+
+  var rows = [];
+  for (var r = 1; r < allData.length; r++) {
+    var hasData = false, cells = {};
+    for (var c2 = 0; c2 < headers.length; c2++) {
+      var val = String(allData[r][c2]).trim();
+      cells[headers[c2]] = val;
+      if (val) hasData = true;
+    }
+    if (!hasData) continue;
+    var topic = topicCol !== -1 ? String(allData[r][topicCol]).trim() : '';
+    if (!topic) {
+      for (var c3 = 0; c3 < allData[r].length; c3++) {
+        var v = String(allData[r][c3]).trim();
+        if (v && v.length > 3) { topic = v; break; }
+      }
+    }
+    rows.push({
+      rowNum: r + 1,
+      topic: topic ? (topic.length > 80 ? topic.substring(0, 80) + '...' : topic) : 'Рядок ' + (r + 1),
+      cells: cells
+    });
+  }
+  if (!rows.length) throw new Error('Немає рядків з даними');
+  return { headers: headers, rows: rows };
+}
+
+// --- API Key (залишаємо в GAS для сумісності з UI) ---
+
+function setOpenAIKey(key) {
+  PropertiesService.getScriptProperties().setProperty('OPENAI_API_KEY', key);
+  return 'OK';
+}
+
+function hasOpenAIKey() {
+  // OpenAI тепер в n8n — завжди true
+  return true;
+}
+
+// --- Dashboard ---
 
 function getAllDataForDashboard(clientId) {
-  try {
-    var client = null;
-    var tasks = [];
-    if (clientId) {
-      var clientRows = execSQL("SELECT * FROM textgen.clients WHERE id=" + clientId);
-      client = clientRows[0] || null;
-      tasks = execSQL("SELECT * FROM textgen.tasks WHERE client_id=" + clientId + " ORDER BY created_at DESC");
-    }
-    return { client: client, tasks: tasks };
-  } catch (e) {
-    throw new Error('Помилка: ' + e.message);
-  }
+  if (!clientId) return { client: null, tasks: [] };
+  var clientRows = callSQL("SELECT * FROM textgen.clients WHERE id=" + clientId);
+  var taskRows = callSQL("SELECT * FROM textgen.tasks WHERE client_id=" + clientId + " ORDER BY created_at DESC");
+  return { client: clientRows[0] || null, tasks: taskRows };
 }
