@@ -44,6 +44,9 @@ function loadTaskScreen(taskId) {
     // Рендер core fields
     renderCoreFields();
 
+    // Спеціаліст email
+    document.getElementById('task-specialist-email').value = task.specialist_email || '';
+
     // Рендер flex blocks
     renderFlexToggleBar();
     renderActiveFlexBlocks();
@@ -282,6 +285,12 @@ function confirmFlexEdit(key) {
   _editingFlexBlocks[key] = false;
   renderActiveFlexBlocks();
   showToast('Збережено', 'success');
+}
+
+function saveSpecialistEmail() {
+  if (!state.currentTask) return;
+  state.currentTask.specialist_email = document.getElementById('task-specialist-email').value.trim();
+  autoSaveTask();
 }
 
 function cancelFlexEdit(key) {
@@ -554,6 +563,28 @@ function startGeneration() {
     showToast(e.message, 'error');
     resetGenUI();
   }).generateTextWithAI(state.currentTask.id, assembledPrompt, fv);
+}
+
+function saveLastGenToGDoc() {
+  if (!state.lastGeneratedText || !state.lastGeneratedText.id) {
+    showToast('Немає тексту для збереження', 'error');
+    return;
+  }
+  var btn = document.getElementById('btn-save-gdoc');
+  if (btn) { btn.disabled = true; btn.textContent = 'Збереження...'; }
+
+  google.script.run.withSuccessHandler(function(url) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Зберегти в Google Doc'; }
+    var link = document.getElementById('gen-gdoc-link');
+    if (link && url) {
+      link.href = url;
+      link.style.display = 'inline';
+    }
+    showToast('Збережено в Google Doc!', 'success');
+  }).withFailureHandler(function(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Зберегти в Google Doc'; }
+    showToast(e.message, 'error');
+  }).saveToGoogleDoc(state.lastGeneratedText.id);
 }
 
 function clearGenResult() {

@@ -63,6 +63,28 @@ function renderEditorMeta() {
   if (ui) ui.textContent = t.user_input || '(пусто)';
 }
 
+function saveEditorToGDoc() {
+  if (!state.editorText || !state.editorText.id) {
+    showToast('Немає тексту для збереження', 'error');
+    return;
+  }
+  var btn = document.getElementById('btn-editor-save-gdoc');
+  if (btn) { btn.disabled = true; btn.textContent = 'Збереження...'; }
+
+  google.script.run.withSuccessHandler(function(url) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Зберегти в Google Doc'; }
+    var link = document.getElementById('editor-gdoc-link');
+    if (link && url) {
+      link.href = url;
+      link.style.display = 'inline';
+    }
+    showToast('Збережено в Google Doc!', 'success');
+  }).withFailureHandler(function(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Зберегти в Google Doc'; }
+    showToast(e.message, 'error');
+  }).saveToGoogleDoc(state.editorText.id);
+}
+
 function renderEditorStats() {
   var t = state.editorText;
   if (!t) return;

@@ -6,6 +6,7 @@
 var N8N_API_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-api';
 var N8N_SQL_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-sql';
 var N8N_GEN_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-generate';
+var GDRIVE_ROOT_FOLDER = '1Oj6hpJwRQnYwrKQM_NNOA9kIw5wP_oM6';
 
 // --- Хелперы ---
 
@@ -210,6 +211,76 @@ function generateTextWithAI(taskId, assembledPrompt, fieldValues) {
         taskId + "," + escSQL(assembledPrompt) + ",'GPT-4o-mini','failed'," + escSQL(e.message) + ")");
     } catch(e2) {}
     throw new Error('Помилка генерації: ' + e.message);
+  }
+}
+
+// --- Зберігання в Google Doc ---
+
+function saveToGoogleDoc(textId) {
+  try {
+    var text = getGeneratedText(textId);
+    if (!text) throw new Error('Текст не знайдено');
+    if (!text.content) throw new Error('Немає контенту');
+
+    // Знайти задачу для отримання email
+    var task = getTask(text.task_id);
+    var email = (task && task.specialist_email) ? task.specialist_email.trim() : 'unknown';
+    var folderName = email || 'unknown';
+
+    // Знайти/створити папку спеціаліста
+    var rootFolder = DriveApp.getFolderById(GDRIVE_ROOT_FOLDER);
+    var specialistFolder = null;
+    var folders = rootFolder.getFoldersByName(folderName);
+    if (folders.hasNext()) {
+      specialistFolder = folders.next();
+    } else {
+      specialistFolder = rootFolder.createFolder(folderName);
+    }
+
+    // Створити Google Doc
+    var docTitle = (task ? task.name : 'TextGen') + ' — ' + new Date().toLocaleDateString('uk-UA');
+    var doc = DocumentApp.create(docTitle);
+    var body = doc.getBody();
+
+    // Парсити блоки і додати в документ
+    var blocks = text.blocks || [];
+    if (!blocks.length) blocks = parseContentToBlocksServer(text.content);
+
+    for (var i = 0; i < blocks.length; i++) {
+      var b = blocks[i];
+      var cleanText = b.content.replace(/<[^>]+>/g, '').trim();
+      if (!cleanText) continue;
+
+      if (b.type === 'heading') {
+        var heading = DocumentApp.ParagraphHeading.HEADING2;
+        if (b.tag === 'h1') heading = DocumentApp.ParagraphHeading.HEADING1;
+        else if (b.tag === 'h3') heading = DocumentApp.ParagraphHeading.HEADING3;
+        body.appendParagraph(cleanText).setHeading(heading);
+      } else if (b.type === 'list') {
+        var liRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+        var liMatch;
+        while ((liMatch = liRegex.exec(b.content)) !== null) {
+          body.appendListItem(liMatch[1].replace(/<[^>]+>/g, '').trim());
+        }
+      } else {
+        body.appendParagraph(cleanText);
+      }
+    }
+
+    doc.saveAndClose();
+
+    // Перемістити файл в папку спеціаліста
+    var file = DriveApp.getFileById(doc.getId());
+    file.moveTo(specialistFolder);
+
+    var url = doc.getUrl();
+
+    // Зберегти URL в БД
+    callSQL("UPDATE textgen.generated_texts SET gdoc_url=" + escSQL(url) + " WHERE id=" + textId);
+
+    return url;
+  } catch (e) {
+    throw new Error('Помилка збереження в Google Doc: ' + e.message);
   }
 }
 
