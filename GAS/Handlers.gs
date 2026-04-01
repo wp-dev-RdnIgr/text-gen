@@ -214,7 +214,9 @@ function generateTextWithAI(taskId, assembledPrompt, fieldValues) {
   }
 }
 
-// --- Зберігання в Google Doc ---
+var N8N_GDOC_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-save-gdoc';
+
+// --- Зберігання в Google Doc (через n8n) ---
 
 function saveToGoogleDoc(textId) {
   try {
@@ -222,58 +224,44 @@ function saveToGoogleDoc(textId) {
     if (!text) throw new Error('Текст не знайдено');
     if (!text.content) throw new Error('Немає контенту');
 
-    // Знайти задачу для отримання email
     var task = getTask(text.task_id);
     var email = (task && task.specialist_email) ? task.specialist_email.trim() : 'unknown';
-    var folderName = email || 'unknown';
+    var title = (task ? task.name : 'TextGen') + ' — ' + new Date().toLocaleDateString('uk-UA');
 
-    // Знайти/створити папку спеціаліста
-    var rootFolder = DriveApp.getFolderById(GDRIVE_ROOT_FOLDER);
-    var specialistFolder = null;
-    var folders = rootFolder.getFoldersByName(folderName);
-    if (folders.hasNext()) {
-      specialistFolder = folders.next();
-    } else {
-      specialistFolder = rootFolder.createFolder(folderName);
-    }
+    // Очистити HTML для Google Docs (plain text з розмітою)
+    var plainContent = text.content
+      .replace(/<h1[^>]*>/gi, '# ')
+      .replace(/<\/h1>/gi, '\n\n')
+      .replace(/<h2[^>]*>/gi, '## ')
+      .replace(/<\/h2>/gi, '\n\n')
+      .replace(/<h3[^>]*>/gi, '### ')
+      .replace(/<\/h3>/gi, '\n\n')
+      .replace(/<li[^>]*>/gi, '• ')
+      .replace(/<\/li>/gi, '\n')
+      .replace(/<p[^>]*>/gi, '')
+      .replace(/<\/p>/gi, '\n\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
 
-    // Створити Google Doc
-    var docTitle = (task ? task.name : 'TextGen') + ' — ' + new Date().toLocaleDateString('uk-UA');
-    var doc = DocumentApp.create(docTitle);
-    var body = doc.getBody();
+    var response = UrlFetchApp.fetch(N8N_GDOC_URL, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({
+        content: plainContent,
+        title: title,
+        specialistEmail: email
+      }),
+      muteHttpExceptions: true
+    });
 
-    // Парсити блоки і додати в документ
-    var blocks = text.blocks || [];
-    if (!blocks.length) blocks = parseContentToBlocksServer(text.content);
+    var code = response.getResponseCode();
+    var body = response.getContentText();
+    if (code !== 200 || !body) throw new Error('n8n error (' + code + '): ' + (body || 'empty').substring(0, 200));
 
-    for (var i = 0; i < blocks.length; i++) {
-      var b = blocks[i];
-      var cleanText = b.content.replace(/<[^>]+>/g, '').trim();
-      if (!cleanText) continue;
-
-      if (b.type === 'heading') {
-        var heading = DocumentApp.ParagraphHeading.HEADING2;
-        if (b.tag === 'h1') heading = DocumentApp.ParagraphHeading.HEADING1;
-        else if (b.tag === 'h3') heading = DocumentApp.ParagraphHeading.HEADING3;
-        body.appendParagraph(cleanText).setHeading(heading);
-      } else if (b.type === 'list') {
-        var liRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
-        var liMatch;
-        while ((liMatch = liRegex.exec(b.content)) !== null) {
-          body.appendListItem(liMatch[1].replace(/<[^>]+>/g, '').trim());
-        }
-      } else {
-        body.appendParagraph(cleanText);
-      }
-    }
-
-    doc.saveAndClose();
-
-    // Перемістити файл в папку спеціаліста
-    var file = DriveApp.getFileById(doc.getId());
-    file.moveTo(specialistFolder);
-
-    var url = doc.getUrl();
+    var result = JSON.parse(body);
+    var url = Array.isArray(result) ? (result[0] && result[0].url) : result.url;
+    if (!url) throw new Error('Не отримано URL документа');
 
     // Зберегти URL в БД
     callSQL("UPDATE textgen.generated_texts SET gdoc_url=" + escSQL(url) + " WHERE id=" + textId);
