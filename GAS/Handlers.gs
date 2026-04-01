@@ -64,7 +64,8 @@ function getClients() {
 }
 
 function saveClient(d) {
-  return callCrudApi('saveClient', d);
+  var rows = callCrudApi('saveClient', d);
+  return Array.isArray(rows) ? rows[0] : rows;
 }
 
 function deleteClient(clientId) {
@@ -84,7 +85,8 @@ function getTask(taskId) {
 }
 
 function saveTask(d) {
-  return callCrudApi('saveTask', d);
+  var rows = callCrudApi('saveTask', d);
+  return Array.isArray(rows) ? rows[0] : rows;
 }
 
 function deleteTask(taskId) {
@@ -93,7 +95,8 @@ function deleteTask(taskId) {
 }
 
 function updateTask(taskId, updates) {
-  return callCrudApi('updateTask', { id: taskId, updates: updates });
+  var rows = callCrudApi('updateTask', { id: taskId, updates: updates });
+  return Array.isArray(rows) ? rows[0] : rows;
 }
 
 // --- Шаблони задач ---
@@ -108,7 +111,8 @@ function getTaskTemplate(id) {
 }
 
 function saveTaskTemplate(d) {
-  return callCrudApi('saveTaskTemplate', d);
+  var rows = callCrudApi('saveTaskTemplate', d);
+  return Array.isArray(rows) ? rows[0] : rows;
 }
 
 function deleteTaskTemplate(id) {
@@ -128,7 +132,8 @@ function getGeneratedText(textId) {
 }
 
 function updateGeneratedText(textId, updates) {
-  return callCrudApi('updateGeneratedText', { id: textId, updates: updates });
+  var rows = callCrudApi('updateGeneratedText', { id: textId, updates: updates });
+  return Array.isArray(rows) ? rows[0] : rows;
 }
 
 function deleteGeneratedText(textId) {
