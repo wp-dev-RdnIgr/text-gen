@@ -36,6 +36,12 @@
       <div id="task-tab-generate" class="task-tab-content" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
         <div style="flex:1;overflow-y:auto;padding:24px;">
 
+          <!-- Спеціаліст -->
+          <div style="margin-bottom:12px;">
+            <label class="field-label">Спеціаліст (email)</label>
+            <input type="email" id="task-specialist-email" class="input-field" placeholder="name@company.com" onchange="saveSpecialistEmail()" style="max-width:350px;">
+          </div>
+
           <!-- Ядровые поля -->
           <div id="core-fields-section" class="core-fields-grid">
             <div class="core-field" id="cf-url" style="grid-column:1/-1;">
@@ -94,7 +100,8 @@
             </div>
             <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
               <button class="btn btn-blue btn-sm" onclick="openEditorForLastGen()">Відкрити в редакторі</button>
-              <button class="btn btn-sm btn-primary" onclick="showToast('Збереження в Google Doc буде доступне в повній версії','info')">Зберегти в Google Doc</button>
+              <button class="btn btn-sm btn-primary" id="btn-save-gdoc" onclick="saveLastGenToGDoc()">Зберегти в Google Doc</button>
+              <a id="gen-gdoc-link" href="#" target="_blank" style="display:none;font-size:12px;color:#1A5FB4;">Відкрити документ</a>
               <button class="btn btn-sm" onclick="clearGenResult()">Нова генерація</button>
             </div>
           </div>
