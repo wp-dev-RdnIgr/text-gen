@@ -6,6 +6,8 @@
 var N8N_API_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-api';
 var N8N_SQL_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-sql';
 var N8N_GEN_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-generate';
+var N8N_PROMPT_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-prompt';
+var N8N_GDOC_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-save-gdoc';
 var GDRIVE_ROOT_FOLDER = '1Oj6hpJwRQnYwrKQM_NNOA9kIw5wP_oM6';
 
 // --- Хелперы ---
@@ -61,6 +63,32 @@ function callGenApi(action, params) {
   var data = JSON.parse(text);
   if (Array.isArray(data)) return data[0] || {};
   return data;
+}
+
+/**
+ * Чистий Prompt Engine — промпти передаються БЕЗ модифікацій
+ */
+function callPromptEngine(systemPrompt, userPrompt, options) {
+  var payload = {
+    systemPrompt: systemPrompt || '',
+    userPrompt: userPrompt || '',
+    model: (options && options.model) || 'gpt-4o-mini',
+    temperature: (options && options.temperature) || 0.7,
+    maxTokens: (options && options.maxTokens) || 4000,
+    action: (options && options.action) || 'generate',
+    taskId: (options && options.taskId) || null,
+    textId: (options && options.textId) || null
+  };
+  var response = UrlFetchApp.fetch(N8N_PROMPT_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+  var code = response.getResponseCode();
+  var text = response.getContentText();
+  if (code !== 200 || !text) throw new Error('Prompt Engine error (' + code + ')');
+  return JSON.parse(text);
 }
 
 function escSQL(s) {
@@ -174,14 +202,12 @@ function generateTextWithAI(taskId, assembledPrompt, fieldValues) {
     var task = getTask(taskId);
     if (!task) throw new Error('Задачу не знайдено');
 
-    // Викликаємо n8n AI генерацію
-    var aiResult = callGenApi('generateTextWithAI', {
-      taskId: taskId,
-      assembledPrompt: assembledPrompt,
-      fieldValues: fieldValues || {},
-      systemPrompt: task.system_prompt || '',
-      userPrompt: task.user_prompt || ''
-    });
+    // Чистий Prompt Engine — промпти йдуть БЕЗ модифікацій
+    var aiResult = callPromptEngine(
+      task.system_prompt || '',   // системний промт як є
+      assembledPrompt,             // зібраний користувацький промт як є
+      { action: 'generate', taskId: taskId }
+    );
 
     var rawContent = aiResult.content || '';
 
@@ -279,14 +305,21 @@ function regenerateBlockWithAI(textId, blockIndex, comment) {
     var blocks = text.blocks || [];
     if (blockIndex >= blocks.length) throw new Error('Блок не знайдено');
 
-    var aiResult = callGenApi('regenerateBlockWithAI', {
-      textId: textId,
-      blockIndex: blockIndex,
-      comment: comment || '',
-      usedSystemPrompt: text.used_system_prompt || '',
-      blocks: blocks,
-      regenerationCount: text.regeneration_count || 0
-    });
+    // Побудувати промпт для блоку
+    var contextBlocks = [];
+    for (var i = 0; i < blocks.length; i++) {
+      contextBlocks.push((i === blockIndex ? '[ПЕРЕПИСАТИ]: ' : '') + blocks[i].content);
+    }
+    var blockPrompt = 'Перепиши ТІЛЬКИ виділений блок.\n\nКонтекст:\n' + contextBlocks.join('\n\n') +
+      '\n\nБлок: "' + blocks[blockIndex].content + '"' +
+      (comment ? '\nКоментар: ' + comment : '') +
+      '\n\nВідповідай ТІЛЬКИ переписаним блоком, без HTML, без пояснень.';
+
+    var aiResult = callPromptEngine(
+      text.used_system_prompt || '',
+      blockPrompt,
+      { action: 'regenerateBlock', textId: textId }
+    );
 
     var newContent = (aiResult.content || '').replace(/<[^>]+>/g, '').trim();
     blocks[blockIndex].content = newContent;
@@ -311,13 +344,14 @@ function regenerateFullTextWithAI(textId, comment) {
     var text = getGeneratedText(textId);
     if (!text) throw new Error('Текст не знайдено');
 
-    var aiResult = callGenApi('regenerateFullTextWithAI', {
-      textId: textId,
-      comment: comment || '',
-      userInput: text.user_input || '',
-      usedSystemPrompt: text.used_system_prompt || '',
-      regenerationCount: text.regeneration_count || 0
-    });
+    var fullPrompt = text.user_input || '';
+    if (comment) fullPrompt += '\n\nДодаткові інструкції:\n' + comment;
+
+    var aiResult = callPromptEngine(
+      text.used_system_prompt || '',
+      fullPrompt,
+      { action: 'regenerateFull', textId: textId }
+    );
 
     var rawContent = aiResult.content || '';
     if (rawContent.indexOf('<') === -1) {
