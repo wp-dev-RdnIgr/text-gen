@@ -75,6 +75,7 @@ function callPromptEngine(systemPrompt, userPrompt, options) {
     model: (options && options.model) || 'gpt-4o-mini',
     temperature: (options && options.temperature) || 0.7,
     maxTokens: (options && options.maxTokens) || 4000,
+    humanize: (options && options.humanize) || false,
     action: (options && options.action) || 'generate',
     taskId: (options && options.taskId) || null,
     textId: (options && options.textId) || null
@@ -234,10 +235,12 @@ function generateTextWithAI(taskId, assembledPrompt, fieldValues) {
     if (!task) throw new Error('Задачу не знайдено');
 
     // Чистий Prompt Engine — промпти йдуть БЕЗ модифікацій
+    // Гуманізація відбувається в n8n якщо humanize=true
+    var opts = task.options || {};
     var aiResult = callPromptEngine(
-      task.system_prompt || '',   // системний промт як є
-      assembledPrompt,             // зібраний користувацький промт як є
-      { action: 'generate', taskId: taskId }
+      task.system_prompt || '',
+      assembledPrompt,
+      { action: 'generate', taskId: taskId, humanize: !!opts.humanize }
     );
 
     var rawContent = aiResult.content || '';
@@ -253,31 +256,6 @@ function generateTextWithAI(taskId, assembledPrompt, fieldValues) {
         }
         return '<p>' + p + '</p>';
       }).join('\n');
-    }
-
-    // Гуманізація (якщо увімкнено в опціях задачі)
-    var opts = task.options || {};
-    if (opts.humanize) {
-      var humanizeResult = callPromptEngine(
-        HUMANIZER_SYSTEM_PROMPT,
-        'Humanize the following text. Keep the same language. Preserve HTML tags (h1, h2, h3, p, ul, li).\n\n' + rawContent,
-        { action: 'humanize', taskId: taskId }
-      );
-      if (humanizeResult.content) {
-        rawContent = humanizeResult.content;
-        // Повторна конвертація якщо гуманізатор повернув не-HTML
-        if (rawContent.indexOf('<') === -1) {
-          rawContent = rawContent.split(/\n\n+/).map(function(p) {
-            p = p.trim();
-            if (!p) return '';
-            if (p.match(/^#{1,3}\s/)) {
-              var level = p.match(/^(#{1,3})\s/)[1].length;
-              return '<h' + level + '>' + p.replace(/^#{1,3}\s/, '') + '</h' + level + '>';
-            }
-            return '<p>' + p + '</p>';
-          }).join('\n');
-        }
-      }
     }
 
     // Парсинг блоків
