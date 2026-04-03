@@ -198,6 +198,52 @@ function deleteGeneratedText(textId) {
   return true;
 }
 
+// --- Voice Clone: аналіз голосового профілю ---
+
+function analyzeVoiceProfile(taskId, referenceTexts) {
+  try {
+    var result = callPromptEngine('', referenceTexts.join('\n\n---\n\n'), {
+      action: 'analyzeVoice',
+      taskId: taskId
+    });
+    var profile = result.content || '';
+    // Зберегти профіль і референси в задачу
+    callSQL("UPDATE textgen.tasks SET voice_profile=" + escSQL(profile) +
+      ", reference_texts=" + jsonSQL(referenceTexts) +
+      " WHERE id=" + taskId);
+    return profile;
+  } catch (e) {
+    throw new Error('Помилка аналізу голосу: ' + e.message);
+  }
+}
+
+// --- Interview: генерація питань ---
+
+function generateInterviewQuestions(taskId, topic) {
+  try {
+    var result = callPromptEngine('', topic, {
+      action: 'generateInterview',
+      taskId: taskId
+    });
+    // Парсити JSON масив питань
+    var raw = (result.content || '').trim();
+    try {
+      var questions = JSON.parse(raw);
+      if (Array.isArray(questions)) return questions;
+    } catch(e2) {}
+    // Fallback: розбити по рядках
+    var lines = raw.split('\n');
+    var questions = [];
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].replace(/^\d+[\.\)]\s*/, '').replace(/^[-•]\s*/, '').trim();
+      if (line.length > 10) questions.push(line);
+    }
+    return questions.length ? questions : ['Розкажіть про ваш досвід з цією темою', 'Які конкретні цифри або приклади ви можете навести?', 'Що не спрацювало і які уроки ви винесли?'];
+  } catch (e) {
+    throw new Error('Помилка генерації питань: ' + e.message);
+  }
+}
+
 // --- Генерація через OpenAI (n8n) ---
 
 function generateTextWithAI(taskId, assembledPrompt, fieldValues) {
@@ -205,13 +251,30 @@ function generateTextWithAI(taskId, assembledPrompt, fieldValues) {
     var task = getTask(taskId);
     if (!task) throw new Error('Задачу не знайдено');
 
-    // Чистий Prompt Engine — промпти йдуть БЕЗ модифікацій
-    // Гуманізація відбувається в n8n якщо humanize=true
     var opts = task.options || {};
+    var systemPrompt = task.system_prompt || '';
+    var userPrompt = assembledPrompt;
+
+    // Інжекція voice profile в system prompt
+    if (opts.voice_clone && task.voice_profile) {
+      systemPrompt += '\n\n=== VOICE PROFILE ===\n' + task.voice_profile + '\n=== END VOICE PROFILE ===';
+    }
+
+    // Інжекція interview answers в user prompt
+    if (task.interview_answers && task.interview_answers.length) {
+      var interviewBlock = '\n\n=== INTERVIEW ANSWERS (use these real experiences in the text) ===\n';
+      for (var i = 0; i < task.interview_answers.length; i++) {
+        var qa = task.interview_answers[i];
+        interviewBlock += 'Q: ' + qa.question + '\nA: ' + qa.answer + '\n\n';
+      }
+      interviewBlock += '=== END INTERVIEW ===';
+      userPrompt += interviewBlock;
+    }
+
     var aiResult = callPromptEngine(
-      task.system_prompt || '',
-      assembledPrompt,
-      { action: 'generate', taskId: taskId, humanize: !!opts.humanize }
+      systemPrompt,
+      userPrompt,
+      { action: 'generate', taskId: taskId, humanize: !!opts.humanize, voiceClone: !!opts.voice_clone }
     );
 
     var rawContent = aiResult.content || '';
@@ -234,7 +297,7 @@ function generateTextWithAI(taskId, assembledPrompt, fieldValues) {
 
     // Зберегти в БД
     var rows = callSQL("INSERT INTO textgen.generated_texts (task_id, user_input, used_system_prompt, used_user_prompt, used_llm_model, used_field_values, content, blocks, status) VALUES (" +
-      taskId + "," + escSQL(assembledPrompt) + "," + escSQL(task.system_prompt) + "," + escSQL(task.user_prompt) + ",'GPT-4o-mini'," + jsonSQL(fieldValues) + "," + escSQL(rawContent) + "," + jsonSQL(blocks) + ",'completed') RETURNING *");
+      taskId + "," + escSQL(assembledPrompt) + "," + escSQL(systemPrompt) + "," + escSQL(userPrompt) + ",'GPT-4o-mini'," + jsonSQL(fieldValues) + "," + escSQL(rawContent) + "," + jsonSQL(blocks) + ",'completed') RETURNING *");
     return rows[0];
   } catch (e) {
     try {
