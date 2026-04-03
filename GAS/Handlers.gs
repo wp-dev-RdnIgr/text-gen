@@ -4,11 +4,8 @@
 // ===========================================
 
 var N8N_API_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-api';
-var N8N_SQL_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-sql';
-var N8N_GEN_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-generate';
 var N8N_PROMPT_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-prompt';
 var N8N_GDOC_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-save-gdoc';
-var GDRIVE_ROOT_FOLDER = '1Oj6hpJwRQnYwrKQM_NNOA9kIw5wP_oM6';
 
 // --- Хелперы ---
 
@@ -33,40 +30,12 @@ function callCrudApi(action, params) {
   }
 }
 
-function callSQL(query) {
-  try {
-    var response = UrlFetchApp.fetch(N8N_SQL_URL, {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify({ query: query }),
-      muteHttpExceptions: true
-    });
-    var code = response.getResponseCode();
-    var text = response.getContentText();
-    if (code !== 200) throw new Error('SQL error ' + code + ': ' + text.substring(0, 200));
-    if (!text) return [];
-    return JSON.parse(text);
-  } catch (e) {
-    throw new Error('callSQL: ' + e.message);
-  }
-}
+// callSQL видалено — весь SQL тепер в n8n
 
-function callGenApi(action, params) {
-  var response = UrlFetchApp.fetch(N8N_GEN_URL, {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify({ action: action, params: params || {} }),
-    muteHttpExceptions: true
-  });
-  var text = response.getContentText();
-  if (!text) throw new Error('Порожня відповідь від AI сервісу');
-  var data = JSON.parse(text);
-  if (Array.isArray(data)) return data[0] || {};
-  return data;
-}
+// callGenApi видалено — AI тепер через Prompt Engine
 
 /**
- * Чистий Prompt Engine — промпти передаються БЕЗ модифікацій
+ * Prompt Engine — тонкий прокси до n8n, вся логіка там
  */
 function callPromptEngine(systemPrompt, userPrompt, options) {
   var payload = {
@@ -78,7 +47,12 @@ function callPromptEngine(systemPrompt, userPrompt, options) {
     humanize: (options && options.humanize) || false,
     action: (options && options.action) || 'generate',
     taskId: (options && options.taskId) || null,
-    textId: (options && options.textId) || null
+    textId: (options && options.textId) || null,
+    fieldValues: (options && options.fieldValues) || {},
+    referenceTexts: (options && options.referenceTexts) || [],
+    topic: (options && options.topic) || '',
+    blockIndex: (options && options.blockIndex != null) ? options.blockIndex : null,
+    comment: (options && options.comment) || ''
   };
   var response = UrlFetchApp.fetch(N8N_PROMPT_URL, {
     method: 'post',
@@ -92,17 +66,7 @@ function callPromptEngine(systemPrompt, userPrompt, options) {
   return JSON.parse(text);
 }
 
-// Humanizer prompt is now fully in n8n Prompt Engine (29 patterns, 27K chars)
-
-function escSQL(s) {
-  if (s === null || s === undefined) return 'NULL';
-  return "'" + String(s).replace(/'/g, "''") + "'";
-}
-
-function jsonSQL(obj) {
-  if (!obj) return "'{}'::jsonb";
-  return "'" + JSON.stringify(obj).replace(/'/g, "''") + "'::jsonb";
-}
+// escSQL, jsonSQL видалено — весь SQL тепер в n8n
 
 // --- Клиенты ---
 
@@ -198,296 +162,97 @@ function deleteGeneratedText(textId) {
   return true;
 }
 
-// --- Voice Clone: аналіз голосового профілю ---
+// --- Voice Clone: аналіз голосового профілю (бекенд в n8n) ---
 
 function analyzeVoiceProfile(taskId, referenceTexts) {
-  try {
-    var result = callPromptEngine('', referenceTexts.join('\n\n---\n\n'), {
-      action: 'analyzeVoice',
-      taskId: taskId
-    });
-    var profile = result.content || '';
-    // Зберегти профіль і референси в задачу
-    callSQL("UPDATE textgen.tasks SET voice_profile=" + escSQL(profile) +
-      ", reference_texts=" + jsonSQL(referenceTexts) +
-      " WHERE id=" + taskId);
-    return profile;
-  } catch (e) {
-    throw new Error('Помилка аналізу голосу: ' + e.message);
-  }
+  var result = callPromptEngine('', referenceTexts.join('\n\n---\n\n'), {
+    action: 'analyzeVoice',
+    taskId: taskId,
+    referenceTexts: referenceTexts
+  });
+  return result.content || '';
 }
 
-// --- Interview: генерація питань ---
+// --- Interview: генерація питань (бекенд в n8n) ---
 
 function generateInterviewQuestions(taskId, topic) {
-  try {
-    var result = callPromptEngine('', topic, {
-      action: 'generateInterview',
-      taskId: taskId
-    });
-    // Парсити JSON масив питань
-    var raw = (result.content || '').trim();
-    try {
-      var questions = JSON.parse(raw);
-      if (Array.isArray(questions)) return questions;
-    } catch(e2) {}
-    // Fallback: розбити по рядках
-    var lines = raw.split('\n');
-    var questions = [];
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i].replace(/^\d+[\.\)]\s*/, '').replace(/^[-•]\s*/, '').trim();
-      if (line.length > 10) questions.push(line);
-    }
-    return questions.length ? questions : ['Розкажіть про ваш досвід з цією темою', 'Які конкретні цифри або приклади ви можете навести?', 'Що не спрацювало і які уроки ви винесли?'];
-  } catch (e) {
-    throw new Error('Помилка генерації питань: ' + e.message);
-  }
+  var result = callPromptEngine('', topic, {
+    action: 'generateInterview',
+    taskId: taskId,
+    topic: topic
+  });
+  return result.questions || JSON.parse(result.content || '[]');
 }
 
-// --- Генерація через OpenAI (n8n) ---
+// --- Генерація тексту (бекенд повністю в n8n) ---
 
 function generateTextWithAI(taskId, assembledPrompt, fieldValues) {
-  try {
-    var task = getTask(taskId);
-    if (!task) throw new Error('Задачу не знайдено');
-
-    var opts = task.options || {};
-    var systemPrompt = task.system_prompt || '';
-    var userPrompt = assembledPrompt;
-
-    // Інжекція voice profile в system prompt
-    if (opts.voice_clone && task.voice_profile) {
-      systemPrompt += '\n\n=== VOICE PROFILE ===\n' + task.voice_profile + '\n=== END VOICE PROFILE ===';
-    }
-
-    // Інжекція interview answers в user prompt
-    if (task.interview_answers && task.interview_answers.length) {
-      var interviewBlock = '\n\n=== INTERVIEW ANSWERS (use these real experiences in the text) ===\n';
-      for (var i = 0; i < task.interview_answers.length; i++) {
-        var qa = task.interview_answers[i];
-        interviewBlock += 'Q: ' + qa.question + '\nA: ' + qa.answer + '\n\n';
-      }
-      interviewBlock += '=== END INTERVIEW ===';
-      userPrompt += interviewBlock;
-    }
-
-    var aiResult = callPromptEngine(
-      systemPrompt,
-      userPrompt,
-      { action: 'generate', taskId: taskId, humanize: !!opts.humanize, voiceClone: !!opts.voice_clone }
-    );
-
-    var rawContent = aiResult.content || '';
-
-    // Конвертація в HTML якщо потрібно
-    if (rawContent.indexOf('<') === -1) {
-      rawContent = rawContent.split(/\n\n+/).map(function(p) {
-        p = p.trim();
-        if (!p) return '';
-        if (p.match(/^#{1,3}\s/)) {
-          var level = p.match(/^(#{1,3})\s/)[1].length;
-          return '<h' + level + '>' + p.replace(/^#{1,3}\s/, '') + '</h' + level + '>';
-        }
-        return '<p>' + p + '</p>';
-      }).join('\n');
-    }
-
-    // Парсинг блоків
-    var blocks = parseContentToBlocksServer(rawContent);
-
-    // Зберегти в БД
-    var rows = callSQL("INSERT INTO textgen.generated_texts (task_id, user_input, used_system_prompt, used_user_prompt, used_llm_model, used_field_values, content, blocks, status) VALUES (" +
-      taskId + "," + escSQL(assembledPrompt) + "," + escSQL(systemPrompt) + "," + escSQL(userPrompt) + ",'GPT-4o-mini'," + jsonSQL(fieldValues) + "," + escSQL(rawContent) + "," + jsonSQL(blocks) + ",'completed') RETURNING *");
-    return rows[0];
-  } catch (e) {
-    try {
-      callSQL("INSERT INTO textgen.generated_texts (task_id, user_input, used_llm_model, status, error_message) VALUES (" +
-        taskId + "," + escSQL(assembledPrompt) + ",'GPT-4o-mini','failed'," + escSQL(e.message) + ")");
-    } catch(e2) {}
-    throw new Error('Помилка генерації: ' + e.message);
-  }
+  var result = callPromptEngine(
+    '',
+    assembledPrompt,
+    { action: 'generate', taskId: taskId, fieldValues: fieldValues }
+  );
+  return result;
 }
-
-var N8N_GDOC_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-save-gdoc';
 
 // --- Зберігання в Google Doc (через n8n) ---
 
 function saveToGoogleDoc(textId) {
-  try {
-    var text = getGeneratedText(textId);
-    if (!text) throw new Error('Текст не знайдено');
-    if (!text.content) throw new Error('Немає контенту');
+  var response = UrlFetchApp.fetch(N8N_GDOC_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({ textId: textId }),
+    muteHttpExceptions: true
+  });
 
-    var task = getTask(text.task_id);
-    var email = (task && task.specialist_email) ? task.specialist_email.trim() : 'unknown';
-    var title = (task ? task.name : 'TextGen') + ' — ' + new Date().toLocaleDateString('uk-UA');
+  var code = response.getResponseCode();
+  var body = response.getContentText();
+  if (code !== 200 || !body) throw new Error('n8n error (' + code + '): ' + (body || 'empty').substring(0, 200));
 
-    // Очистити HTML для Google Docs (plain text з розмітою)
-    var plainContent = text.content
-      .replace(/<h1[^>]*>/gi, '# ')
-      .replace(/<\/h1>/gi, '\n\n')
-      .replace(/<h2[^>]*>/gi, '## ')
-      .replace(/<\/h2>/gi, '\n\n')
-      .replace(/<h3[^>]*>/gi, '### ')
-      .replace(/<\/h3>/gi, '\n\n')
-      .replace(/<li[^>]*>/gi, '• ')
-      .replace(/<\/li>/gi, '\n')
-      .replace(/<p[^>]*>/gi, '')
-      .replace(/<\/p>/gi, '\n\n')
-      .replace(/<[^>]+>/g, '')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-
-    var response = UrlFetchApp.fetch(N8N_GDOC_URL, {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify({
-        content: plainContent,
-        title: title,
-        specialistEmail: email
-      }),
-      muteHttpExceptions: true
-    });
-
-    var code = response.getResponseCode();
-    var body = response.getContentText();
-    if (code !== 200 || !body) throw new Error('n8n error (' + code + '): ' + (body || 'empty').substring(0, 200));
-
-    var result = JSON.parse(body);
-    var url = result.url || (Array.isArray(result) ? (result[0] && result[0].url) : null);
-    if (!url) throw new Error('Не отримано URL документа');
-
-    // Зберегти URL в БД
-    callSQL("UPDATE textgen.generated_texts SET gdoc_url=" + escSQL(url) + " WHERE id=" + textId);
-
-    return url;
-  } catch (e) {
-    throw new Error('Помилка збереження в Google Doc: ' + e.message);
-  }
+  var result = JSON.parse(body);
+  return result.url || (Array.isArray(result) ? (result[0] && result[0].url) : null) || '';
 }
+
+// --- Регенерація блоку (бекенд в n8n) ---
 
 function regenerateBlockWithAI(textId, blockIndex, comment) {
-  try {
-    var text = getGeneratedText(textId);
-    if (!text) throw new Error('Текст не знайдено');
-    var blocks = text.blocks || [];
-    if (blockIndex >= blocks.length) throw new Error('Блок не знайдено');
-
-    // Побудувати промпт для блоку
-    var contextBlocks = [];
-    for (var i = 0; i < blocks.length; i++) {
-      contextBlocks.push((i === blockIndex ? '[ПЕРЕПИСАТИ]: ' : '') + blocks[i].content);
-    }
-    var blockPrompt = 'Перепиши ТІЛЬКИ виділений блок.\n\nКонтекст:\n' + contextBlocks.join('\n\n') +
-      '\n\nБлок: "' + blocks[blockIndex].content + '"' +
-      (comment ? '\nКоментар: ' + comment : '') +
-      '\n\nВідповідай ТІЛЬКИ переписаним блоком, без HTML, без пояснень.';
-
-    var aiResult = callPromptEngine(
-      text.used_system_prompt || '',
-      blockPrompt,
-      { action: 'regenerateBlock', textId: textId }
-    );
-
-    var newContent = (aiResult.content || '').replace(/<[^>]+>/g, '').trim();
-    blocks[blockIndex].content = newContent;
-
-    var fullContent = blocks.map(function(b) {
-      if (b.type === 'heading') return '<' + b.tag + '>' + b.content + '</' + b.tag + '>';
-      if (b.type === 'list') return b.content;
-      return '<p>' + b.content + '</p>';
-    }).join('\n');
-
-    var rows = callSQL("UPDATE textgen.generated_texts SET content=" + escSQL(fullContent) +
-      ", blocks=" + jsonSQL(blocks) + ", regeneration_count=" + ((text.regeneration_count || 0) + 1) +
-      " WHERE id=" + textId + " RETURNING *");
-    return rows[0];
-  } catch (e) {
-    throw new Error('Помилка регенерації блоку: ' + e.message);
-  }
+  var result = callPromptEngine('', '', {
+    action: 'regenerateBlock',
+    textId: textId,
+    blockIndex: blockIndex,
+    comment: comment || ''
+  });
+  return result;
 }
+
+// --- Повна перегенерація (бекенд в n8n) ---
 
 function regenerateFullTextWithAI(textId, comment) {
-  try {
-    var text = getGeneratedText(textId);
-    if (!text) throw new Error('Текст не знайдено');
-
-    var fullPrompt = text.user_input || '';
-    if (comment) fullPrompt += '\n\nДодаткові інструкції:\n' + comment;
-
-    var aiResult = callPromptEngine(
-      text.used_system_prompt || '',
-      fullPrompt,
-      { action: 'regenerateFull', textId: textId }
-    );
-
-    var rawContent = aiResult.content || '';
-    if (rawContent.indexOf('<') === -1) {
-      rawContent = rawContent.split(/\n\n+/).map(function(p) {
-        p = p.trim();
-        if (!p) return '';
-        if (p.match(/^#{1,3}\s/)) {
-          var level = p.match(/^(#{1,3})\s/)[1].length;
-          return '<h' + level + '>' + p.replace(/^#{1,3}\s/, '') + '</h' + level + '>';
-        }
-        return '<p>' + p + '</p>';
-      }).join('\n');
-    }
-
-    var blocks = parseContentToBlocksServer(rawContent);
-
-    var rows = callSQL("UPDATE textgen.generated_texts SET content=" + escSQL(rawContent) +
-      ", blocks=" + jsonSQL(blocks) + ", regeneration_count=" + ((text.regeneration_count || 0) + 1) +
-      (comment ? ", comment=" + escSQL(comment) : '') +
-      " WHERE id=" + textId + " RETURNING *");
-    return rows[0];
-  } catch (e) {
-    throw new Error('Помилка перегенерації: ' + e.message);
-  }
+  var result = callPromptEngine('', '', {
+    action: 'regenerateFull',
+    textId: textId,
+    comment: comment || ''
+  });
+  return result;
 }
 
-// --- AI маппінг колонок ---
+// --- AI маппінг колонок (через Prompt Engine) ---
 
 function mapSheetRowToFields(sheetHeaders, rowCells, taskFieldNames) {
-  try {
-    var aiResult = callGenApi('mapSheetRowToFields', {
-      sheetHeaders: sheetHeaders,
-      rowCells: rowCells,
-      taskFieldNames: taskFieldNames
-    });
-
-    var content = aiResult.content || '';
-    content = content.trim().replace(/```json\s*/g, '').replace(/```\s*/g, '');
-    return JSON.parse(content);
-  } catch (e) {
-    throw new Error('Помилка маппінгу: ' + e.message);
-  }
+  var prompt = 'Map these sheet columns to task fields.\nSheet headers: ' + JSON.stringify(sheetHeaders) +
+    '\nRow data: ' + JSON.stringify(rowCells) +
+    '\nTask fields: ' + JSON.stringify(taskFieldNames) +
+    '\nReturn ONLY a JSON object mapping task field names to cell values.';
+  var result = callPromptEngine(
+    'You are a data mapper. Return only valid JSON, no explanation.',
+    prompt,
+    { action: 'generate', maxTokens: 1000 }
+  );
+  var content = (result.content || '').trim().replace(/```json\s*/g, '').replace(/```\s*/g, '');
+  return JSON.parse(content);
 }
 
-// --- Парсинг HTML → блоки ---
-
-function parseContentToBlocksServer(html) {
-  if (!html) return [];
-  var blocks = [];
-  var tagRegex = /<(h[1-3]|p|ul|ol)[^>]*>([\s\S]*?)<\/\1>/gi;
-  var match, idx = 0;
-  while ((match = tagRegex.exec(html)) !== null) {
-    var tag = match[1].toLowerCase();
-    var content = match[2].trim();
-    if (!content) continue;
-    var type = (tag === 'h1' || tag === 'h2' || tag === 'h3') ? 'heading' : (tag === 'ul' || tag === 'ol') ? 'list' : 'paragraph';
-    blocks.push({ id: 'b_' + Date.now() + '_' + idx, type: type, tag: tag, content: type === 'list' ? match[0] : content });
-    idx++;
-  }
-  if (!blocks.length) {
-    var lines = html.split(/\n\n+/);
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i].trim();
-      if (line) blocks.push({ id: 'b_' + Date.now() + '_' + i, type: 'paragraph', tag: 'p', content: line.replace(/<[^>]+>/g, '') });
-    }
-  }
-  return blocks;
-}
+// parseContentToBlocksServer видалено — парсинг блоків тепер в n8n
 
 // --- Google Sheets Import (залишаємо в GAS — нативний доступ) ---
 
@@ -557,15 +322,7 @@ function getSheetRows(sheetUrl) {
   return { headers: headers, rows: rows };
 }
 
-// --- API Key (залишаємо в GAS для сумісності з UI) ---
-
-function setOpenAIKey(key) {
-  PropertiesService.getScriptProperties().setProperty('OPENAI_API_KEY', key);
-  return 'OK';
-}
-
 function hasOpenAIKey() {
-  // OpenAI тепер в n8n — завжди true
   return true;
 }
 
@@ -573,7 +330,11 @@ function hasOpenAIKey() {
 
 function getAllDataForDashboard(clientId) {
   if (!clientId) return { client: null, tasks: [] };
-  var clientRows = callSQL("SELECT * FROM textgen.clients WHERE id=" + clientId);
-  var taskRows = callSQL("SELECT * FROM textgen.tasks WHERE client_id=" + clientId + " ORDER BY created_at DESC");
-  return { client: clientRows[0] || null, tasks: taskRows };
+  var clients = callCrudApi('getClients', {});
+  var client = null;
+  for (var i = 0; i < clients.length; i++) {
+    if (clients[i].id == clientId) { client = clients[i]; break; }
+  }
+  var tasks = callCrudApi('getTasks', { clientId: clientId });
+  return { client: client, tasks: tasks };
 }
