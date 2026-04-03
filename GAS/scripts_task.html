@@ -34,6 +34,9 @@ function loadTaskScreen(taskId) {
     document.getElementById('task-opt-uniqueness').checked = !!opts.uniqueness;
     document.getElementById('task-opt-factcheck').checked = !!opts.factcheck;
     document.getElementById('task-opt-ai-detector').checked = !!opts.ai_detector;
+    document.getElementById('task-opt-voice-clone').checked = !!opts.voice_clone;
+    document.getElementById('task-opt-interview').checked = !!opts.interview;
+    document.getElementById('task-opt-draft-review').checked = !!opts.draft_review;
 
     // Клиент в хлебных крошках
     google.script.run.withSuccessHandler(function(clients) {
@@ -491,7 +494,10 @@ function saveTaskSettings() {
     humanize: document.getElementById('task-opt-humanize').checked,
     uniqueness: document.getElementById('task-opt-uniqueness').checked,
     factcheck: document.getElementById('task-opt-factcheck').checked,
-    ai_detector: document.getElementById('task-opt-ai-detector').checked
+    ai_detector: document.getElementById('task-opt-ai-detector').checked,
+    voice_clone: document.getElementById('task-opt-voice-clone').checked,
+    interview: document.getElementById('task-opt-interview').checked,
+    draft_review: document.getElementById('task-opt-draft-review').checked
   };
   autoSaveTask();
 }
@@ -514,12 +520,12 @@ function deleteCurrentTask() {
   }).deleteTask(state.currentTask.id);
 }
 
-// --- Генерация ---
+// --- Генерация (multi-step flow) ---
 function startGeneration() {
   if (!state.currentTask) return;
 
   // Собрать все field values
-  saveFieldValues(); // сохранить актуальные значения core fields
+  saveFieldValues();
 
   var task = state.currentTask;
   var fv = task.field_values || {};
@@ -538,27 +544,49 @@ function startGeneration() {
     return;
   }
 
+  var opts = task.options || {};
+
+  // Step 1: If interview enabled → generate questions first
+  if (opts.interview) {
+    _pendingGenArgs = { assembledPrompt: assembledPrompt, fv: fv };
+    document.getElementById('gen-result').style.display = 'none';
+    document.getElementById('gen-loading').style.display = 'block';
+    document.getElementById('gen-send-btn').disabled = true;
+
+    var topic = fv.topic || task.name || '';
+    google.script.run.withSuccessHandler(function(questions) {
+      document.getElementById('gen-loading').style.display = 'none';
+      document.getElementById('gen-send-btn').disabled = false;
+      showInterviewModal(questions);
+    }).withFailureHandler(function(e) {
+      resetGenUI();
+      showToast('Помилка генерації питань: ' + e.message, 'error');
+      // Fallback: continue without interview
+      executeGeneration(assembledPrompt, fv);
+    }).generateInterviewQuestions(task.id, topic);
+    return;
+  }
+
+  // No interview → go straight to generation
+  executeGeneration(assembledPrompt, fv);
+}
+
+function executeGeneration(assembledPrompt, fv) {
   // Показать лоадер
   document.getElementById('gen-result').style.display = 'none';
   document.getElementById('gen-loading').style.display = 'block';
   document.getElementById('gen-send-btn').disabled = true;
 
-  // Вызвать реальную генерацию через OpenAI
+  var opts = state.currentTask.options || {};
+
   google.script.run.withSuccessHandler(function(text) {
-    state.lastGeneratedText = text;
-
-    document.getElementById('gen-loading').style.display = 'none';
-    document.getElementById('gen-result').style.display = 'block';
-    document.getElementById('gen-result-content').innerHTML = text.content || '';
-    document.getElementById('gen-send-btn').disabled = false;
-
-    // Обновить историю
-    state.currentTexts.unshift(text);
-    var countEl = document.getElementById('task-history-count');
-    if (countEl) countEl.textContent = state.currentTexts.length;
-    renderHistoryList();
-
-    showToast('Текст згенеровано!', 'success');
+    // If draft review enabled → show draft modal for approval
+    if (opts.draft_review) {
+      showDraftReviewModal(text);
+      return;
+    }
+    // No draft review → show final result directly
+    showFinalResult(text);
   }).withFailureHandler(function(e) {
     showToast(e.message, 'error');
     resetGenUI();
@@ -808,4 +836,194 @@ function openEditorFromHistory(textId) {
   if (!state.currentTask) return;
   navigateTo('#editor/' + state.currentTask.id + '/' + textId);
 }
+
+// ===========================================
+// Voice Clone (Клон голосу)
+// ===========================================
+function openVoiceCloneModal() {
+  var task = state.currentTask;
+  if (!task) return;
+  renderVoiceRefTexts();
+  // Show profile status
+  var status = document.getElementById('voice-profile-status');
+  if (task.voice_profile) {
+    status.innerHTML = '<div style="background:#ECFDF5;border:1px solid #16A34A;border-radius:6px;padding:8px 12px;font-size:11px;color:#16A34A;">✓ Голосовий профіль створено (' + task.voice_profile.length + ' символів)</div>';
+  } else {
+    status.innerHTML = '<div class="text-secondary" style="font-size:11px;">Профіль ще не створено. Додайте тексти та натисніть "Аналізувати".</div>';
+  }
+  openModal('modal-voice-clone');
+}
+
+function renderVoiceRefTexts() {
+  var container = document.getElementById('voice-ref-texts-container');
+  if (!container || !state.currentTask) return;
+  var texts = state.currentTask.reference_texts || [];
+  if (!texts.length) texts = [''];
+  var h = '';
+  for (var i = 0; i < texts.length; i++) {
+    h += '<div style="margin-bottom:8px;position:relative;">' +
+      '<label class="field-label">Текст ' + (i + 1) + (i > 0 ? ' <button class="btn btn-sm btn-danger" style="font-size:9px;padding:1px 4px;position:absolute;right:0;top:0;" onclick="removeVoiceRefText(' + i + ')">×</button>' : '') + '</label>' +
+      '<textarea class="input-field textarea-mono" rows="6" id="voice-ref-' + i + '" placeholder="Вставте текст (мінімум 200 слів)...">' + escapeHtml(texts[i] || '') + '</textarea>' +
+    '</div>';
+  }
+  container.innerHTML = h;
+  // Hide add button if 4 texts
+  var addBtn = document.getElementById('voice-add-ref-btn');
+  if (addBtn) addBtn.style.display = texts.length >= 4 ? 'none' : 'inline-block';
+}
+
+function addVoiceRefText() {
+  var task = state.currentTask;
+  if (!task) return;
+  if (!task.reference_texts) task.reference_texts = [''];
+  if (task.reference_texts.length >= 4) { showToast('Максимум 4 тексти', 'error'); return; }
+  // Save current values first
+  collectVoiceRefTexts();
+  task.reference_texts.push('');
+  renderVoiceRefTexts();
+}
+
+function removeVoiceRefText(idx) {
+  collectVoiceRefTexts();
+  state.currentTask.reference_texts.splice(idx, 1);
+  if (!state.currentTask.reference_texts.length) state.currentTask.reference_texts = [''];
+  renderVoiceRefTexts();
+}
+
+function collectVoiceRefTexts() {
+  if (!state.currentTask) return [];
+  var texts = [];
+  var count = (state.currentTask.reference_texts || ['']).length;
+  for (var i = 0; i < count; i++) {
+    var el = document.getElementById('voice-ref-' + i);
+    texts.push(el ? el.value : '');
+  }
+  state.currentTask.reference_texts = texts;
+  return texts;
+}
+
+function analyzeVoiceProfile() {
+  collectVoiceRefTexts();
+  var texts = (state.currentTask.reference_texts || []).filter(function(t) { return t && t.trim().length > 50; });
+  if (!texts.length) { showToast('Додайте хоча б один текст (мінімум 200 слів)', 'error'); return; }
+
+  var btn = document.getElementById('voice-analyze-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Аналізуємо...'; }
+
+  google.script.run.withSuccessHandler(function(profile) {
+    state.currentTask.voice_profile = profile;
+    state.currentTask.reference_texts = texts;
+    autoSaveTask();
+    if (btn) { btn.disabled = false; btn.textContent = 'Аналізувати та зберегти'; }
+    showToast('Голосовий профіль створено!', 'success');
+    closeModal('modal-voice-clone');
+  }).withFailureHandler(function(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Аналізувати та зберегти'; }
+    showToast(e.message, 'error');
+  }).analyzeVoiceProfile(state.currentTask.id, texts);
+}
+
+// ===========================================
+// Interview Extraction (Інтерв'ю)
+// ===========================================
+var _interviewQuestions = [];
+var _pendingGenArgs = null;
+
+function showInterviewModal(questions) {
+  _interviewQuestions = questions || [];
+  var container = document.getElementById('interview-questions-container');
+  document.getElementById('interview-loading').style.display = 'none';
+  var h = '';
+  for (var i = 0; i < _interviewQuestions.length; i++) {
+    h += '<div class="field-group">' +
+      '<label class="field-label" style="color:#1A1A1A;font-size:12px;text-transform:none;letter-spacing:0;">' + escapeHtml(_interviewQuestions[i]) + '</label>' +
+      '<textarea class="input-field" rows="3" id="interview-answer-' + i + '" placeholder="Ваша відповідь..."></textarea>' +
+    '</div>';
+  }
+  container.innerHTML = h;
+  openModal('modal-interview');
+}
+
+function submitInterviewAnswers() {
+  var answers = [];
+  for (var i = 0; i < _interviewQuestions.length; i++) {
+    var el = document.getElementById('interview-answer-' + i);
+    var answer = el ? el.value.trim() : '';
+    if (answer) {
+      answers.push({ question: _interviewQuestions[i], answer: answer });
+    }
+  }
+  state.currentTask.interview_answers = answers;
+  autoSaveTask();
+  closeModal('modal-interview');
+
+  // Продовжити генерацію з відповідями
+  if (_pendingGenArgs) {
+    executeGeneration(_pendingGenArgs.assembledPrompt, _pendingGenArgs.fv);
+    _pendingGenArgs = null;
+  }
+}
+
+function skipInterview() {
+  closeModal('modal-interview');
+  state.currentTask.interview_answers = null;
+  if (_pendingGenArgs) {
+    executeGeneration(_pendingGenArgs.assembledPrompt, _pendingGenArgs.fv);
+    _pendingGenArgs = null;
+  }
+}
+
+// ===========================================
+// Draft Review (Чернетка)
+// ===========================================
+var _draftResult = null;
+
+function showDraftReviewModal(result) {
+  _draftResult = result;
+  document.getElementById('gen-loading').style.display = 'none';
+  document.getElementById('gen-send-btn').disabled = false;
+  document.getElementById('draft-content').innerHTML = result.content || '';
+  document.getElementById('draft-feedback').value = '';
+  openModal('modal-draft-review');
+}
+
+function approveDraft() {
+  closeModal('modal-draft-review');
+  if (_draftResult) {
+    showFinalResult(_draftResult);
+    _draftResult = null;
+  }
+}
+
+function refineDraft() {
+  var feedback = document.getElementById('draft-feedback').value.trim();
+  if (!feedback) { showToast('Напишіть зворотній зв\'язок', 'error'); return; }
+  closeModal('modal-draft-review');
+
+  document.getElementById('gen-loading').style.display = 'block';
+  document.getElementById('gen-send-btn').disabled = true;
+
+  google.script.run.withSuccessHandler(function(refined) {
+    document.getElementById('gen-loading').style.display = 'none';
+    document.getElementById('gen-send-btn').disabled = false;
+    showFinalResult(refined);
+  }).withFailureHandler(function(e) {
+    document.getElementById('gen-loading').style.display = 'none';
+    document.getElementById('gen-send-btn').disabled = false;
+    showToast(e.message, 'error');
+  }).regenerateFullTextWithAI(_draftResult.id, feedback);
+}
+
+function showFinalResult(result) {
+  state.lastGeneratedText = result;
+  document.getElementById('gen-result').style.display = 'block';
+  document.getElementById('gen-result-content').innerHTML = result.content || '';
+
+  state.currentTexts.unshift(result);
+  var countEl = document.getElementById('task-history-count');
+  if (countEl) countEl.textContent = state.currentTexts.length;
+  renderHistoryList();
+  showToast('Текст згенеровано!', 'success');
+}
+
 </script>

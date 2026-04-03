@@ -188,6 +188,12 @@
           <label class="checkbox-label" style="font-size:11px;padding:2px 0;"><input type="checkbox" id="task-opt-factcheck" onchange="saveTaskSettings()"> Фактчекінг</label>
           <label class="checkbox-label" style="font-size:11px;padding:2px 0;"><input type="checkbox" id="task-opt-ai-detector" onchange="saveTaskSettings()"> AI-детектор</label>
         </div>
+        <hr style="border:none;border-top:1px solid #E5E5E0;margin:8px 0;">
+        <div style="display:flex;flex-wrap:wrap;gap:2px 12px;">
+          <label class="checkbox-label" style="font-size:11px;padding:2px 0;"><input type="checkbox" id="task-opt-voice-clone" onchange="saveTaskSettings()"> Клон голосу <button class="btn btn-sm" style="font-size:9px;padding:1px 6px;margin-left:4px;" onclick="event.preventDefault();openVoiceCloneModal()">Налаштувати</button></label>
+          <label class="checkbox-label" style="font-size:11px;padding:2px 0;"><input type="checkbox" id="task-opt-interview" onchange="saveTaskSettings()"> Інтерв'ю</label>
+          <label class="checkbox-label" style="font-size:11px;padding:2px 0;"><input type="checkbox" id="task-opt-draft-review" onchange="saveTaskSettings()"> Чернетка</label>
+        </div>
       </div>
 
       <!-- Скрытые textarea для хранения значений -->
@@ -238,6 +244,78 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-add-flex-block')">Скасувати</button>
       <button class="btn btn-primary" onclick="confirmAddFlexBlock()">Додати</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка: Клон голосу (Voice Clone) -->
+<div id="modal-voice-clone" class="modal-overlay" style="display:none;">
+  <div class="modal-card" style="max-width:700px;">
+    <div class="modal-header">
+      <h3>Клон голосу</h3>
+      <button class="modal-close" onclick="closeModal('modal-voice-clone')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#92690C;">
+        <strong>Як це працює:</strong> Додайте 1-4 тексти, написані цільовим голосом (ваші статті, або статті в стилі, який подобається). Мінімум 200 слів кожен. Система проаналізує: ритм речень, лексику, тон, структуру, пунктуацію — і створить "голосовий профіль" для генерації.
+      </div>
+      <div id="voice-ref-texts-container">
+        <!-- Динамічно: textarea для кожного тексту -->
+      </div>
+      <button class="btn btn-sm" id="voice-add-ref-btn" onclick="addVoiceRefText()" style="margin-top:8px;">+ Додати текст</button>
+      <div id="voice-profile-status" style="margin-top:12px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-voice-clone')">Скасувати</button>
+      <button class="btn btn-primary" id="voice-analyze-btn" onclick="analyzeVoiceProfile()">Аналізувати та зберегти</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка: Інтерв'ю (Interview Extraction) -->
+<div id="modal-interview" class="modal-overlay" style="display:none;">
+  <div class="modal-card" style="max-width:700px;">
+    <div class="modal-header">
+      <h3>Інтерв'ю — ваш досвід</h3>
+      <button class="modal-close" onclick="skipInterview()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#EBF5FF;border:1px solid #BDD7F5;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#1A5FB4;">
+        <strong>Навіщо це:</strong> Ваші особисті відповіді зроблять текст автентичним. Конкретні числа, історії та досвід — це те, що відрізняє живий текст від AI. Відповідайте як розмовляєте — не треба "красиво".
+      </div>
+      <div id="interview-questions-container">
+        <!-- Динамічно: питання + textarea для відповідей -->
+      </div>
+      <div id="interview-loading" style="display:none;text-align:center;padding:24px;">
+        <div class="loader-dots"><span></span><span></span><span></span></div>
+        <p style="margin-top:12px;color:#888;font-size:12px;">Генерація питань по темі...</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="skipInterview()">Пропустити</button>
+      <button class="btn btn-primary" onclick="submitInterviewAnswers()">Продовжити генерацію</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка: Перегляд чернетки (Draft Review) -->
+<div id="modal-draft-review" class="modal-overlay" style="display:none;">
+  <div class="modal-card" style="max-width:800px;">
+    <div class="modal-header">
+      <h3>Перегляд чернетки</h3>
+      <button class="modal-close" onclick="closeModal('modal-draft-review')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="draft-content" style="max-height:400px;overflow-y:auto;border:1px solid #E5E5E0;border-radius:8px;padding:16px;margin-bottom:12px;font-size:13px;line-height:1.7;"></div>
+      <div class="field-group">
+        <label class="field-label">Зворотній зв'язок (якщо потрібні зміни)</label>
+        <textarea id="draft-feedback" class="input-field" rows="4" placeholder="Що змінити, що додати, що прибрати..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-draft-review')">Скасувати</button>
+      <button class="btn" onclick="refineDraft()">Переробити</button>
+      <button class="btn btn-primary" onclick="approveDraft()">Затвердити</button>
     </div>
   </div>
 </div>
