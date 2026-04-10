@@ -5,6 +5,7 @@
 
 var N8N_API_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-api';
 var N8N_PROMPT_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-prompt';
+var N8N_AGENT_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-seo-agent';
 var N8N_GDOC_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-save-gdoc';
 
 // --- Хелперы ---
@@ -184,15 +185,26 @@ function generateInterviewQuestions(taskId, topic) {
   return result.questions || JSON.parse(result.content || '[]');
 }
 
-// --- Генерація тексту (бекенд повністю в n8n) ---
+// --- Генерація тексту (через AI Agent в n8n) ---
 
 function generateTextWithAI(taskId, assembledPrompt, fieldValues) {
-  var result = callPromptEngine(
-    '',
-    assembledPrompt,
-    { action: 'generate', taskId: taskId, fieldValues: fieldValues }
-  );
-  return result;
+  var task = getTask(taskId);
+  var response = UrlFetchApp.fetch(N8N_AGENT_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({
+      taskId: taskId,
+      assembledPrompt: assembledPrompt,
+      systemPrompt: task ? task.system_prompt || '' : '',
+      userPrompt: assembledPrompt,
+      fieldValues: fieldValues || {}
+    }),
+    muteHttpExceptions: true
+  });
+  var code = response.getResponseCode();
+  var text = response.getContentText();
+  if (code !== 200 || !text) throw new Error('Agent error (' + code + ')');
+  return JSON.parse(text);
 }
 
 // --- Зберігання в Google Doc (через n8n) ---
@@ -213,27 +225,25 @@ function saveToGoogleDoc(textId) {
   return result.url || (Array.isArray(result) ? (result[0] && result[0].url) : null) || '';
 }
 
-// --- Регенерація блоку (бекенд в n8n) ---
+// --- Регенерація блоку (через Prompt Engine — простий запит без агента) ---
 
 function regenerateBlockWithAI(textId, blockIndex, comment) {
-  var result = callPromptEngine('', '', {
+  return callPromptEngine('', '', {
     action: 'regenerateBlock',
     textId: textId,
     blockIndex: blockIndex,
     comment: comment || ''
   });
-  return result;
 }
 
-// --- Повна перегенерація (бекенд в n8n) ---
+// --- Повна перегенерація (через Prompt Engine) ---
 
 function regenerateFullTextWithAI(textId, comment) {
-  var result = callPromptEngine('', '', {
+  return callPromptEngine('', '', {
     action: 'regenerateFull',
     textId: textId,
     comment: comment || ''
   });
-  return result;
 }
 
 // --- AI маппінг колонок (через Prompt Engine) ---
