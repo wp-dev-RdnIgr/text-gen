@@ -239,12 +239,15 @@ function regenerateFullTextWithAI(textId, comment) {
 // --- AI маппінг колонок (через Prompt Engine) ---
 
 function mapSheetRowToFields(sheetHeaders, rowCells, taskFieldNames) {
-  var prompt = 'Map these sheet columns to task fields.\nSheet headers: ' + JSON.stringify(sheetHeaders) +
-    '\nRow data: ' + JSON.stringify(rowCells) +
-    '\nTask fields: ' + JSON.stringify(taskFieldNames) +
-    '\nReturn ONLY a JSON object mapping task field names to cell values.';
+  var prompt = 'Map these Google Sheet columns to task fields.\n\n' +
+    'Sheet column headers: ' + JSON.stringify(sheetHeaders) + '\n\n' +
+    'Task fields (key + label): ' + JSON.stringify(taskFieldNames) + '\n\n' +
+    'IMPORTANT: Return a JSON object where each KEY is the task field KEY (like "url", "topic", etc.) ' +
+    'and each VALUE is the EXACT sheet column header name that matches this field.\n' +
+    'Example: {"url": "URL-адреса", "topic": "Тема статті", "keywords": "Анкор"}\n' +
+    'Only include fields that have a matching column. Do NOT include cell values, only column header names.';
   var result = callPromptEngine(
-    'You are a data mapper. Return only valid JSON, no explanation.',
+    'You are a data mapper. Return only valid JSON mapping task field keys to sheet column header names. No explanation.',
     prompt,
     { action: 'mapFields', maxTokens: 1000 }
   );
