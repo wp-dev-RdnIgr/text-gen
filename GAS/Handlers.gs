@@ -246,7 +246,7 @@ function mapSheetRowToFields(sheetHeaders, rowCells, taskFieldNames) {
   var result = callPromptEngine(
     'You are a data mapper. Return only valid JSON, no explanation.',
     prompt,
-    { action: 'generate', maxTokens: 1000 }
+    { action: 'mapFields', maxTokens: 1000 }
   );
   var content = (result.content || '').trim().replace(/```json\s*/g, '').replace(/```\s*/g, '');
   return JSON.parse(content);
