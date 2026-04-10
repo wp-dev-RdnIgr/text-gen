@@ -11,14 +11,19 @@
     <div class="nav-logo" onclick="navigateTo('#dashboard')">TextGen</div>
     <div class="nav-tabs">
       <button class="nav-tab active" data-hash="#dashboard" onclick="navigateTo('#dashboard')">Дашборд</button>
-      <button class="nav-tab" data-hash="#templates" onclick="navigateTo('#templates')">Шаблоны</button>
-      <button class="nav-tab" data-hash="#clients" onclick="navigateTo('#clients')">Клиенты</button>
+      <button class="nav-tab" data-hash="#templates" onclick="navigateTo('#templates')">Шаблони</button>
+      <button class="nav-tab" data-hash="#clients" onclick="navigateTo('#clients')">Клієнти</button>
     </div>
-    <div style="display:flex;gap:6px;align-items:center;">
-      <input type="password" id="api-key-input" class="input-field" style="width:220px;font-size:11px;padding:4px 8px;" placeholder="OpenAI API Key (sk-...)" onchange="saveApiKey(this.value)">
-      <button class="btn btn-sm" onclick="seedDemoData()">Демо-данные</button>
-    </div>
+    <div id="autosave-status" class="autosave-indicator"></div>
   </nav>
+
+  <!-- Screen preloader -->
+  <div id="screen-loader" class="screen-loader" style="display:none;">
+    <div class="screen-loader-content">
+      <div class="loader-spinner"></div>
+      <span>Завантаження...</span>
+    </div>
+  </div>
 
   <!-- Контейнер экранов -->
   <div class="app-container">

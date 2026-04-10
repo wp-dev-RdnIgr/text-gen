@@ -5,7 +5,7 @@
 
 function loadTaskScreen(taskId) {
   google.script.run.withSuccessHandler(function(task) {
-    if (!task) { showToast('Задача не найдена', 'error'); return; }
+    if (!task) { showToast('Задачу не знайдено', 'error'); hideScreenLoader(); return; }
     state.currentTask = task;
     state.lastGeneratedText = null;
 
@@ -67,6 +67,7 @@ function loadTaskScreen(taskId) {
 
     switchTaskTab('generate');
     loadTaskHistory(taskId);
+    hideScreenLoader();
   }).getTask(taskId);
 }
 
@@ -502,11 +503,19 @@ function saveTaskSettings() {
   autoSaveTask();
 }
 
-function autoSaveTask() {
+var _debouncedSave = debounce(function() {
   if (!state.currentTask) return;
-  google.script.run.withFailureHandler(function(e) {
+  showAutosaveStatus('saving');
+  google.script.run.withSuccessHandler(function() {
+    showAutosaveStatus('saved');
+  }).withFailureHandler(function(e) {
+    showAutosaveStatus('error');
     showToast(e.message, 'error');
   }).saveTask(state.currentTask);
+}, 500);
+
+function autoSaveTask() {
+  _debouncedSave();
 }
 
 function deleteCurrentTask() {
