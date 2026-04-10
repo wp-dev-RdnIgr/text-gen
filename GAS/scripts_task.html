@@ -723,12 +723,13 @@ function taskImportAcceptRow() {
     taskFieldNames.push({ key: flexBlocks[fi].key, label: flexBlocks[fi].label });
   }
 
-  // Показать лоадер
-  document.getElementById('task-import-accept-btn').disabled = true;
-  document.getElementById('task-import-accept-btn').textContent = 'AI визначає поля...';
+  // Закрити модалку імпорту і показати прелоадер
+  closeModal('modal-task-import');
+  openModal('modal-import-loading');
 
   // Вызвать AI-маппинг на сервере
   google.script.run.withSuccessHandler(function(mapping) {
+    closeModal('modal-import-loading');
     if (!task.field_values) task.field_values = {};
     if (!task.active_flex_blocks) task.active_flex_blocks = [];
 
@@ -755,7 +756,7 @@ function taskImportAcceptRow() {
       }
     }
 
-    // Данные из колонок, которые AI не замаппил — создать новые flex блоки
+    // Данные из колонок, которые AI не замаппил — заполнить существующие или создать новые
     for (var hi = 0; hi < headers.length; hi++) {
       var header = headers[hi];
       if (mappedColumns[header]) continue;
@@ -764,15 +765,29 @@ function taskImportAcceptRow() {
       if (header.match(/^(№|#|id|номер)$/i)) continue;
 
       var newKey = generateFlexKey(header);
-      var keyExists = false;
-      for (var ci = 0; ci < flexBlocks.length; ci++) {
-        if (flexBlocks[ci].key === newKey) { keyExists = true; break; }
-      }
-      if (keyExists) newKey = newKey + '_' + Date.now();
 
-      flexBlocks.push({ key: newKey, label: header, type: 'textarea', enabled: true });
-      task.field_values[newKey] = String(cellVal).trim();
-      task.active_flex_blocks.push(newKey);
+      // Спочатку шукаємо існуючий блок по ключу або лейблу
+      var existingIdx = -1;
+      for (var ci = 0; ci < flexBlocks.length; ci++) {
+        if (flexBlocks[ci].key === newKey || flexBlocks[ci].label.toLowerCase() === header.toLowerCase()) {
+          existingIdx = ci;
+          break;
+        }
+      }
+
+      if (existingIdx >= 0) {
+        // Існуючий блок — просто заповнити значення
+        var existKey = flexBlocks[existingIdx].key;
+        task.field_values[existKey] = String(cellVal).trim();
+        if (task.active_flex_blocks.indexOf(existKey) === -1) {
+          task.active_flex_blocks.push(existKey);
+        }
+      } else {
+        // Новий блок
+        flexBlocks.push({ key: newKey, label: header, type: 'textarea', enabled: true });
+        task.field_values[newKey] = String(cellVal).trim();
+        task.active_flex_blocks.push(newKey);
+      }
     }
 
     task.flex_blocks = flexBlocks;
@@ -784,15 +799,11 @@ function taskImportAcceptRow() {
     renderActiveFlexBlocks();
     autoSaveTask();
 
-    closeModal('modal-task-import');
-    document.getElementById('task-import-accept-btn').disabled = false;
-    document.getElementById('task-import-accept-btn').textContent = 'Заповнити поля';
     showToast('Заповнено ' + mappedCount + ' полів з рядка #' + row.rowNum, 'success');
 
   }).withFailureHandler(function(e) {
+    closeModal('modal-import-loading');
     showToast(e.message, 'error');
-    document.getElementById('task-import-accept-btn').disabled = false;
-    document.getElementById('task-import-accept-btn').textContent = 'Заповнити поля';
   }).mapSheetRowToFields(headers, row.cells, taskFieldNames);
 }
 

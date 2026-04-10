@@ -345,7 +345,18 @@
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-task-import')">Скасувати</button>
-      <button class="btn btn-primary" id="task-import-accept-btn" style="display:none;" onclick="taskImportAcceptRow()">Заповнити</button>
+      <button class="btn btn-primary" id="task-import-accept-btn" style="display:none;" onclick="taskImportAcceptRow()">Заповнити поля</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка: Прелоадер імпорту -->
+<div id="modal-import-loading" class="modal-overlay" style="display:none;">
+  <div class="modal-card" style="max-width:400px;text-align:center;">
+    <div style="padding:32px 16px;">
+      <div class="loader-spinner" style="margin:0 auto 16px;"></div>
+      <h3 style="margin-bottom:8px;">AI обробляє дані</h3>
+      <p style="color:var(--text-secondary);font-size:13px;">Зіставляємо колонки таблиці з полями задачі.<br>Це може зайняти 10-30 секунд...</p>
     </div>
   </div>
 </div>
