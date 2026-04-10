@@ -8,21 +8,57 @@ var state = {
   clients: [],
   taskTemplates: [],
   selectedClientId: null,
-  // Дашборд
   dashboardTasks: [],
-  // Задача
   currentTask: null,
   currentTexts: [],
   lastGeneratedText: null,
-  // Редактор
   editorText: null,
   editorTaskId: null,
   activeBlockIndex: -1,
   regenBlockIndex: -1,
-  // Шаблоны
   selectedTemplateId: null,
-  tplClientIds: []
+  tplClientIds: [],
+  _initialDataLoaded: false
 };
+
+// --- Утиліта: debounce ---
+function debounce(fn, delay) {
+  var timer = null;
+  return function() {
+    var ctx = this, args = arguments;
+    clearTimeout(timer);
+    timer = setTimeout(function() { fn.apply(ctx, args); }, delay);
+  };
+}
+
+// --- Autosave індикатор ---
+var _autosaveTimer = null;
+function showAutosaveStatus(status) {
+  var el = document.getElementById('autosave-status');
+  if (!el) return;
+  if (status === 'saving') {
+    el.textContent = 'Зберігається...';
+    el.className = 'autosave-indicator saving';
+  } else if (status === 'saved') {
+    el.textContent = 'Збережено ✓';
+    el.className = 'autosave-indicator saved';
+    clearTimeout(_autosaveTimer);
+    _autosaveTimer = setTimeout(function() { el.className = 'autosave-indicator'; el.textContent = ''; }, 2000);
+  } else if (status === 'error') {
+    el.textContent = 'Помилка збереження';
+    el.className = 'autosave-indicator error';
+  }
+}
+
+// --- Screen transition ---
+function showScreenLoader() {
+  var el = document.getElementById('screen-loader');
+  if (el) el.style.display = 'flex';
+}
+function hideScreenLoader() {
+  var el = document.getElementById('screen-loader');
+  if (el) el.style.display = 'none';
+}
 
 // --- Инициализация ---
 document.addEventListener('DOMContentLoaded', function() {
@@ -32,7 +68,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function loadInitialData() {
-  loadApiKeyHint();
   google.script.run.withSuccessHandler(function(clients) {
     state.clients = clients || [];
     renderClientList();
@@ -71,11 +106,17 @@ function handleHashRoute() {
       break;
     case '#task':
       showScreen('screen-task');
-      if (parts[1]) loadTaskScreen(parts[1]);
+      if (parts[1]) {
+        showScreenLoader();
+        loadTaskScreen(parts[1]);
+      }
       break;
     case '#editor':
       showScreen('screen-editor');
-      if (parts[1] && parts[2]) loadEditorScreen(parts[1], parts[2]);
+      if (parts[1] && parts[2]) {
+        showScreenLoader();
+        loadEditorScreen(parts[1], parts[2]);
+      }
       break;
     default:
       showScreen('screen-dashboard');
@@ -301,37 +342,5 @@ document.addEventListener('click', function(e) {
   }
 });
 
-// --- API Key ---
-function saveApiKey(key) {
-  if (!key || !key.trim()) return;
-  google.script.run.withSuccessHandler(function() {
-    showToast('API ключ збережено', 'success');
-    document.getElementById('api-key-input').value = '••••••••' + key.slice(-4);
-  }).withFailureHandler(function(e) {
-    showToast(e.message, 'error');
-  }).setOpenAIKey(key.trim());
-}
-
-function loadApiKeyHint() {
-  google.script.run.withSuccessHandler(function(hasKey) {
-    var input = document.getElementById('api-key-input');
-    if (input && hasKey) {
-      input.value = '';
-      input.placeholder = 'API Key встановлено ✓';
-      input.style.borderColor = '#16A34A';
-    }
-  }).hasOpenAIKey();
-}
-
-// --- Демо-данные ---
-function seedDemoData() {
-  showToast('Загрузка демо-данных...', 'info');
-  google.script.run.withSuccessHandler(function() {
-    showToast('Демо-данные загружены!', 'success');
-    loadInitialData();
-    if (state.selectedClientId) selectClient(state.selectedClientId);
-  }).withFailureHandler(function(e) {
-    showToast(e.message, 'error');
-  }).seedData();
-}
+// API Key тепер в n8n — не потрібно в UI
 </script>

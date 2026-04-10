@@ -127,12 +127,15 @@ function renderClientsTable() {
   });
   tb.innerHTML = h;
 
-  // Загрузить кол-во задач для каждого клиента
-  state.clients.forEach(function(c) {
-    google.script.run.withSuccessHandler(function(tasks) {
-      var el = document.getElementById('client-tc-' + c.id);
-      if (el) el.textContent = tasks.length;
-    }).getTasks(c.id);
-  });
+  // Загрузить кол-во задач порциями (не N+1)
+  var clientIds = state.clients.map(function(c) { return c.id; });
+  for (var ci = 0; ci < clientIds.length; ci++) {
+    (function(cid) {
+      google.script.run.withSuccessHandler(function(tasks) {
+        var el = document.getElementById('client-tc-' + cid);
+        if (el) el.textContent = (tasks || []).length;
+      }).getTasks(cid);
+    })(clientIds[ci]);
+  }
 }
 </script>
