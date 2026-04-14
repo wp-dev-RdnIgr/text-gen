@@ -361,6 +361,26 @@
   </div>
 </div>
 
+<!-- Модалка: Перегляд етапів з історії -->
+<div id="modal-history-stages" class="modal-overlay" style="display:none;">
+  <div class="stages-modal-card">
+    <div class="stages-modal-header">
+      <div>
+        <div class="stages-modal-title" id="history-stages-title">Етапи генерації</div>
+        <div class="stages-modal-subtitle">Збережена історія обробки тексту</div>
+      </div>
+      <button class="modal-close" onclick="closeHistoryStages()">&times;</button>
+    </div>
+    <div class="stages-modal-body">
+      <div id="history-stages-content"></div>
+    </div>
+    <div class="stages-modal-footer">
+      <div class="stages-footer-info"></div>
+      <button class="btn btn-primary" onclick="closeHistoryStages()">Закрити</button>
+    </div>
+  </div>
+</div>
+
 <!-- Модалка: Деталі етапу -->
 <div id="modal-stage-detail" class="modal-overlay" style="display:none;">
   <div class="stages-modal-card" style="max-width:1000px;">

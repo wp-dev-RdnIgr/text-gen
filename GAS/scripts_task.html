@@ -1246,6 +1246,9 @@ function renderHistoryList() {
       preview = truncate(preview, 150);
     }
 
+    var stagesCount = (t.stages && t.stages.length) ? t.stages.length : 0;
+    var stagesBtn = stagesCount ? '<button class="stage-detail-btn" onclick="event.stopPropagation();openHistoryStages(\'' + t.id + '\')">Етапи (' + stagesCount + ')</button>' : '';
+
     h += '<div class="history-item" onclick="openEditorFromHistory(\'' + t.id + '\')">' +
       '<div class="history-item-header">' +
         '<span class="badge ' + (statusClass[t.status] || '') + '">' + (statusLabel[t.status] || t.status) + '</span>' +
@@ -1257,6 +1260,7 @@ function renderHistoryList() {
         (t.uniqueness_score != null ? '<span class="badge badge-success">Унік: ' + t.uniqueness_score + '%</span>' : '') +
         (t.ai_score != null ? '<span class="badge badge-neutral">AI: ' + t.ai_score + '%</span>' : '') +
         '<span class="text-secondary">' + escapeHtml(t.used_llm_model || '') + '</span>' +
+        stagesBtn +
       '</div>' +
     '</div>';
   }
@@ -1266,6 +1270,75 @@ function renderHistoryList() {
 function openEditorFromHistory(textId) {
   if (!state.currentTask) return;
   navigateTo('#editor/' + state.currentTask.id + '/' + textId);
+}
+
+// ===========================================
+// History Stages Viewer
+// ===========================================
+function openHistoryStages(textId) {
+  // Знайти текст у state.currentTexts
+  var text = null;
+  for (var i = 0; i < (state.currentTexts || []).length; i++) {
+    if (String(state.currentTexts[i].id) === String(textId)) {
+      text = state.currentTexts[i];
+      break;
+    }
+  }
+  if (!text || !text.stages || !text.stages.length) {
+    showToast('Для цього тексту немає збережених етапів', 'info');
+    return;
+  }
+
+  // Заповнюємо _stageData з історії, щоб openStageDetail працював
+  _stageData = {};
+  for (var s = 0; s < text.stages.length; s++) {
+    _stageData[text.stages[s].id] = text.stages[s];
+  }
+
+  var labels = {
+    generation: '1. Генерація',
+    resize: '2. Підгонка обсягу',
+    factcheck: '3. Факт-чекінг',
+    humanize: '4. Гуманізація'
+  };
+
+  // Будуємо список етапів
+  var html = '<div style="margin-bottom:16px;color:var(--text-secondary);font-size:13px;">' +
+    'Текст пройшов <b>' + text.stages.length + ' етапів</b> обробки. Натисніть "Деталі" для перегляду змін на кожному етапі.' +
+  '</div>';
+
+  for (var k = 0; k < text.stages.length; k++) {
+    var st = text.stages[k];
+    var prevSt = k > 0 ? text.stages[k - 1] : null;
+    var delta = prevSt ? (st.chars_count - prevSt.chars_count) : 0;
+    var deltaHtml = '';
+    if (delta > 0) deltaHtml = '<span style="color:var(--success);font-size:10px;margin-left:4px;">+' + delta + '</span>';
+    else if (delta < 0) deltaHtml = '<span style="color:var(--danger);font-size:10px;margin-left:4px;">' + delta + '</span>';
+
+    html += '<div class="stage-block expanded" data-stage-id="' + st.id + '">' +
+      '<div class="stage-block-header" onclick="toggleStageBlock(this)">' +
+        '<div class="stage-block-title">' +
+          '<div class="stage-block-icon">✓</div>' +
+          (labels[st.stage] || st.stage) +
+        '</div>' +
+        '<div class="stage-block-meta">' +
+          '<span class="stage-block-chars">' + (st.chars_count || 0) + ' збп' + deltaHtml + '</span>' +
+          '<button class="stage-detail-btn" onclick="event.stopPropagation();openStageDetail(' + st.id + ')">Деталі</button>' +
+          '<span class="stage-status-badge done">' + (st.stage || '') + '</span>' +
+          '<span class="stage-block-chevron">▸</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="stage-block-body">' + (st.content || '') + '</div>' +
+    '</div>';
+  }
+
+  document.getElementById('history-stages-content').innerHTML = html;
+  document.getElementById('history-stages-title').textContent = 'Етапи генерації — ' + formatDateTime(text.created_at);
+  openModal('modal-history-stages');
+}
+
+function closeHistoryStages() {
+  closeModal('modal-history-stages');
 }
 
 // ===========================================
