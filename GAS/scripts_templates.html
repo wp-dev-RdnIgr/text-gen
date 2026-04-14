@@ -1,6 +1,6 @@
 <script>
 // ===========================================
-// scripts_templates.html - Шаблоны задач
+// scripts_templates.html — Шаблони задач
 // ===========================================
 
 // --- Temp storage for editing ---
@@ -121,7 +121,7 @@ function renderTplClientMultiselect() {
     var checked = state.tplClientIds.indexOf(cl.id) !== -1 ? ' checked' : '';
     h += '<label class="multiselect-option"><input type="checkbox" value="' + cl.id + '"' + checked + ' onchange="onTplClientChange()">' + escapeHtml(cl.name) + '</label>';
   });
-  if (!state.clients.length) h = '<div style="padding:8px 12px;color:#888;font-size:12px;">Немає клієнтів</div>';
+  if (!state.clients.length) h = '<div style="padding:8px 12px;color:var(--text-muted);font-size:12px;">Немає клієнтів</div>';
   opts.innerHTML = h;
   updateTplClientLabel();
 }
@@ -221,10 +221,10 @@ function importSheetHeaders() {
     document.getElementById('import-step-select').style.display = 'block';
     document.getElementById('import-accept-btn').style.display = 'inline-block';
 
-    // Рендер чекбоксов
+    // Рендер чекбоксів
     var h = '';
     headers.forEach(function(header, i) {
-      h += '<label class="checkbox-label" style="padding:6px 0;border-bottom:1px solid #F0F0EC;">' +
+      h += '<label class="checkbox-label" style="padding:7px 0;border-bottom:1px solid var(--border-light);">' +
         '<input type="checkbox" checked value="' + i + '"> ' + escapeHtml(header) +
       '</label>';
     });
@@ -250,7 +250,7 @@ function acceptImportedColumns() {
 
   if (!selected.length) { showToast('Оберіть хоча б одну колонку', 'error'); return; }
 
-  // Заменить все текущие flex blocks на выбранные
+  // Замінити всі поточні flex-блоки на обрані
   _tplFlexBlocks = selected.map(function(header) {
     var key = generateFlexKey(header);
     return { key: key, label: header, type: 'textarea', enabled: true };
@@ -324,7 +324,7 @@ function deleteCurrentTemplate() {
     showToast('Шаблон видалено', 'success');
     state.selectedTemplateId = null;
     document.getElementById('template-editor-content').style.display = 'none';
-    document.getElementById('template-placeholder').style.display = 'block';
+    document.getElementById('template-placeholder').style.display = 'flex';
     google.script.run.withSuccessHandler(function(list) {
       state.taskTemplates = list || [];
       renderTemplateList();
