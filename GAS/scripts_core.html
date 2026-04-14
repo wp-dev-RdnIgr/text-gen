@@ -71,15 +71,23 @@ document.addEventListener('DOMContentLoaded', function() {
 function loadInitialData() {
   google.script.run.withSuccessHandler(function(clients) {
     state.clients = clients || [];
-    renderClientList();
-    renderClientsTable();
+    if (typeof renderClientList === 'function') renderClientList();
+    if (typeof renderClientsTable === 'function') renderClientsTable();
     updateSidebarCounts();
+    // Перерендер дашборду/клієнтів після завантаження даних
+    var hash = window.location.hash || '#dashboard';
+    if (hash === '#dashboard' && typeof renderDashboardOverview === 'function') {
+      renderDashboardOverview();
+    }
   }).withFailureHandler(function(e) {
     console.error('loadClients error:', e);
   }).getClients();
 
   google.script.run.withSuccessHandler(function(tt) {
     state.taskTemplates = tt || [];
+    // Оновити stat-templates-count якщо на дашборді
+    var el = document.getElementById('stat-templates-count');
+    if (el) el.textContent = tt.length;
   }).withFailureHandler(function(e) {
     console.error('loadTaskTemplates error:', e);
   }).getTaskTemplates();
@@ -148,6 +156,7 @@ function handleHashRoute() {
   switch (screen) {
     case '#dashboard':
       showScreen('screen-dashboard');
+      if (typeof renderDashboardOverview === 'function') renderDashboardOverview();
       break;
     case '#tasks':
       // Stage 4 додасть screen-tasks; поки що — fallback на дашборд

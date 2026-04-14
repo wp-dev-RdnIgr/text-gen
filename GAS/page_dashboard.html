@@ -1,47 +1,68 @@
-<!-- Экран: Дашборд -->
+<!-- Екран: Дашборд (overview) -->
 <div id="screen-dashboard" class="screen" style="display:none;">
-  <div class="dashboard-layout">
-    <!-- Сайдбар со списком клиентов -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <h2 class="sidebar-title">Клиенты</h2>
-        <input type="text" id="client-search" class="input-field" placeholder="Поиск..." oninput="filterClients(this.value)">
-      </div>
-      <div id="client-list" class="client-list">
-        <!-- Заполняется динамически -->
-      </div>
-      <div class="sidebar-footer">
-        <button class="btn btn-block" onclick="openClientModal()">+ Добавить клиента</button>
-      </div>
-    </aside>
+  <div class="page-wrap">
 
-    <!-- Контент выбранного клиента -->
-    <main class="dashboard-content">
-      <div id="dashboard-placeholder" class="placeholder-message">
-        <p>Выберите клиента из списка слева,<br>чтобы увидеть его задачи</p>
+    <!-- Hero -->
+    <div class="hero-block">
+      <div class="hero-greeting" id="dashboard-greeting">Доброго дня 👋</div>
+      <div class="hero-subtitle">Створюйте тексти для клієнтів, керуйте шаблонами та тримайте всю історію генерацій в одному місці.</div>
+      <div class="hero-actions">
+        <button class="btn btn-primary" onclick="dashboardCreateTask()">
+          <span style="font-size:14px;">＋</span> Створити задачу
+        </button>
+        <button class="btn" onclick="openClientModal()">Додати клієнта</button>
+        <button class="btn btn-ghost" onclick="navigateTo('#templates')">Відкрити шаблони</button>
       </div>
+    </div>
 
-      <div id="dashboard-client-content" style="display:none;">
-        <!-- Хедер клиента -->
-        <div class="content-header">
-          <div class="content-header-info">
-            <h1 id="dashboard-client-name" class="page-title"></h1>
-            <span id="dashboard-client-niche" class="badge badge-info"></span>
-          </div>
-          <div class="content-header-actions">
-            <button class="btn" onclick="openClientModal(state.selectedClientId)">Настройки клиента</button>
-            <button class="btn btn-primary" onclick="createNewTask()">+ Новая задача</button>
-          </div>
-        </div>
-
-        <!-- Карточки задач -->
-        <div id="tasks-container">
-          <div id="tasks-loading" class="spinner" style="display:none;"></div>
-          <div id="tasks-grid" class="tasks-grid">
-            <!-- Заполняется динамически -->
-          </div>
-        </div>
+    <!-- Stats -->
+    <div class="stats-cards" id="dashboard-stats">
+      <div class="stat-card stat-info">
+        <div class="stat-value" id="stat-total-tasks">0</div>
+        <div class="stat-label">Усього задач</div>
       </div>
-    </main>
+      <div class="stat-card stat-success">
+        <div class="stat-value" id="stat-active-tasks">0</div>
+        <div class="stat-label">У роботі</div>
+      </div>
+      <div class="stat-card stat-neutral">
+        <div class="stat-value" id="stat-clients-count">0</div>
+        <div class="stat-label">Клієнтів</div>
+      </div>
+      <div class="stat-card stat-neutral">
+        <div class="stat-value" id="stat-templates-count">0</div>
+        <div class="stat-label">Шаблонів</div>
+      </div>
+    </div>
+
+    <!-- Recent tasks -->
+    <div class="section">
+      <div class="section-header-row">
+        <div class="section-title">Останні задачі</div>
+        <button class="btn btn-ghost btn-sm" onclick="navigateTo('#tasks')">Переглянути всі →</button>
+      </div>
+      <div id="dashboard-recent-loading" class="spinner" style="display:none;"></div>
+      <div id="dashboard-recent-grid" class="tasks-grid">
+        <!-- Заповнюється динамічно через renderDashboardRecentTasks() -->
+      </div>
+      <div id="dashboard-recent-empty" class="empty-state" style="display:none;">
+        <div class="empty-state-icon">✎</div>
+        <div class="empty-state-title">Ще немає задач</div>
+        <div class="empty-state-desc">Створіть першу задачу — оберіть клієнта та шаблон, заповніть ТЗ і згенеруйте текст.</div>
+        <button class="btn btn-primary" onclick="dashboardCreateTask()">Створити задачу</button>
+      </div>
+    </div>
+
+    <!-- Quick clients -->
+    <div class="section" id="dashboard-clients-section" style="display:none;">
+      <div class="section-header-row">
+        <div class="section-title">Клієнти</div>
+        <button class="btn btn-ghost btn-sm" onclick="navigateTo('#clients')">Переглянути всіх →</button>
+      </div>
+      <div id="dashboard-clients-grid" class="clients-grid">
+        <!-- Заповнюється через renderDashboardClientsPreview() -->
+      </div>
+    </div>
+
   </div>
 </div>
