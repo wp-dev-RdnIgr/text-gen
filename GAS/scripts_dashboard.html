@@ -104,40 +104,30 @@ function loadDashboardRecentTasks() {
   grid.innerHTML = skeletonTaskCards(6);
   if (empty) empty.style.display = 'none';
 
-  // Завантажуємо задачі по всім клієнтам паралельно
-  var remaining = clients.length;
-  var allTasks = [];
-  var perClientCount = {};
-  clients.forEach(function(cl) {
-    google.script.run.withSuccessHandler(function(tasks) {
-      perClientCount[cl.id] = (tasks || []).length;
-      (tasks || []).forEach(function(t) {
-        t._clientName = cl.name;
-        t._clientId = cl.id;
-        allTasks.push(t);
-      });
-      remaining--;
-      if (remaining === 0) {
-        // Кешуємо tasks_count у state.clients для sidebar
-        (state.clients || []).forEach(function(c) {
-          c.tasks_count = perClientCount[c.id] || 0;
-        });
-        // Зберігаємо у спільний кеш для #tasks сторінки
-        state.allTasks = allTasks;
-        state._allTasksFetchedAt = Date.now();
-        updateSidebarCounts();
-        // Оновити stat-total-tasks на реальні числа
-        var totalEl = document.getElementById('stat-total-tasks');
-        if (totalEl) totalEl.textContent = allTasks.length;
-        renderDashboardClientsPreview();
-        renderDashboardRecentTasks(allTasks);
-      }
-    }).withFailureHandler(function(e) {
-      console.error('loadDashboardRecentTasks', e);
-      remaining--;
-      if (remaining === 0) renderDashboardRecentTasks(allTasks);
-    }).getTasks(cl.id);
-  });
+  // Один batch-виклик на сервер замість N окремих
+  google.script.run.withSuccessHandler(function(allTasks) {
+    allTasks = allTasks || [];
+    // Оновити tasks_count на клієнтах
+    var perClientCount = {};
+    allTasks.forEach(function(t) {
+      perClientCount[t._clientId] = (perClientCount[t._clientId] || 0) + 1;
+    });
+    (state.clients || []).forEach(function(c) {
+      c.tasks_count = perClientCount[c.id] || 0;
+    });
+    state.allTasks = allTasks;
+    state._allTasksFetchedAt = Date.now();
+    updateSidebarCounts();
+
+    var totalEl = document.getElementById('stat-total-tasks');
+    if (totalEl) totalEl.textContent = allTasks.length;
+    renderDashboardClientsPreview();
+    renderDashboardRecentTasks(allTasks);
+  }).withFailureHandler(function(e) {
+    console.error('loadDashboardRecentTasks:', e);
+    grid.innerHTML = '';
+    if (empty) empty.style.display = 'flex';
+  }).getAllTasksSlim();
 }
 
 function renderDashboardRecentTasks(tasks) {
@@ -171,7 +161,7 @@ function renderDashboardRecentTasks(tasks) {
 
     var clientBadge = t._clientName ? '<span class="badge badge-neutral">' + escapeHtml(t._clientName) + '</span>' : '';
     var modelBadge = t.llm_model ? '<span class="badge badge-info">' + escapeHtml(t.llm_model) + '</span>' : '';
-    var desc = truncate(t.system_prompt || t.description || '', 90);
+    var desc = truncate(t.description || t.system_prompt || '', 90);
 
     h += '<div class="task-card ' + statusCls + '" onclick="navigateTo(\'#task/' + t.id + '\')" onmouseenter="prefetchTask(\'' + t.id + '\')">' +
       '<div class="task-card-header">' +

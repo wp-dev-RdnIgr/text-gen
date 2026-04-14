@@ -73,36 +73,25 @@ function loadAllTasksForPage() {
   if (empty) empty.style.display = 'none';
   grid.innerHTML = skeletonTaskCards(6);
 
-  var remaining = clients.length;
-  var allTasks = [];
-  var perClientCount = {};
-  clients.forEach(function(cl) {
-    google.script.run.withSuccessHandler(function(tasks) {
-      perClientCount[cl.id] = (tasks || []).length;
-      (tasks || []).forEach(function(t) {
-        t._clientName = cl.name;
-        t._clientId = cl.id;
-        allTasks.push(t);
-      });
-      remaining--;
-      if (remaining === 0) {
-        (state.clients || []).forEach(function(c) {
-          c.tasks_count = perClientCount[c.id] || 0;
-        });
-        if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
-        state.allTasks = allTasks;
-        state._allTasksFetchedAt = Date.now();
-        filterTasksList();
-      }
-    }).withFailureHandler(function(e) {
-      console.error('loadAllTasksForPage', e);
-      remaining--;
-      if (remaining === 0) {
-        state.allTasks = allTasks;
-        filterTasksList();
-      }
-    }).getTasks(cl.id);
-  });
+  // Один batch-виклик замість N окремих
+  google.script.run.withSuccessHandler(function(allTasks) {
+    allTasks = allTasks || [];
+    var perClientCount = {};
+    allTasks.forEach(function(t) {
+      perClientCount[t._clientId] = (perClientCount[t._clientId] || 0) + 1;
+    });
+    (state.clients || []).forEach(function(c) {
+      c.tasks_count = perClientCount[c.id] || 0;
+    });
+    if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
+    state.allTasks = allTasks;
+    state._allTasksFetchedAt = Date.now();
+    filterTasksList();
+  }).withFailureHandler(function(e) {
+    console.error('loadAllTasksForPage:', e);
+    state.allTasks = [];
+    filterTasksList();
+  }).getAllTasksSlim();
 }
 
 // --- Filter / sort / render ---
@@ -123,7 +112,7 @@ function filterTasksList() {
   if (tplId)    list = list.filter(function(t) { return String(t.template_id || '') === String(tplId); });
   if (q) {
     list = list.filter(function(t) {
-      var hay = ((t.name || '') + ' ' + (t.system_prompt || '') + ' ' + (t.user_prompt || '') + ' ' + (t._clientName || '')).toLowerCase();
+      var hay = ((t.name || '') + ' ' + (t.description || '') + ' ' + (t.system_prompt || '') + ' ' + (t.user_prompt || '') + ' ' + (t._clientName || '')).toLowerCase();
       return hay.indexOf(q) !== -1;
     });
   }
@@ -187,7 +176,7 @@ function renderTasksList(list) {
     var clientBadge = t._clientName ? '<span class="badge badge-neutral">' + escapeHtml(t._clientName) + '</span>' : '';
     var modelBadge = t.llm_model ? '<span class="badge badge-info">' + escapeHtml(t.llm_model) + '</span>' : '';
     var statusBadge = getStatusBadge(t.status);
-    var desc = truncate(t.system_prompt || t.description || '', 100);
+    var desc = truncate(t.description || t.system_prompt || '', 100);
 
     h += '<div class="task-card ' + statusCls + '" onclick="navigateTo(\'#task/' + t.id + '\')" onmouseenter="prefetchTask(\'' + t.id + '\')">' +
       '<div class="task-card-header">' +

@@ -93,6 +93,123 @@ function getTasks(clientId) {
   return callCrudApi('getTasks', { clientId: clientId });
 }
 
+/**
+ * Bootstrap: один client RPC → паралельні server-side fetch'і
+ * Повертає { clients, templates, tasks } за ~1 round-trip для клієнта
+ * замість 2 + N викликів. Slim tasks (без heavy полів) для списків.
+ */
+function getBootstrap() {
+  try {
+    // Послідовно: clients → templates → parallel tasks
+    var clients = callCrudApi('getClients') || [];
+    var templates = callCrudApi('getTaskTemplates') || [];
+
+    if (!clients.length) {
+      return { clients: [], templates: templates, tasks: [] };
+    }
+
+    // Паралельні server-side запити до n8n через fetchAll
+    var requests = clients.map(function(c) {
+      return {
+        url: N8N_API_URL,
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify({ action: 'getTasks', params: { clientId: c.id } }),
+        muteHttpExceptions: true
+      };
+    });
+
+    var responses = UrlFetchApp.fetchAll(requests);
+    var allTasks = [];
+
+    responses.forEach(function(resp, i) {
+      if (resp.getResponseCode() !== 200) return;
+      try {
+        var tasks = JSON.parse(resp.getContentText() || '[]');
+        if (!Array.isArray(tasks)) return;
+        var clientName = clients[i].name;
+        var clientId = clients[i].id;
+        tasks.forEach(function(t) {
+          // Slim version — тільки поля для списку (мінус heavy промпти/блоки)
+          allTasks.push({
+            id: t.id,
+            name: t.name,
+            status: t.status || 'active',
+            client_id: clientId,
+            _clientId: clientId,
+            _clientName: clientName,
+            template_id: t.template_id,
+            llm_provider: t.llm_provider,
+            llm_model: t.llm_model,
+            created_at: t.created_at,
+            updated_at: t.updated_at,
+            // Short preview з system_prompt — для карток
+            description: (t.system_prompt || '').substring(0, 120)
+          });
+        });
+      } catch (e) {
+        Logger.log('getBootstrap parse error: ' + e.message);
+      }
+    });
+
+    // Підрахувати tasks_count на клієнтах
+    clients.forEach(function(c) {
+      c.tasks_count = allTasks.filter(function(t) { return String(t._clientId) === String(c.id); }).length;
+    });
+
+    return { clients: clients, templates: templates, tasks: allTasks };
+  } catch (e) {
+    Logger.log('getBootstrap ERROR: ' + e.message);
+    throw new Error('getBootstrap: ' + e.message);
+  }
+}
+
+/**
+ * Slim getTasks для cross-client списку (альтернатива getBootstrap,
+ * якщо клієнти вже завантажені). Паралельні fetch'і + slim поля.
+ */
+function getAllTasksSlim() {
+  var clients = callCrudApi('getClients') || [];
+  if (!clients.length) return [];
+
+  var requests = clients.map(function(c) {
+    return {
+      url: N8N_API_URL,
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ action: 'getTasks', params: { clientId: c.id } }),
+      muteHttpExceptions: true
+    };
+  });
+
+  var responses = UrlFetchApp.fetchAll(requests);
+  var all = [];
+  responses.forEach(function(resp, i) {
+    if (resp.getResponseCode() !== 200) return;
+    try {
+      var tasks = JSON.parse(resp.getContentText() || '[]');
+      if (!Array.isArray(tasks)) return;
+      tasks.forEach(function(t) {
+        all.push({
+          id: t.id,
+          name: t.name,
+          status: t.status || 'active',
+          client_id: clients[i].id,
+          _clientId: clients[i].id,
+          _clientName: clients[i].name,
+          template_id: t.template_id,
+          llm_provider: t.llm_provider,
+          llm_model: t.llm_model,
+          created_at: t.created_at,
+          updated_at: t.updated_at,
+          description: (t.system_prompt || '').substring(0, 120)
+        });
+      });
+    } catch (e) { Logger.log('getAllTasksSlim parse: ' + e.message); }
+  });
+  return all;
+}
+
 function getTask(taskId) {
   var rows = callCrudApi('getTask', { id: taskId });
   return Array.isArray(rows) ? rows[0] || null : rows;

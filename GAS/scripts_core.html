@@ -152,6 +152,43 @@ function loadInitialData(force) {
     return;
   }
 
+  // Один RPC замість двох+N — паралельна batch-підкачка на сервері
+  google.script.run.withSuccessHandler(function(data) {
+    data = data || {};
+    state.clients = data.clients || [];
+    state.taskTemplates = data.templates || [];
+    state.allTasks = data.tasks || [];
+    var now = Date.now();
+    state._clientsFetchedAt = now;
+    state._allTasksFetchedAt = now;
+    state._initialDataLoaded = true;
+
+    // Оновити всі UI елементи, що залежать від state
+    if (typeof renderClientList === 'function') renderClientList();
+    if (typeof renderClientsTable === 'function') renderClientsTable();
+    updateSidebarCounts();
+
+    var tplCountEl = document.getElementById('stat-templates-count');
+    if (tplCountEl) tplCountEl.textContent = state.taskTemplates.length;
+
+    // Перерендерити поточну сторінку якщо вона використовує ці дані
+    var hash = window.location.hash || '#dashboard';
+    if (hash === '#dashboard' && typeof renderDashboardOverview === 'function') {
+      renderDashboardOverview();
+    } else if (hash === '#tasks' && typeof renderTasksPage === 'function') {
+      renderTasksPage();
+    }
+  }).withFailureHandler(function(e) {
+    console.error('getBootstrap error, fallback to legacy:', e);
+    // Fallback: окремі виклики (для сумісності якщо Handlers.gs ще старий)
+    _loadInitialDataLegacy();
+  }).getBootstrap();
+
+  renderRecentTasks();
+}
+
+// Fallback (якщо getBootstrap недоступний)
+function _loadInitialDataLegacy() {
   google.script.run.withSuccessHandler(function(clients) {
     state.clients = clients || [];
     state._clientsFetchedAt = Date.now();
@@ -159,7 +196,6 @@ function loadInitialData(force) {
     if (typeof renderClientList === 'function') renderClientList();
     if (typeof renderClientsTable === 'function') renderClientsTable();
     updateSidebarCounts();
-    // Перерендер дашборду/клієнтів після завантаження даних
     var hash = window.location.hash || '#dashboard';
     if (hash === '#dashboard' && typeof renderDashboardOverview === 'function') {
       renderDashboardOverview();
@@ -170,14 +206,11 @@ function loadInitialData(force) {
 
   google.script.run.withSuccessHandler(function(tt) {
     state.taskTemplates = tt || [];
-    // Оновити stat-templates-count якщо на дашборді
     var el = document.getElementById('stat-templates-count');
     if (el) el.textContent = tt.length;
   }).withFailureHandler(function(e) {
     console.error('loadTaskTemplates error:', e);
   }).getTaskTemplates();
-
-  renderRecentTasks();
 }
 
 // --- Sidebar counts (Задачі / Клієнти) ---
