@@ -1,6 +1,6 @@
 <script>
 // ===========================================
-// scripts_task.html - Экран задачи, генерация, история
+// scripts_task.html — Екран задачі, генерація, історія
 // ===========================================
 
 function loadTaskScreen(taskId) {
@@ -9,7 +9,7 @@ function loadTaskScreen(taskId) {
     state.currentTask = task;
     state.lastGeneratedText = null;
 
-    // Заполнить UI
+    // Заповнити UI
     document.getElementById('task-name-input').value = task.name || '';
     document.getElementById('task-breadcrumb-name').textContent = task.name || '';
     document.getElementById('task-system-prompt').value = task.system_prompt || '';
@@ -28,7 +28,7 @@ function loadTaskScreen(taskId) {
       document.getElementById('task-llm-select').value = task.llm_provider + '|' + task.llm_model;
     }
 
-    // Опции
+    // Опції
     var opts = task.options || {};
     document.getElementById('task-opt-humanize').checked = !!opts.humanize;
     document.getElementById('task-opt-uniqueness').checked = !!opts.uniqueness;
@@ -38,7 +38,7 @@ function loadTaskScreen(taskId) {
     document.getElementById('task-opt-interview').checked = !!opts.interview;
     document.getElementById('task-opt-draft-review').checked = !!opts.draft_review;
 
-    // Клиент в хлебных крошках
+    // Клієнт у breadcrumbs
     google.script.run.withSuccessHandler(function(clients) {
       var cl = (clients || []).find(function(c) { return c.id == task.client_id; });
       document.getElementById('task-breadcrumb-client').textContent = cl ? cl.name : '';
@@ -47,23 +47,25 @@ function loadTaskScreen(taskId) {
     // Рендер core fields
     renderCoreFields();
 
-    // Спеціаліст email
+    // Email спеціаліста
     document.getElementById('task-specialist-email').value = task.specialist_email || '';
 
     // Рендер flex blocks
     renderFlexToggleBar();
     renderActiveFlexBlocks();
 
-    // Заполнить field values
+    // Заповнити field values
     populateFieldValues();
 
-    // Обновить превью промптов
+    // Оновити прев'ю промптів
     updatePromptPreviews();
 
     // Скинути UI генерації
     document.getElementById('gen-result').style.display = 'none';
     document.getElementById('gen-loading').style.display = 'none';
     document.getElementById('gen-user-input').value = '';
+    var _startCard = document.getElementById('gen-start-card');
+    if (_startCard) _startCard.style.display = '';
 
     switchTaskTab('generate');
     goToWizardStep(1);
@@ -106,7 +108,7 @@ function renderFlexToggleBar() {
   renderFlexDropdownList();
 }
 
-// --- Хранилище раскрытых блоков и режимов ---
+// --- Сховище розгорнутих блоків і режимів ---
 var _expandedFlexBlocks = {};
 var _editingFlexBlocks = {};
 
@@ -140,7 +142,7 @@ function renderFlexDropdownList() {
     var checked = active.indexOf(b.key) !== -1 ? ' checked' : '';
     h += '<label><input type="checkbox" value="' + b.key + '"' + checked + ' onchange="onFlexDropdownChange(\'' + b.key + '\',this.checked)"> ' + escapeHtml(b.label) + '</label>';
   }
-  dd.innerHTML = h || '<div style="padding:8px 12px;color:#AAA;font-size:12px;">Немає блоків</div>';
+  dd.innerHTML = h || '<div style="padding:8px 12px;color:var(--text-muted);font-size:12px;">Немає блоків</div>';
   updateFlexDropdownLabel();
 }
 
@@ -164,10 +166,10 @@ function updateFlexDropdownLabel() {
   var total = blocks.length;
   if (active.length === 0) {
     label.textContent = 'Обрати блоки (' + total + ' доступно)';
-    label.style.color = '#888';
+    label.style.color = 'var(--text-secondary)';
   } else {
     label.textContent = 'Додаткові блоки: ' + active.length + ' з ' + total;
-    label.style.color = '#1A1A1A';
+    label.style.color = 'var(--text)';
   }
 }
 
@@ -188,7 +190,7 @@ function renderActiveFlexBlocks() {
     var isExpanded = !!_expandedFlexBlocks[b.key];
     var hasValue = false;
 
-    // Превью значения
+    // Прев'ю значення
     var preview = '';
     if (b.type === 'repeatable') {
       var items = val;
@@ -205,7 +207,7 @@ function renderActiveFlexBlocks() {
 
     h += '<div class="flex-accordion-item' + (isExpanded ? ' expanded' : '') + '">';
 
-    // Заголовок-строка (всегда видна)
+    // Заголовок (завжди видимий)
     h += '<div class="flex-accordion-header" onclick="toggleFlexExpand(\'' + b.key + '\')">';
     h += '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">';
     h += '<span class="flex-accordion-chevron' + (isExpanded ? ' open' : '') + '">&#9654;</span>';
@@ -223,7 +225,7 @@ function renderActiveFlexBlocks() {
       h += '<div class="flex-accordion-body">';
 
       if (b.type === 'repeatable') {
-        // Repeatable всегда в режиме редактирования
+        // Repeatable завжди в режимі редагування
         var repItems = fv[b.key] || [''];
         if (!Array.isArray(repItems)) repItems = val ? [String(val)] : [''];
         h += '<div class="repeatable-list" id="rep-' + b.key + '">';
@@ -359,7 +361,7 @@ function updateFlexValue(key, value) {
   autoSaveTask();
 }
 
-// --- Добавление пользовательского блока ---
+// --- Додавання користувацького блоку ---
 function confirmAddFlexBlock() {
   var label = document.getElementById('new-flex-label').value.trim();
   var type = document.getElementById('new-flex-type').value;
@@ -370,7 +372,7 @@ function confirmAddFlexBlock() {
   if (!task) return;
   if (!task.flex_blocks) task.flex_blocks = [];
 
-  // Проверить уникальность ключа
+  // Перевірити унікальність ключа
   var exists = task.flex_blocks.some(function(b) { return b.key === key; });
   if (exists) key = key + '_' + Date.now();
 
@@ -406,7 +408,7 @@ function saveFieldValues() {
   autoSaveTask();
 }
 
-// --- Компактная правая панель ---
+// --- Прев'ю промптів ---
 var _promptModalType = '';
 
 function updatePromptPreviews() {
@@ -576,15 +578,23 @@ function autoSaveTask() {
 function deleteCurrentTask() {
   if (!state.currentTask) return;
   if (!confirm('Видалити задачу та всі її тексти?')) return;
+  var taskId = state.currentTask.id;
   google.script.run.withSuccessHandler(function() {
     showToast('Задачу видалено', 'success');
-    navigateTo('#dashboard');
+    // Видалити з localStorage recent
+    try {
+      var list = JSON.parse(localStorage.getItem('tg_recent_tasks') || '[]');
+      list = list.filter(function(t) { return t.id !== taskId; });
+      localStorage.setItem('tg_recent_tasks', JSON.stringify(list));
+      if (typeof renderRecentTasks === 'function') renderRecentTasks();
+    } catch (e) {}
+    navigateTo('#tasks');
   }).withFailureHandler(function(e) {
     showToast(e.message, 'error');
-  }).deleteTask(state.currentTask.id);
+  }).deleteTask(taskId);
 }
 
-// --- Генерация (multi-step flow) ---
+// --- Генерація (multi-step flow) ---
 function startGeneration() {
   if (!state.currentTask) return;
 
@@ -593,16 +603,16 @@ function startGeneration() {
   var startCard = document.getElementById('gen-start-card');
   if (startCard) startCard.style.display = 'none';
 
-  // Собрать все field values
+  // Зібрати всі field values
   saveFieldValues();
 
   var task = state.currentTask;
   var fv = task.field_values || {};
 
-  // Собрать промпт
+  // Зібрати промпт
   var assembledPrompt = assemblePrompt(task.user_prompt || '', fv);
 
-  // Дополнительные инструкции
+  // Додаткові інструкції
   var extra = document.getElementById('gen-user-input').value.trim();
   if (extra) {
     assembledPrompt += '\n\nДодаткові інструкції:\n' + extra;
@@ -1113,7 +1123,7 @@ function openEditorForLastGen() {
   navigateTo('#editor/' + state.currentTask.id + '/' + state.lastGeneratedText.id);
 }
 
-// --- История ---
+// --- Історія ---
 // ===========================================
 // Імпорт даних з Google Sheets
 // ===========================================
@@ -1150,11 +1160,11 @@ function taskImportLoadRows() {
     var rows = data.rows || [];
     for (var ri = 0; ri < rows.length; ri++) {
       var row = rows[ri];
-      h += '<label class="checkbox-label" style="padding:8px 0;border-bottom:1px solid #F0F0EC;align-items:flex-start;">' +
+      h += '<label class="checkbox-label" style="padding:8px 0;border-bottom:1px solid var(--border-light);align-items:flex-start;">' +
         '<input type="radio" name="task-import-row" value="' + ri + '" onchange="onTaskImportRowSelect(' + ri + ')" style="margin-top:2px;">' +
         '<div>' +
           '<strong style="font-size:13px;">#' + row.rowNum + '</strong> ' +
-          '<span style="font-size:12px;color:#555;">' + escapeHtml(row.topic) + '</span>' +
+          '<span style="font-size:12px;color:var(--text-secondary);">' + escapeHtml(row.topic) + '</span>' +
         '</div>' +
       '</label>';
     }
@@ -1183,7 +1193,7 @@ function taskImportAcceptRow() {
   var row = _taskImportData.rows[_taskImportSelectedRow];
   var headers = _taskImportData.headers || [];
 
-  // Собрать список полей задачи для AI-маппинга
+  // Зібрати список полів задачі для AI-маппінгу
   var taskFieldNames = [
     { key: 'url', label: 'URL сторінки (одна конкретна URL-адреса сторінки)' },
     { key: 'keywords', label: 'Анкор (ключове слово для посилання, зазвичай 1-3 слова)' },
@@ -1200,7 +1210,7 @@ function taskImportAcceptRow() {
   closeModal('modal-task-import');
   openModal('modal-import-loading');
 
-  // Вызвать AI-маппинг на сервере
+  // Викликати AI-маппінг на сервері
   google.script.run.withSuccessHandler(function(mapping) {
     closeModal('modal-import-loading');
     if (!task.field_values) task.field_values = {};
@@ -1220,7 +1230,7 @@ function taskImportAcceptRow() {
       task.field_values[fieldKey] = val;
       mappedCount++;
 
-      // Активировать flex block если это flex
+      // Активувати flex block якщо це flex
       for (var bfi = 0; bfi < flexBlocks.length; bfi++) {
         if (flexBlocks[bfi].key === fieldKey && task.active_flex_blocks.indexOf(fieldKey) === -1) {
           task.active_flex_blocks.push(fieldKey);
@@ -1229,7 +1239,7 @@ function taskImportAcceptRow() {
       }
     }
 
-    // Данные из колонок, которые AI не замаппил — заполнить существующие или создать новые
+    // Дані з колонок, які AI не змаппив — заповнити існуючі або створити нові
     for (var hi = 0; hi < headers.length; hi++) {
       var header = headers[hi];
       if (mappedColumns[header]) continue;
@@ -1265,7 +1275,7 @@ function taskImportAcceptRow() {
 
     task.flex_blocks = flexBlocks;
 
-    // Обновить UI
+    // Оновити UI
     populateFieldValues();
     renderCoreFields();
     renderFlexToggleBar();
@@ -1413,7 +1423,7 @@ function openVoiceCloneModal() {
   // Show profile status
   var status = document.getElementById('voice-profile-status');
   if (task.voice_profile) {
-    status.innerHTML = '<div style="background:#ECFDF5;border:1px solid #16A34A;border-radius:6px;padding:8px 12px;font-size:11px;color:#16A34A;">✓ Голосовий профіль створено (' + task.voice_profile.length + ' символів)</div>';
+    status.innerHTML = '<div style="background:var(--success-light);border:1px solid var(--success-border);border-radius:6px;padding:8px 12px;font-size:11px;color:#047857;">✓ Голосовий профіль створено (' + task.voice_profile.length + ' символів)</div>';
   } else {
     status.innerHTML = '<div class="text-secondary" style="font-size:11px;">Профіль ще не створено. Додайте тексти та натисніть "Аналізувати".</div>';
   }
@@ -1502,7 +1512,7 @@ function showInterviewModal(questions) {
   var h = '';
   for (var i = 0; i < _interviewQuestions.length; i++) {
     h += '<div class="field-group">' +
-      '<label class="field-label" style="color:#1A1A1A;font-size:12px;text-transform:none;letter-spacing:0;">' + escapeHtml(_interviewQuestions[i]) + '</label>' +
+      '<label class="field-label" style="color:var(--text);font-size:12px;text-transform:none;letter-spacing:0;">' + escapeHtml(_interviewQuestions[i]) + '</label>' +
       '<textarea class="input-field" rows="3" id="interview-answer-' + i + '" placeholder="Ваша відповідь..."></textarea>' +
     '</div>';
   }
@@ -1582,6 +1592,8 @@ function refineDraft() {
 
 function showFinalResult(result) {
   state.lastGeneratedText = result;
+  var startCard = document.getElementById('gen-start-card');
+  if (startCard) startCard.style.display = 'none';
   document.getElementById('gen-result').style.display = 'block';
   document.getElementById('gen-result-content').innerHTML = result.content || '';
 

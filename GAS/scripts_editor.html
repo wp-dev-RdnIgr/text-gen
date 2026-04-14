@@ -1,6 +1,6 @@
 <script>
 // ===========================================
-// scripts_editor.html - Блочный редактор текста
+// scripts_editor.html — Блочний редактор тексту
 // ===========================================
 
 function loadEditorScreen(taskId, textId) {
@@ -8,7 +8,7 @@ function loadEditorScreen(taskId, textId) {
   state.activeBlockIndex = -1;
   state.regenBlockIndex = -1;
 
-  // Ссылка назад
+  // Посилання назад
   var backLink = document.getElementById('editor-breadcrumb-task-link');
   if (backLink) {
     backLink.setAttribute('onclick', "navigateTo('#task/" + taskId + "'); return false;");
@@ -19,7 +19,7 @@ function loadEditorScreen(taskId, textId) {
     if (!text) { showToast('Текст не знайдено', 'error'); return; }
     state.editorText = text;
 
-    // Если нет блоков — парсим из контента
+    // Якщо немає блоків — парсимо з контенту
     if (!text.blocks || !text.blocks.length) {
       text.blocks = parseContentToBlocks(text.content);
     }
@@ -42,11 +42,11 @@ function navigateBackFromEditor() {
   if (state.editorTaskId) {
     navigateTo('#task/' + state.editorTaskId);
   } else {
-    navigateTo('#dashboard');
+    navigateTo('#tasks');
   }
 }
 
-// --- Мета-информация ---
+// --- Мета-інформація ---
 function renderEditorMeta() {
   var t = state.editorText;
   if (!t) return;
@@ -58,6 +58,7 @@ function renderEditorMeta() {
   if (llmBadge) llmBadge.textContent = t.used_llm_model || '—';
 
   // Промпт
+
   var sp = document.getElementById('editor-system-prompt');
   var ui = document.getElementById('editor-user-input');
   if (sp) sp.textContent = t.used_system_prompt || '(пусто)';
@@ -103,7 +104,7 @@ function toggleEditorPromptInfo() {
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
-// --- Рендер блоков ---
+// --- Рендер блоків ---
 function renderEditorBlocks() {
   var container = document.getElementById('editor-blocks');
   if (!container || !state.editorText) return;
@@ -128,7 +129,7 @@ function renderEditorBlocks() {
       content = '<p>' + block.content + '</p>';
     }
 
-    // Тулбар блока
+    // Тулбар блоку
     var toolbar = '<div class="block-toolbar">' +
       '<button class="block-toolbar-btn" onclick="event.stopPropagation();regenerateBlock(' + index + ')" title="Перегенерувати цей блок">&#x21bb; Перегенерувати</button>' +
       '<div class="block-toolbar-sep"></div>' +
@@ -160,7 +161,7 @@ function toggleBlock(index) {
   renderEditorBlocks();
 }
 
-// --- Регенерация блока ---
+// --- Регенерація блоку ---
 function regenerateBlock(index) {
   var t = state.editorText;
   if (!t || !t.blocks || !t.blocks[index]) return;
@@ -186,7 +187,7 @@ function regenerateBlock(index) {
   }).regenerateBlockWithAI(t.id, index, '');
 }
 
-// --- Регенерация блока с комментарием ---
+// --- Регенерація блоку з коментарем ---
 function openBlockCommentModal(index) {
   state.regenBlockIndex = index;
   var t = state.editorText;
@@ -262,7 +263,7 @@ function regenerateFullText() {
   }).regenerateFullTextWithAI(t.id, '');
 }
 
-// --- Перегенерация с комментарием ---
+// --- Перегенерація з коментарем ---
 function openRegenWithComment() {
   var el = document.getElementById('editor-regen-comment');
   if (!el) return;
@@ -337,7 +338,7 @@ function mergeBlocks(index) {
   showToast('Блоки об\'єднано', 'success');
 }
 
-// --- Разбивка блока ---
+// --- Розбиття блоку ---
 function promptSplitBlock(index) {
   var t = state.editorText;
   if (!t || !t.blocks || !t.blocks[index]) return;
@@ -345,7 +346,7 @@ function promptSplitBlock(index) {
   var block = t.blocks[index];
   var content = block.content;
 
-  // Ищем точку разделения: середина по предложениям
+  // Шукаємо точку розділення: середина за реченнями
   var sentences = content.split(/(?<=[.!?])\s+/);
   if (sentences.length < 2) {
     showToast('Блок занадто короткий для розбиття', 'error');

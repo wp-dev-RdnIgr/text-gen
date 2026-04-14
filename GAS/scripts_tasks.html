@@ -66,8 +66,10 @@ function loadAllTasksForPage() {
 
   var remaining = clients.length;
   var allTasks = [];
+  var perClientCount = {};
   clients.forEach(function(cl) {
     google.script.run.withSuccessHandler(function(tasks) {
+      perClientCount[cl.id] = (tasks || []).length;
       (tasks || []).forEach(function(t) {
         t._clientName = cl.name;
         t._clientId = cl.id;
@@ -75,6 +77,10 @@ function loadAllTasksForPage() {
       });
       remaining--;
       if (remaining === 0) {
+        (state.clients || []).forEach(function(c) {
+          c.tasks_count = perClientCount[c.id] || 0;
+        });
+        if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
         state.allTasks = allTasks;
         filterTasksList();
       }

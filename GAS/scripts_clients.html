@@ -113,6 +113,25 @@ function renderClientsGrid() {
   }
   if (empty) empty.style.display = 'none';
 
+  // Якщо лічильники задач ще не завантажені — підвантажимо їх у фоні
+  var needsCounts = clients.some(function(c) { return c.tasks_count == null; });
+  if (needsCounts) {
+    var remaining = clients.length;
+    clients.forEach(function(cl) {
+      google.script.run.withSuccessHandler(function(tasks) {
+        cl.tasks_count = (tasks || []).length;
+        remaining--;
+        if (remaining === 0) {
+          if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
+          renderClientsGrid(); // перерендерити з актуальними цифрами
+        }
+      }).withFailureHandler(function() {
+        remaining--;
+        if (remaining === 0) renderClientsGrid();
+      }).getTasks(cl.id);
+    });
+  }
+
   var h = '';
   clients.forEach(function(cl) {
     var initials = (cl.name || '?').split(' ').map(function(w) { return w.charAt(0); }).join('').substring(0, 2).toUpperCase();

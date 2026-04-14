@@ -1,6 +1,6 @@
 // ===========================================
 // Handlers.gs — Усі дані через n8n → PostgreSQL
-// OpenAI и AI-маппинг тоже через n8n
+// OpenAI та AI-маппінг теж через n8n
 // ===========================================
 
 var N8N_API_URL = 'https://n8n.rnd.webpromo.tools/webhook/textgen-api';

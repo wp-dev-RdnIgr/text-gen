@@ -97,15 +97,28 @@ function loadDashboardRecentTasks() {
   // Завантажуємо задачі по всім клієнтам паралельно
   var remaining = clients.length;
   var allTasks = [];
+  var perClientCount = {};
   clients.forEach(function(cl) {
     google.script.run.withSuccessHandler(function(tasks) {
+      perClientCount[cl.id] = (tasks || []).length;
       (tasks || []).forEach(function(t) {
         t._clientName = cl.name;
         t._clientId = cl.id;
         allTasks.push(t);
       });
       remaining--;
-      if (remaining === 0) renderDashboardRecentTasks(allTasks);
+      if (remaining === 0) {
+        // Кешуємо tasks_count у state.clients для sidebar
+        (state.clients || []).forEach(function(c) {
+          c.tasks_count = perClientCount[c.id] || 0;
+        });
+        updateSidebarCounts();
+        // Оновити stat-total-tasks на реальні числа
+        var totalEl = document.getElementById('stat-total-tasks');
+        if (totalEl) totalEl.textContent = allTasks.length;
+        renderDashboardClientsPreview();
+        renderDashboardRecentTasks(allTasks);
+      }
     }).withFailureHandler(function(e) {
       console.error('loadDashboardRecentTasks', e);
       remaining--;
@@ -246,18 +259,21 @@ function onNewTaskClientFilterChange() {
 
 // --- Resolve target client for creation ---
 function resolveNewTaskClientId() {
-  // 1) selected in multiselect → first
+  // 1) selected in multiselect (modal-new-task own filter) → first
   var selected = getMultiselectSelected('new-task-client-ms-options');
   if (selected && selected.length === 1) return selected[0];
   if (selected && selected.length > 1) {
     showToast('Оберіть одного клієнта у фільтрі', 'error');
     return null;
   }
-  // 2) filter (from openClient) legacy
+  // 2) filter from Tasks page (#tasks-filter-client)
+  var tasksFilter = document.getElementById('tasks-filter-client');
+  if (tasksFilter && tasksFilter.value) return tasksFilter.value;
+  // 3) filter (from openClient) legacy
   if (state.filterClientId) return state.filterClientId;
-  // 3) якщо лише один клієнт у системі — беремо його
+  // 4) якщо лише один клієнт у системі — беремо його
   if ((state.clients || []).length === 1) return state.clients[0].id;
-  // 4) інакше помилка
+  // 5) інакше помилка
   showToast('Оберіть клієнта у фільтрі зверху', 'error');
   return null;
 }
