@@ -62,6 +62,7 @@ function hideScreenLoader() {
 
 // --- Инициализация ---
 document.addEventListener('DOMContentLoaded', function() {
+  restoreSidebarState();
   loadInitialData();
   handleHashRoute();
   window.addEventListener('hashchange', handleHashRoute);
@@ -72,6 +73,7 @@ function loadInitialData() {
     state.clients = clients || [];
     renderClientList();
     renderClientsTable();
+    updateSidebarCounts();
   }).withFailureHandler(function(e) {
     console.error('loadClients error:', e);
   }).getClients();
@@ -81,6 +83,57 @@ function loadInitialData() {
   }).withFailureHandler(function(e) {
     console.error('loadTaskTemplates error:', e);
   }).getTaskTemplates();
+
+  renderRecentTasks();
+}
+
+// --- Sidebar counts (Задачі / Клієнти) ---
+function updateSidebarCounts() {
+  var clientsEl = document.getElementById('sidebar-clients-count');
+  if (clientsEl && state.clients) {
+    clientsEl.textContent = state.clients.length || '';
+  }
+  var tasksEl = document.getElementById('sidebar-tasks-count');
+  if (tasksEl) {
+    var total = 0;
+    if (state.clients) {
+      for (var i = 0; i < state.clients.length; i++) {
+        total += (state.clients[i].tasks_count || 0);
+      }
+    }
+    tasksEl.textContent = total || '';
+  }
+}
+
+// --- Recent tasks (localStorage) ---
+function pushRecentTask(taskId, taskName) {
+  if (!taskId) return;
+  try {
+    var key = 'tg_recent_tasks';
+    var list = JSON.parse(localStorage.getItem(key) || '[]');
+    list = list.filter(function(t) { return t.id !== taskId; });
+    list.unshift({ id: taskId, name: taskName || 'Задача', ts: Date.now() });
+    if (list.length > 5) list = list.slice(0, 5);
+    localStorage.setItem(key, JSON.stringify(list));
+    renderRecentTasks();
+  } catch (e) {}
+}
+
+function renderRecentTasks() {
+  var host = document.getElementById('sidebar-recent');
+  if (!host) return;
+  var list = [];
+  try { list = JSON.parse(localStorage.getItem('tg_recent_tasks') || '[]'); } catch (e) {}
+  var html = '<div class="sidebar-section-title">Нещодавнє</div>';
+  if (!list.length) {
+    html += '<div class="sidebar-recent-item" style="color:var(--text-muted); cursor:default;"><span style="opacity:.6;">порожньо</span></div>';
+  } else {
+    for (var i = 0; i < list.length; i++) {
+      var t = list[i];
+      html += '<div class="sidebar-recent-item" onclick="navigateTo(\'#task/' + escapeHtml(t.id) + '\')" title="' + escapeHtml(t.name) + '">' + escapeHtml(t.name) + '</div>';
+    }
+  }
+  host.innerHTML = html;
 }
 
 // --- Роутер ---
@@ -95,6 +148,15 @@ function handleHashRoute() {
   switch (screen) {
     case '#dashboard':
       showScreen('screen-dashboard');
+      break;
+    case '#tasks':
+      // Stage 4 додасть screen-tasks; поки що — fallback на дашборд
+      if (document.getElementById('screen-tasks')) {
+        showScreen('screen-tasks');
+        if (typeof renderTasksPage === 'function') renderTasksPage();
+      } else {
+        showScreen('screen-dashboard');
+      }
       break;
     case '#clients':
       showScreen('screen-clients');
@@ -138,11 +200,36 @@ function showScreen(id) {
 }
 
 function updateActiveNav(hash) {
-  var tabs = document.querySelectorAll('.nav-tab');
-  for (var i = 0; i < tabs.length; i++) {
-    tabs[i].classList.remove('active');
-    if (tabs[i].getAttribute('data-hash') === hash) tabs[i].classList.add('active');
+  // Підсвітка активного пункту sidebar (і старих .nav-tab для сумісності)
+  var items = document.querySelectorAll('[data-hash]');
+  for (var i = 0; i < items.length; i++) {
+    items[i].classList.remove('active');
+    if (items[i].getAttribute('data-hash') === hash) items[i].classList.add('active');
   }
+  // #task — також підсвічуємо "Задачі" в sidebar
+  if (hash === '#task') {
+    var tasksItem = document.querySelector('[data-hash="#tasks"]');
+    if (tasksItem) tasksItem.classList.add('active');
+  }
+}
+
+// --- Sidebar toggle (collapsed / expanded) ---
+function toggleSidebar() {
+  var sb = document.getElementById('app-sidebar');
+  if (!sb) return;
+  sb.classList.toggle('collapsed');
+  try {
+    localStorage.setItem('tg_sidebar_collapsed', sb.classList.contains('collapsed') ? '1' : '0');
+  } catch (e) {}
+}
+
+function restoreSidebarState() {
+  try {
+    if (localStorage.getItem('tg_sidebar_collapsed') === '1') {
+      var sb = document.getElementById('app-sidebar');
+      if (sb) sb.classList.add('collapsed');
+    }
+  } catch (e) {}
 }
 
 // --- Toast ---

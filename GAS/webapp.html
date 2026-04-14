@@ -2,21 +2,10 @@
 <html>
 <head>
   <base target="_top">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <?!= include('styles'); ?>
 </head>
 <body>
-  <!-- Навигация -->
-  <nav class="top-nav">
-    <div class="nav-logo" onclick="navigateTo('#dashboard')">TextGen</div>
-    <div class="nav-tabs">
-      <button class="nav-tab active" data-hash="#dashboard" onclick="navigateTo('#dashboard')">Дашборд</button>
-      <button class="nav-tab" data-hash="#templates" onclick="navigateTo('#templates')">Шаблони</button>
-      <button class="nav-tab" data-hash="#clients" onclick="navigateTo('#clients')">Клієнти</button>
-    </div>
-    <div id="autosave-status" class="autosave-indicator"></div>
-  </nav>
-
   <!-- Screen preloader -->
   <div id="screen-loader" class="screen-loader" style="display:none;">
     <div class="screen-loader-content">
@@ -25,85 +14,137 @@
     </div>
   </div>
 
-  <!-- Контейнер экранов -->
+  <!-- Головний контейнер: sidebar + контент -->
   <div class="app-container">
-    <?!= include('page_dashboard'); ?>
-    <?!= include('page_task'); ?>
-    <?!= include('page_task_editor'); ?>
-    <?!= include('page_templates'); ?>
-    <?!= include('page_clients'); ?>
+
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="app-sidebar" id="app-sidebar">
+      <div class="sidebar-brand" onclick="navigateTo('#dashboard')" style="cursor:pointer;">
+        <div class="sidebar-brand-mark">T</div>
+        <div class="sidebar-brand-text">TextGen</div>
+      </div>
+
+      <div class="sidebar-search" onclick="showToast('Пошук скоро зʼявиться', 'info')" title="Пошук">
+        <span style="font-size:13px;">⌕</span>
+        <span class="sidebar-search-text">Пошук…</span>
+        <span class="sidebar-search-kbd">⌘K</span>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Workspace</div>
+        <button class="sidebar-item" data-hash="#dashboard" onclick="navigateTo('#dashboard')">
+          <span class="sidebar-item-icon">▣</span>
+          <span class="sidebar-item-label">Дашборд</span>
+        </button>
+        <button class="sidebar-item" data-hash="#tasks" onclick="navigateTo('#tasks')">
+          <span class="sidebar-item-icon">✎</span>
+          <span class="sidebar-item-label">Задачі</span>
+          <span class="sidebar-item-count" id="sidebar-tasks-count"></span>
+        </button>
+        <button class="sidebar-item" data-hash="#templates" onclick="navigateTo('#templates')">
+          <span class="sidebar-item-icon">⊞</span>
+          <span class="sidebar-item-label">Шаблони</span>
+        </button>
+        <button class="sidebar-item" data-hash="#clients" onclick="navigateTo('#clients')">
+          <span class="sidebar-item-icon">☻</span>
+          <span class="sidebar-item-label">Клієнти</span>
+          <span class="sidebar-item-count" id="sidebar-clients-count"></span>
+        </button>
+      </div>
+
+      <div class="sidebar-section sidebar-recent" id="sidebar-recent">
+        <div class="sidebar-section-title">Нещодавнє</div>
+        <!-- Заповнюється динамічно через renderRecentTasks() -->
+      </div>
+
+      <div class="sidebar-footer">
+        <button class="sidebar-toggle" onclick="toggleSidebar()" title="Згорнути / розгорнути">
+          <span style="font-size:14px;">◧</span>
+        </button>
+        <div id="autosave-status" class="autosave-indicator"></div>
+      </div>
+    </aside>
+
+    <!-- ============ MAIN CONTENT ============ -->
+    <main class="app-content">
+      <?!= include('page_dashboard'); ?>
+      <?!= include('page_task'); ?>
+      <?!= include('page_task_editor'); ?>
+      <?!= include('page_templates'); ?>
+      <?!= include('page_clients'); ?>
+    </main>
   </div>
 
-  <!-- Модалка: Клиент -->
+  <!-- Модалка: Клієнт -->
   <div id="modal-client" class="modal-overlay" style="display:none;">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-client-title">Новый клиент</h3>
+        <h3 id="modal-client-title">Новий клієнт</h3>
         <button class="modal-close" onclick="closeModal('modal-client')">&times;</button>
       </div>
       <div class="modal-body">
         <input type="hidden" id="mc-id">
         <div class="field-group">
-          <label class="field-label">Название</label>
-          <input type="text" id="mc-name" class="input-field" placeholder="Название компании">
+          <label class="field-label">Назва</label>
+          <input type="text" id="mc-name" class="input-field" placeholder="Назва компанії">
         </div>
         <div class="field-group">
           <label class="field-label">Сайт</label>
           <input type="text" id="mc-domain" class="input-field" placeholder="example.com">
         </div>
         <div class="field-group">
-          <label class="field-label">Ниша</label>
-          <input type="text" id="mc-niche" class="input-field" placeholder="E-commerce, Медицина, ...">
+          <label class="field-label">Ніша</label>
+          <input type="text" id="mc-niche" class="input-field" placeholder="E-commerce, Медицина, …">
         </div>
         <div class="field-group">
-          <label class="field-label">Заметки</label>
-          <textarea id="mc-description" class="input-field" rows="3" placeholder="Заметки о клиенте..."></textarea>
+          <label class="field-label">Нотатки</label>
+          <textarea id="mc-description" class="input-field" rows="3" placeholder="Нотатки про клієнта…"></textarea>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn" onclick="closeModal('modal-client')">Отмена</button>
-        <button class="btn btn-primary" onclick="saveClientFromModal()">Сохранить</button>
+        <button class="btn" onclick="closeModal('modal-client')">Скасувати</button>
+        <button class="btn btn-primary" onclick="saveClientFromModal()">Зберегти</button>
       </div>
     </div>
   </div>
 
-  <!-- Модалка: Выбор шаблона при создании задачи -->
+  <!-- Модалка: Створення задачі -->
   <div id="modal-new-task" class="modal-overlay" style="display:none;">
-    <div class="modal-card" style="max-width:650px;">
+    <div class="modal-card" style="max-width:680px;">
       <div class="modal-header">
-        <h3>Создание задачи</h3>
+        <h3>Створити задачу</h3>
         <button class="modal-close" onclick="closeModal('modal-new-task')">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="text-secondary" style="margin-bottom:12px;">Выберите шаблон или создайте задачу с нуля</p>
+        <p class="text-secondary" style="margin-bottom:14px;">Оберіть шаблон або створіть задачу з нуля</p>
 
-        <!-- Фильтр по клиентам -->
+        <!-- Фільтр за клієнтами -->
         <div style="margin-bottom:16px;">
-          <label class="field-label">Фильтр по клиентам</label>
+          <label class="field-label">Фільтр за клієнтами</label>
           <div class="multiselect-box" id="new-task-client-ms" onclick="toggleMultiselect('new-task-client-ms')">
-            <span class="multiselect-placeholder" id="new-task-client-ms-label">Все клиенты</span>
+            <span class="multiselect-placeholder" id="new-task-client-ms-label">Усі клієнти</span>
             <span class="multiselect-arrow">&#9662;</span>
           </div>
           <div class="multiselect-dropdown" id="new-task-client-ms-dropdown" style="display:none;">
-            <input type="text" class="multiselect-search" placeholder="Поиск клиента..." oninput="filterMultiselectOptions('new-task-client-ms-dropdown', this.value)">
+            <input type="text" class="multiselect-search" placeholder="Пошук клієнта…" oninput="filterMultiselectOptions('new-task-client-ms-dropdown', this.value)">
             <div class="multiselect-options" id="new-task-client-ms-options">
-              <!-- Заполняется динамически -->
+              <!-- Заповнюється динамічно -->
             </div>
           </div>
         </div>
 
         <div id="new-task-template-list" class="task-template-grid">
-          <!-- Заполняется динамически -->
+          <!-- Заповнюється динамічно -->
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn" onclick="closeModal('modal-new-task')">Отмена</button>
-        <button class="btn btn-primary" onclick="createTaskFromScratch()">Пустая задача</button>
+        <button class="btn" onclick="closeModal('modal-new-task')">Скасувати</button>
+        <button class="btn btn-primary" onclick="createTaskFromScratch()">Порожня задача</button>
       </div>
     </div>
   </div>
 
-  <!-- Toast уведомления -->
+  <!-- Toast повідомлення -->
   <div id="toast-container" class="toast-container"></div>
 
   <?!= include('scripts_core'); ?>
