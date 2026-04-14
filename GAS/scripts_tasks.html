@@ -1,0 +1,210 @@
+<script>
+// ===========================================
+// scripts_tasks.html — Розділ "Задачі" (cross-client)
+// ===========================================
+
+state.allTasks = state.allTasks || [];
+state.tasksSort = state.tasksSort || 'updated';
+
+// --- Entry point ---
+function renderTasksPage() {
+  populateTasksFilters();
+  loadAllTasksForPage();
+
+  // Якщо зайшли через "Открыть клієнта" з дашборду — застосовуємо filter
+  if (state.filterClientId) {
+    var sel = document.getElementById('tasks-filter-client');
+    if (sel) sel.value = state.filterClientId;
+    state.filterClientId = null; // з'їдаємо одноразовий флаг
+  }
+}
+
+function populateTasksFilters() {
+  var clientSel = document.getElementById('tasks-filter-client');
+  if (clientSel) {
+    var current = clientSel.value;
+    var h = '<option value="">Усі клієнти</option>';
+    (state.clients || []).forEach(function(cl) {
+      h += '<option value="' + cl.id + '">' + escapeHtml(cl.name) + '</option>';
+    });
+    clientSel.innerHTML = h;
+    if (current) clientSel.value = current;
+  }
+
+  var tplSel = document.getElementById('tasks-filter-template');
+  if (tplSel) {
+    var cur = tplSel.value;
+    var h2 = '<option value="">Усі шаблони</option>';
+    (state.taskTemplates || []).forEach(function(tt) {
+      h2 += '<option value="' + tt.id + '">' + escapeHtml(tt.name) + '</option>';
+    });
+    tplSel.innerHTML = h2;
+    if (cur) tplSel.value = cur;
+  }
+}
+
+// --- Load tasks from all clients ---
+function loadAllTasksForPage() {
+  var grid = document.getElementById('tasks-all-grid');
+  var empty = document.getElementById('tasks-all-empty');
+  var loader = document.getElementById('tasks-loading-all');
+  var countLabel = document.getElementById('tasks-count-label');
+  if (!grid) return;
+
+  var clients = state.clients || [];
+  if (!clients.length) {
+    if (loader) loader.style.display = 'none';
+    if (empty) empty.style.display = 'flex';
+    grid.innerHTML = '';
+    if (countLabel) countLabel.textContent = '0 задач';
+    return;
+  }
+
+  if (loader) loader.style.display = 'flex';
+  if (empty) empty.style.display = 'none';
+  grid.innerHTML = '';
+
+  var remaining = clients.length;
+  var allTasks = [];
+  clients.forEach(function(cl) {
+    google.script.run.withSuccessHandler(function(tasks) {
+      (tasks || []).forEach(function(t) {
+        t._clientName = cl.name;
+        t._clientId = cl.id;
+        allTasks.push(t);
+      });
+      remaining--;
+      if (remaining === 0) {
+        state.allTasks = allTasks;
+        filterTasksList();
+      }
+    }).withFailureHandler(function(e) {
+      console.error('loadAllTasksForPage', e);
+      remaining--;
+      if (remaining === 0) {
+        state.allTasks = allTasks;
+        filterTasksList();
+      }
+    }).getTasks(cl.id);
+  });
+}
+
+// --- Filter / sort / render ---
+function filterTasksList() {
+  var loader = document.getElementById('tasks-loading-all');
+  if (loader) loader.style.display = 'none';
+
+  var q = (document.getElementById('tasks-search') || {}).value || '';
+  q = q.toLowerCase().trim();
+  var clientId = (document.getElementById('tasks-filter-client') || {}).value || '';
+  var status = (document.getElementById('tasks-filter-status') || {}).value || '';
+  var tplId = (document.getElementById('tasks-filter-template') || {}).value || '';
+
+  var list = (state.allTasks || []).slice();
+
+  if (clientId) list = list.filter(function(t) { return String(t._clientId) === String(clientId); });
+  if (status)   list = list.filter(function(t) { return (t.status || 'active') === status; });
+  if (tplId)    list = list.filter(function(t) { return String(t.template_id || '') === String(tplId); });
+  if (q) {
+    list = list.filter(function(t) {
+      var hay = ((t.name || '') + ' ' + (t.system_prompt || '') + ' ' + (t.user_prompt || '') + ' ' + (t._clientName || '')).toLowerCase();
+      return hay.indexOf(q) !== -1;
+    });
+  }
+
+  // Sort
+  var sort = state.tasksSort || 'updated';
+  list.sort(function(a, b) {
+    if (sort === 'name') return (a.name || '').localeCompare(b.name || '', 'uk');
+    var da = new Date((sort === 'created' ? a.created_at : (a.updated_at || a.created_at)));
+    var db = new Date((sort === 'created' ? b.created_at : (b.updated_at || b.created_at)));
+    return db - da;
+  });
+
+  renderTasksList(list);
+}
+
+function setTasksSort(s) {
+  state.tasksSort = s;
+  // active tab
+  var tabs = document.querySelectorAll('#screen-tasks .tabs .tab');
+  for (var i = 0; i < tabs.length; i++) {
+    tabs[i].classList.remove('active');
+    if (tabs[i].getAttribute('data-sort') === s) tabs[i].classList.add('active');
+  }
+  filterTasksList();
+}
+
+function resetTasksFilters() {
+  ['tasks-search', 'tasks-filter-client', 'tasks-filter-status', 'tasks-filter-template'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  filterTasksList();
+}
+
+function renderTasksList(list) {
+  var grid = document.getElementById('tasks-all-grid');
+  var empty = document.getElementById('tasks-all-empty');
+  var countLabel = document.getElementById('tasks-count-label');
+  if (!grid) return;
+
+  if (countLabel) {
+    var n = list.length;
+    countLabel.textContent = n === 1 ? '1 задача' : n + ' задач';
+  }
+
+  if (!list.length) {
+    grid.innerHTML = '';
+    if (empty) empty.style.display = 'flex';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  var h = '';
+  list.forEach(function(t) {
+    var statusCls = 'status-progress';
+    if (t.status === 'done') statusCls = 'status-done';
+    else if (t.status === 'draft') statusCls = 'status-draft';
+    else if (t.status === 'error') statusCls = 'status-error';
+
+    var clientBadge = t._clientName ? '<span class="badge badge-neutral">' + escapeHtml(t._clientName) + '</span>' : '';
+    var modelBadge = t.llm_model ? '<span class="badge badge-info">' + escapeHtml(t.llm_model) + '</span>' : '';
+    var statusBadge = getStatusBadge(t.status);
+    var desc = truncate(t.system_prompt || t.description || '', 100);
+
+    h += '<div class="task-card ' + statusCls + '" onclick="navigateTo(\'#task/' + t.id + '\')">' +
+      '<div class="task-card-header">' +
+        '<div class="task-card-name">' + escapeHtml(t.name || 'Без назви') + '</div>' +
+        '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();confirmDeleteTaskFromList(\'' + t.id + '\', \'' + escapeHtml(t.name || '') + '\')" title="Видалити" style="padding:3px 7px;color:var(--text-muted);">×</button>' +
+      '</div>' +
+      '<div class="task-card-desc">' + escapeHtml(desc) + '</div>' +
+      '<div class="task-card-meta">' + statusBadge + clientBadge + modelBadge + '</div>' +
+      '<div class="task-card-stats">' + formatDate(t.updated_at || t.created_at) + '</div>' +
+    '</div>';
+  });
+  grid.innerHTML = h;
+}
+
+function getStatusBadge(status) {
+  switch (status) {
+    case 'done':  return '<span class="badge badge-success">Готово</span>';
+    case 'draft': return '<span class="badge badge-warning">Чернетка</span>';
+    case 'error': return '<span class="badge badge-danger">Помилка</span>';
+    case 'active':
+    default:      return '<span class="badge badge-info">У роботі</span>';
+  }
+}
+
+function confirmDeleteTaskFromList(tid, name) {
+  if (!confirm('Видалити задачу «' + (name || 'Без назви') + '» та всі її тексти?')) return;
+  google.script.run.withSuccessHandler(function() {
+    showToast('Задачу видалено', 'success');
+    // Видаляємо з локального списку і перерендерюємо
+    state.allTasks = (state.allTasks || []).filter(function(t) { return String(t.id) !== String(tid); });
+    filterTasksList();
+  }).withFailureHandler(function(e) {
+    showToast(e.message, 'error');
+  }).deleteTask(tid);
+}
+</script>
