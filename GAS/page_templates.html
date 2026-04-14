@@ -1,67 +1,74 @@
-<!-- Экран: Шаблоны задач -->
+<!-- Екран: Шаблони задач -->
 <div id="screen-templates" class="screen" style="display:none;">
   <div class="templates-layout">
-    <!-- Левая панель: список шаблонов -->
+
+    <!-- Ліва панель: список шаблонів -->
     <aside class="templates-sidebar">
-      <h2 class="sidebar-title">Шаблоны задач</h2>
-      <input type="text" id="template-search" class="input-field" placeholder="Поиск шаблона..." oninput="filterTemplates(this.value)">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px;">
+        <h2 style="font-size:14px; font-weight:700; color:var(--text); letter-spacing:-0.2px;">Шаблони задач</h2>
+        <button class="btn btn-sm btn-primary" onclick="createNewTemplate()" title="Новий шаблон">＋</button>
+      </div>
+      <input type="text" id="template-search" class="input-field" placeholder="Пошук шаблону…" oninput="filterTemplates(this.value)">
 
       <div id="template-list" class="template-list">
-        <!-- Заполняется динамически -->
-      </div>
-
-      <div class="sidebar-footer">
-        <button class="btn btn-block" onclick="createNewTemplate()">+ Новый шаблон</button>
+        <!-- Заповнюється динамічно -->
       </div>
     </aside>
 
-    <!-- Правая часть: редактор шаблона -->
+    <!-- Права частина: редактор шаблону -->
     <main class="templates-editor">
-      <div id="template-placeholder" class="placeholder-message">
-        <p>Выберите шаблон из списка слева<br>или создайте новый</p>
+      <div id="template-placeholder" class="empty-state" style="padding:100px 24px;">
+        <div class="empty-state-icon">⊞</div>
+        <div class="empty-state-title">Оберіть шаблон</div>
+        <div class="empty-state-desc">Виберіть шаблон зі списку ліворуч або створіть новий, щоб налаштувати промпти та ядрові поля.</div>
+        <button class="btn btn-primary" onclick="createNewTemplate()">＋ Новий шаблон</button>
       </div>
 
       <div id="template-editor-content" style="display:none;">
+
         <!-- Хедер -->
         <div class="content-header">
-          <div class="content-header-info" style="flex:1;">
-            <input type="text" id="tpl-name" class="input-title" placeholder="Название шаблона">
+          <div class="content-header-info" style="flex:1; min-width:0;">
+            <input type="text" id="tpl-name" class="input-title" placeholder="Назва шаблону">
           </div>
           <div class="content-header-actions">
-            <button class="btn" onclick="duplicateTemplate()">Дублировать</button>
-            <button class="btn btn-danger" onclick="deleteCurrentTemplate()">Удалить</button>
-            <button class="btn btn-primary" onclick="saveCurrentTemplate()">Сохранить</button>
+            <button class="btn" onclick="duplicateTemplate()">Дублювати</button>
+            <button class="btn btn-danger" onclick="deleteCurrentTemplate()">Видалити</button>
+            <button class="btn btn-primary" onclick="saveCurrentTemplate()">Зберегти</button>
           </div>
         </div>
 
-        <!-- Описание -->
-        <div class="field-group">
-          <label class="field-label">Описание</label>
-          <textarea id="tpl-description" class="input-field" rows="2" placeholder="Краткое описание — для чего этот шаблон..."></textarea>
+        <!-- Опис -->
+        <div class="content-card">
+          <div class="content-card-title">Опис шаблону</div>
+          <div class="content-card-subtitle">Коротко — для яких задач цей шаблон</div>
+          <textarea id="tpl-description" class="input-field" rows="2" placeholder="Для яких задач використовується цей шаблон…"></textarea>
         </div>
 
-        <!-- Привязка к клиентам -->
-        <div class="field-group">
-          <div class="field-label">Прив'язка до клієнтів</div>
+        <!-- Прив'язка до клієнтів -->
+        <div class="content-card">
+          <div class="content-card-title">Прив'язка до клієнтів</div>
+          <div class="content-card-subtitle">Шаблон буде доступний лише для обраних клієнтів (порожньо = для всіх)</div>
           <div class="multiselect-box" id="tpl-client-ms" onclick="toggleMultiselect('tpl-client-ms')">
-            <span class="multiselect-placeholder" id="tpl-client-ms-label">Всі клієнти</span>
+            <span class="multiselect-placeholder" id="tpl-client-ms-label">Усі клієнти</span>
             <span class="multiselect-arrow">&#9662;</span>
           </div>
           <div class="multiselect-dropdown" id="tpl-client-ms-dropdown" style="display:none;">
-            <input type="text" class="multiselect-search" placeholder="Пошук клієнта..." oninput="filterMultiselectOptions('tpl-client-ms-dropdown', this.value)">
+            <input type="text" class="multiselect-search" placeholder="Пошук клієнта…" oninput="filterMultiselectOptions('tpl-client-ms-dropdown', this.value)">
             <div class="multiselect-options" id="tpl-client-ms-options"></div>
           </div>
         </div>
 
-        <!-- Ядровые поля -->
-        <div class="field-group">
-          <div class="field-label">
-            Ядрові поля (відображаються в задачі)
+        <!-- Ядрові поля -->
+        <div class="content-card">
+          <div class="content-card-title">
+            Ядрові поля
             <span class="tooltip-wrap">
               <span class="tooltip-icon">?</span>
-              <span class="tooltip-text">Оберіть які поля будуть видимі копірайтеру при заповненні ТЗ</span>
+              <span class="tooltip-text">Оберіть, які поля будуть видимі копірайтеру при заповненні ТЗ</span>
             </span>
           </div>
+          <div class="content-card-subtitle">Поля, які завжди присутні в задачі</div>
           <div class="tpl-core-fields-grid" id="tpl-core-fields-config">
             <label class="checkbox-label"><input type="checkbox" id="tpl-cf-url" checked onchange="onTplCoreFieldChange()"> URL сторінки</label>
             <label class="checkbox-label"><input type="checkbox" id="tpl-cf-keywords" checked onchange="onTplCoreFieldChange()"> Анкор</label>
@@ -71,71 +78,77 @@
           </div>
         </div>
 
-        <!-- Гибкие блоки -->
-        <div class="field-group">
-          <div class="field-label" style="display:flex;align-items:center;gap:8px;">
+        <!-- Гнучкі блоки -->
+        <div class="content-card">
+          <div class="content-card-title" style="display:flex; align-items:center; gap:8px;">
             Гнучкі блоки
             <span class="tooltip-wrap">
               <span class="tooltip-icon">?</span>
               <span class="tooltip-text">Блоки, які копірайтер може вмикати/вимикати. Використовуйте {{ключ}} у промті для підстановки.</span>
             </span>
-            <button class="btn btn-sm" style="font-size:10px;padding:2px 8px;" onclick="openImportSheetModal()">Імпорт з Google Sheets</button>
           </div>
+          <div class="content-card-subtitle">Додаткові поля, які можна вмикати за потреби. Значення вставляються в промпт через {{ключ}}.</div>
           <div class="tpl-flex-list" id="tpl-flex-blocks-list">
-            <!-- Заполняется динамически -->
+            <!-- Заповнюється динамічно -->
           </div>
-          <button class="btn btn-sm mt-8" onclick="addTplFlexBlock()">+ Додати блок</button>
+          <div style="display:flex; gap:6px; margin-top:10px;">
+            <button class="btn btn-sm" onclick="addTplFlexBlock()">＋ Додати блок</button>
+            <button class="btn btn-sm btn-ghost" onclick="openImportSheetModal()">Імпорт з Google Sheets</button>
+          </div>
         </div>
 
-        <!-- Промпты -->
-        <div class="settings-layout">
-          <div class="settings-main">
-            <div class="prompts-grid">
-              <div class="prompt-block">
-                <div class="prompt-section-label">
-                  <label class="field-label" style="margin:0;">Системный промт</label>
-                  <span class="tooltip-wrap">
-                    <span class="tooltip-icon">?</span>
-                    <span class="tooltip-text">Задаёт роль и стиль. Пример: «Ты — SEO-копирайтер...»</span>
-                  </span>
-                </div>
-                <textarea id="tpl-system-prompt" class="input-field textarea-mono" rows="10" placeholder="Ты — опытный SEO-копирайтер..."></textarea>
+        <!-- Промпти (two-col) -->
+        <div class="content-card">
+          <div class="content-card-title">Промпти</div>
+          <div class="content-card-subtitle">Шаблон системного та користувацького промту з підстановкою змінних через <span style="font-family:ui-monospace,monospace; background:var(--bg-subtle); padding:1px 5px; border-radius:4px;">&#123;&#123;ключ&#125;&#125;</span></div>
+          <div class="prompts-grid">
+            <div class="prompt-block">
+              <div class="prompt-section-label">
+                <label class="field-label" style="margin:0;">Системний промт</label>
+                <span class="tooltip-wrap">
+                  <span class="tooltip-icon">?</span>
+                  <span class="tooltip-text">Задає роль і стиль. Приклад: «Ти — SEO-копірайтер…»</span>
+                </span>
               </div>
-              <div class="prompt-block">
-                <div class="prompt-section-label">
-                  <label class="field-label" style="margin:0;">Пользовательский промт</label>
-                  <span class="tooltip-wrap">
-                    <span class="tooltip-icon">?</span>
-                    <span class="tooltip-text">Общие инструкции для каждого запроса. Пример: «Напиши SEO-статью...»</span>
-                  </span>
-                </div>
-                <textarea id="tpl-user-prompt" class="input-field textarea-mono" rows="10" placeholder="Напиши SEO-статью. Структура: H1, H2 (3-5 шт)..."></textarea>
+              <textarea id="tpl-system-prompt" class="input-field textarea-mono" rows="10" placeholder="Ти — досвідчений SEO-копірайтер…"></textarea>
+            </div>
+            <div class="prompt-block">
+              <div class="prompt-section-label">
+                <label class="field-label" style="margin:0;">Користувацький промт</label>
+                <span class="tooltip-wrap">
+                  <span class="tooltip-icon">?</span>
+                  <span class="tooltip-text">Загальні інструкції для кожного запиту. Приклад: «Напиши SEO-статтю…»</span>
+                </span>
               </div>
-            </div>
-          </div>
-
-          <!-- Настройки справа -->
-          <div class="settings-col">
-            <div class="field-group">
-              <label class="field-label">LLM модель</label>
-              <select id="tpl-llm-select" class="input-field">
-                <option value="openai|ChatGPT (GPT-4o)">ChatGPT (GPT-4o)</option>
-                <option value="openai|ChatGPT (GPT-4o-mini)">ChatGPT (GPT-4o-mini)</option>
-                <option value="anthropic|Claude Sonnet" selected>Claude Sonnet</option>
-                <option value="anthropic|Claude Opus">Claude Opus</option>
-                <option value="perplexity|Perplexity Online">Perplexity Online</option>
-              </select>
-            </div>
-
-            <div class="field-group">
-              <label class="field-label">Постобработка</label>
-              <label class="checkbox-label"><input type="checkbox" id="tpl-opt-humanize"> Гуманизация</label>
-              <label class="checkbox-label"><input type="checkbox" id="tpl-opt-uniqueness" checked> Проверка уникальности</label>
-              <label class="checkbox-label"><input type="checkbox" id="tpl-opt-factcheck"> Фактчекинг</label>
-              <label class="checkbox-label"><input type="checkbox" id="tpl-opt-ai-detector"> AI-детектор</label>
+              <textarea id="tpl-user-prompt" class="input-field textarea-mono" rows="10" placeholder="Напиши SEO-статтю. Структура: H1, H2 (3-5 шт)…"></textarea>
             </div>
           </div>
         </div>
+
+        <!-- LLM / Постобробка (cards row) -->
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:14px;">
+          <div class="content-card" style="margin-bottom:0;">
+            <div class="content-card-title">LLM модель</div>
+            <div class="content-card-subtitle">Провайдер та модель для генерації</div>
+            <select id="tpl-llm-select" class="input-field">
+              <option value="openai|ChatGPT (GPT-4o)">ChatGPT (GPT-4o)</option>
+              <option value="openai|ChatGPT (GPT-4o-mini)">ChatGPT (GPT-4o-mini)</option>
+              <option value="anthropic|Claude Sonnet" selected>Claude Sonnet</option>
+              <option value="anthropic|Claude Opus">Claude Opus</option>
+              <option value="perplexity|Perplexity Online">Perplexity Online</option>
+            </select>
+          </div>
+
+          <div class="content-card" style="margin-bottom:0;">
+            <div class="content-card-title">Постобробка</div>
+            <div class="content-card-subtitle">Додаткові кроки після генерації</div>
+            <label class="checkbox-label"><input type="checkbox" id="tpl-opt-humanize"> Гуманізація</label>
+            <label class="checkbox-label"><input type="checkbox" id="tpl-opt-uniqueness" checked> Перевірка унікальності</label>
+            <label class="checkbox-label"><input type="checkbox" id="tpl-opt-factcheck"> Фактчекінг</label>
+            <label class="checkbox-label"><input type="checkbox" id="tpl-opt-ai-detector"> AI-детектор</label>
+          </div>
+        </div>
+
       </div>
     </main>
   </div>
@@ -143,30 +156,30 @@
 
 <!-- Модалка: Імпорт колонок з Google Sheets -->
 <div id="modal-import-sheet" class="modal-overlay" style="display:none;">
-  <div class="modal-card" style="max-width:550px;">
+  <div class="modal-card" style="max-width:560px;">
     <div class="modal-header">
       <h3>Імпорт з Google Sheets</h3>
       <button class="modal-close" onclick="closeModal('modal-import-sheet')">&times;</button>
     </div>
     <div class="modal-body">
-      <!-- Шаг 1: ввод ссылки -->
+      <!-- Крок 1: URL -->
       <div id="import-step-url">
         <div class="field-group">
-          <label class="field-label">Посилання на Google таблицю</label>
-          <input type="text" id="import-sheet-url" class="input-field" placeholder="https://docs.google.com/spreadsheets/d/...">
+          <label class="field-label">Посилання на Google-таблицю</label>
+          <input type="text" id="import-sheet-url" class="input-field" placeholder="https://docs.google.com/spreadsheets/d/…">
         </div>
-        <p class="text-secondary" style="margin-top:-8px;margin-bottom:12px;">Вставте посилання на таблицю з ТЗ. Система зчитає назви колонок (перший рядок).</p>
+        <p class="text-secondary" style="margin-top:-8px;margin-bottom:14px;">Вставте посилання на таблицю з ТЗ. Система зчитає назви колонок (перший рядок).</p>
         <button class="btn btn-primary btn-block" id="import-sheet-btn" onclick="importSheetHeaders()">Зчитати колонки</button>
         <div id="import-sheet-loading" style="display:none;text-align:center;padding:16px;">
-          <div class="loader-inline">Зчитування таблиці...</div>
+          <div class="loader-inline">Зчитування таблиці…</div>
         </div>
       </div>
 
-      <!-- Шаг 2: выбор колонок -->
+      <!-- Крок 2: вибір колонок -->
       <div id="import-step-select" style="display:none;">
-        <p class="text-secondary" style="margin-bottom:12px;">Оберіть колонки, які стануть гнучкими блоками:</p>
-        <div id="import-columns-list" style="max-height:300px;overflow-y:auto;">
-          <!-- Заполняется динамически -->
+        <p class="text-secondary" style="margin-bottom:14px;">Оберіть колонки, які стануть гнучкими блоками:</p>
+        <div id="import-columns-list" style="max-height:320px;overflow-y:auto;">
+          <!-- Заповнюється динамічно -->
         </div>
       </div>
     </div>
