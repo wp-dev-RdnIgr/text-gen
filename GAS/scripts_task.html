@@ -66,7 +66,10 @@ function loadTaskScreen(taskId) {
     document.getElementById('gen-user-input').value = '';
 
     switchTaskTab('generate');
+    goToWizardStep(1);
     loadTaskHistory(taskId);
+    // Запам'ятати в "Нещодавнє"
+    if (typeof pushRecentTask === 'function') pushRecentTask(taskId, task.name || '');
     hideScreenLoader();
   }).getTask(taskId);
 }
@@ -459,15 +462,67 @@ function loadTaskHistory(taskId) {
   }).getGeneratedTexts(taskId);
 }
 
-// --- Табы задачи ---
+// --- Перемикання між wizard і історією ---
 function switchTaskTab(tab) {
-  var tabs = document.querySelectorAll('.task-tabs .tab');
-  for (var i = 0; i < tabs.length; i++) {
-    tabs[i].classList.remove('active');
-    if (tabs[i].getAttribute('data-tab') === tab) tabs[i].classList.add('active');
+  var gen = document.getElementById('task-tab-generate');
+  var hist = document.getElementById('task-tab-history');
+  var footer = document.getElementById('wizard-footer');
+  if (gen) gen.style.display = tab === 'generate' ? 'block' : 'none';
+  if (hist) hist.style.display = tab === 'history' ? 'block' : 'none';
+  if (footer) footer.style.display = tab === 'history' ? 'none' : 'flex';
+}
+
+// --- Wizard navigation ---
+state.currentWizardStep = state.currentWizardStep || 1;
+
+function goToWizardStep(n) {
+  if (n < 1 || n > 3) return;
+  state.currentWizardStep = n;
+
+  // ensure wizard (not history) is visible
+  switchTaskTab('generate');
+
+  // steps
+  for (var i = 1; i <= 3; i++) {
+    var el = document.getElementById('wizard-step-' + i);
+    if (el) el.classList.toggle('active', i === n);
   }
-  document.getElementById('task-tab-generate').style.display = tab === 'generate' ? 'flex' : 'none';
-  document.getElementById('task-tab-history').style.display = tab === 'history' ? 'flex' : 'none';
+  // progress dots
+  var dots = document.querySelectorAll('#wizard-progress .wizard-step-dot');
+  for (var j = 0; j < dots.length; j++) {
+    var step = parseInt(dots[j].getAttribute('data-step'), 10);
+    dots[j].classList.toggle('active', step === n);
+    dots[j].classList.toggle('done', step < n);
+  }
+  // separators
+  var seps = document.querySelectorAll('#wizard-progress .wizard-step-sep');
+  for (var k = 0; k < seps.length; k++) {
+    seps[k].classList.toggle('done', (k + 1) < n);
+  }
+
+  // footer
+  var backBtn = document.getElementById('wizard-back-btn');
+  var nextBtn = document.getElementById('wizard-next-btn');
+  var genBtn = document.getElementById('wizard-generate-btn');
+  var info = document.getElementById('wizard-footer-info');
+  if (backBtn) backBtn.style.display = n === 1 ? 'none' : '';
+  if (nextBtn) nextBtn.style.display = n === 3 ? 'none' : '';
+  if (genBtn)  genBtn.style.display  = n === 3 ? '' : 'none';
+  if (info) {
+    var labels = { 1: 'ТЗ та контекст', 2: 'Налаштування AI', 3: 'Генерація' };
+    info.textContent = 'Крок ' + n + ' з 3 — ' + (labels[n] || '');
+  }
+
+  // scroll to top
+  var body = document.querySelector('.wizard-body');
+  if (body) body.scrollTop = 0;
+}
+
+function wizardNext() {
+  goToWizardStep(Math.min(3, (state.currentWizardStep || 1) + 1));
+}
+function wizardBack() {
+  goToWizardStep(Math.max(1, (state.currentWizardStep || 1) - 1));
 }
 
 // --- Сохранение настроек ---
@@ -532,6 +587,11 @@ function deleteCurrentTask() {
 // --- Генерация (multi-step flow) ---
 function startGeneration() {
   if (!state.currentTask) return;
+
+  // Перехід на крок 3, щоб бачити loader/result
+  goToWizardStep(3);
+  var startCard = document.getElementById('gen-start-card');
+  if (startCard) startCard.style.display = 'none';
 
   // Собрать все field values
   saveFieldValues();
@@ -1039,6 +1099,8 @@ function clearGenResult() {
   document.getElementById('gen-result').style.display = 'none';
   document.getElementById('gen-user-input').value = '';
   state.lastGeneratedText = null;
+  var startCard = document.getElementById('gen-start-card');
+  if (startCard) startCard.style.display = '';
 }
 
 function resetGenUI() {
