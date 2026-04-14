@@ -90,8 +90,18 @@ function loadDashboardRecentTasks() {
     return;
   }
 
-  if (loader) loader.style.display = 'flex';
-  grid.innerHTML = '';
+  // --- TTL-кеш: якщо дані свіжі, беремо їх миттєво ---
+  if (isCacheFresh(state._allTasksFetchedAt) && state.allTasks && state.allTasks.length) {
+    if (loader) loader.style.display = 'none';
+    renderDashboardRecentTasks(state.allTasks);
+    var totalEl = document.getElementById('stat-total-tasks');
+    if (totalEl) totalEl.textContent = state.allTasks.length;
+    return;
+  }
+
+  // --- Skeleton замість spinner ---
+  if (loader) loader.style.display = 'none';
+  grid.innerHTML = skeletonTaskCards(6);
   if (empty) empty.style.display = 'none';
 
   // Завантажуємо задачі по всім клієнтам паралельно
@@ -112,6 +122,9 @@ function loadDashboardRecentTasks() {
         (state.clients || []).forEach(function(c) {
           c.tasks_count = perClientCount[c.id] || 0;
         });
+        // Зберігаємо у спільний кеш для #tasks сторінки
+        state.allTasks = allTasks;
+        state._allTasksFetchedAt = Date.now();
         updateSidebarCounts();
         // Оновити stat-total-tasks на реальні числа
         var totalEl = document.getElementById('stat-total-tasks');
@@ -160,7 +173,7 @@ function renderDashboardRecentTasks(tasks) {
     var modelBadge = t.llm_model ? '<span class="badge badge-info">' + escapeHtml(t.llm_model) + '</span>' : '';
     var desc = truncate(t.system_prompt || t.description || '', 90);
 
-    h += '<div class="task-card ' + statusCls + '" onclick="navigateTo(\'#task/' + t.id + '\')">' +
+    h += '<div class="task-card ' + statusCls + '" onclick="navigateTo(\'#task/' + t.id + '\')" onmouseenter="prefetchTask(\'' + t.id + '\')">' +
       '<div class="task-card-header">' +
         '<div class="task-card-name">' + escapeHtml(t.name || 'Без назви') + '</div>' +
       '</div>' +
@@ -303,6 +316,7 @@ function createTaskFromScratch() {
   };
   google.script.run.withSuccessHandler(function(s) {
     showToast('Задачу створено', 'success');
+    invalidateTasksCache();
     pushRecentTask(s.id, task.name);
     navigateTo('#task/' + s.id);
   }).withFailureHandler(function(e) {
@@ -346,6 +360,7 @@ function createTaskFromTemplate(ttId) {
   };
   google.script.run.withSuccessHandler(function(s) {
     showToast('Задачу створено з шаблону', 'success');
+    invalidateTasksCache();
     pushRecentTask(s.id, task.name);
     navigateTo('#task/' + s.id);
   }).withFailureHandler(function(e) {
@@ -355,12 +370,17 @@ function createTaskFromTemplate(ttId) {
 
 function deleteTaskConfirm(tid) {
   if (!confirm('Видалити задачу та всі її тексти?')) return;
+  // Optimistic: видаляємо з локальних списків одразу
+  state.allTasks = (state.allTasks || []).filter(function(t) { return String(t.id) !== String(tid); });
+  if (typeof renderDashboardRecentTasks === 'function') renderDashboardRecentTasks(state.allTasks);
+
   google.script.run.withSuccessHandler(function() {
     showToast('Задачу видалено', 'success');
-    // Оновлюємо дашборд
-    if (typeof renderDashboardOverview === 'function') renderDashboardOverview();
+    invalidateTasksCache();
   }).withFailureHandler(function(e) {
-    showToast(e.message, 'error');
+    showToast('Не вдалося видалити: ' + e.message, 'error');
+    invalidateTasksCache();
+    if (typeof renderDashboardOverview === 'function') renderDashboardOverview();
   }).deleteTask(tid);
 }
 

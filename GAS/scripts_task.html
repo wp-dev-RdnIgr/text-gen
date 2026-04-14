@@ -4,8 +4,23 @@
 // ===========================================
 
 function loadTaskScreen(taskId) {
+  // Якщо задача вже префетчнута — одразу рендеримо
+  var cached = state._prefetchedTasks && state._prefetchedTasks[taskId];
+  if (cached) {
+    _applyTaskToScreen(cached, taskId);
+    // Інвалідуємо, щоб наступне відкриття було актуальним
+    delete state._prefetchedTasks[taskId];
+    return;
+  }
+
   google.script.run.withSuccessHandler(function(task) {
     if (!task) { showToast('Задачу не знайдено', 'error'); hideScreenLoader(); return; }
+    _applyTaskToScreen(task, taskId);
+  }).getTask(taskId);
+}
+
+function _applyTaskToScreen(task, taskId) {
+  (function() {
     state.currentTask = task;
     state.lastGeneratedText = null;
 
@@ -38,11 +53,9 @@ function loadTaskScreen(taskId) {
     document.getElementById('task-opt-interview').checked = !!opts.interview;
     document.getElementById('task-opt-draft-review').checked = !!opts.draft_review;
 
-    // Клієнт у breadcrumbs
-    google.script.run.withSuccessHandler(function(clients) {
-      var cl = (clients || []).find(function(c) { return c.id == task.client_id; });
-      document.getElementById('task-breadcrumb-client').textContent = cl ? cl.name : '';
-    }).getClients();
+    // Клієнт у breadcrumbs — беремо з локального state (без RPC)
+    var _cl = (state.clients || []).find(function(c) { return c.id == task.client_id; });
+    document.getElementById('task-breadcrumb-client').textContent = _cl ? _cl.name : '';
 
     // Рендер core fields
     renderCoreFields();
@@ -69,11 +82,12 @@ function loadTaskScreen(taskId) {
 
     switchTaskTab('generate');
     goToWizardStep(1);
-    loadTaskHistory(taskId);
+    // #7 — відкладений рендер історії (не блокує перший малюнок)
+    setTimeout(function() { loadTaskHistory(taskId); }, 200);
     // Запам'ятати в "Нещодавнє"
     if (typeof pushRecentTask === 'function') pushRecentTask(taskId, task.name || '');
     hideScreenLoader();
-  }).getTask(taskId);
+  })();
 }
 
 // --- Core Fields ---
@@ -565,11 +579,13 @@ var _debouncedSave = debounce(function() {
   showAutosaveStatus('saving');
   google.script.run.withSuccessHandler(function() {
     showAutosaveStatus('saved');
+    // Інвалідувати кеш списку задач — цю задачу було оновлено
+    state._allTasksFetchedAt = 0;
   }).withFailureHandler(function(e) {
     showAutosaveStatus('error');
     showToast(e.message, 'error');
   }).saveTask(state.currentTask);
-}, 500);
+}, 1000);
 
 function autoSaveTask() {
   _debouncedSave();

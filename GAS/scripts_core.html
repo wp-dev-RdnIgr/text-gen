@@ -23,8 +23,73 @@ var state = {
   tasksSort: 'updated',
   filterClientId: null,
   currentWizardStep: 1,
+  // --- TTL-кеші ---
+  _allTasksFetchedAt: 0,
+  _clientsFetchedAt: 0,
   _initialDataLoaded: false
 };
+
+// --- TTL-кеш константи ---
+var CACHE_TTL_MS = 30000; // 30 секунд
+
+// --- Skeleton helper ---
+function skeletonTaskCards(count) {
+  var h = '';
+  for (var i = 0; i < (count || 6); i++) {
+    h += '<div class="task-card" style="pointer-events:none;">' +
+      '<div class="skeleton skeleton-title" style="width:65%;"></div>' +
+      '<div class="skeleton skeleton-text" style="width:90%;"></div>' +
+      '<div class="skeleton skeleton-text" style="width:75%;"></div>' +
+      '<div style="display:flex;gap:6px;margin-top:10px;">' +
+        '<div class="skeleton" style="width:55px;height:16px;border-radius:999px;"></div>' +
+        '<div class="skeleton" style="width:70px;height:16px;border-radius:999px;"></div>' +
+      '</div>' +
+    '</div>';
+  }
+  return h;
+}
+
+function skeletonClientCards(count) {
+  var h = '';
+  for (var i = 0; i < (count || 4); i++) {
+    h += '<div class="client-card" style="pointer-events:none;">' +
+      '<div style="display:flex;gap:12px;align-items:flex-start;">' +
+        '<div class="skeleton" style="width:40px;height:40px;border-radius:10px;"></div>' +
+        '<div style="flex:1;">' +
+          '<div class="skeleton skeleton-title" style="width:70%;"></div>' +
+          '<div class="skeleton skeleton-text" style="width:55%;"></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="skeleton" style="width:70px;height:18px;border-radius:999px;margin-top:8px;"></div>' +
+    '</div>';
+  }
+  return h;
+}
+
+function isCacheFresh(timestamp) {
+  return timestamp && (Date.now() - timestamp < CACHE_TTL_MS);
+}
+
+function invalidateTasksCache() {
+  state._allTasksFetchedAt = 0;
+}
+
+function invalidateClientsCache() {
+  state._clientsFetchedAt = 0;
+}
+
+// --- Prefetch тасків на hover (кеш у state._prefetchedTasks) ---
+state._prefetchedTasks = state._prefetchedTasks || {};
+var _prefetchTimer = null;
+function prefetchTask(taskId) {
+  if (!taskId || state._prefetchedTasks[taskId]) return;
+  clearTimeout(_prefetchTimer);
+  _prefetchTimer = setTimeout(function() {
+    google.script.run.withSuccessHandler(function(task) {
+      if (task) state._prefetchedTasks[taskId] = task;
+    }).withFailureHandler(function() { /* ignore */ }).getTask(taskId);
+  }, 150); // невелика затримка — не стріляємо на миттєвих hover
+}
 
 // --- Утиліта: debounce ---
 function debounce(fn, delay) {
@@ -74,9 +139,23 @@ document.addEventListener('DOMContentLoaded', function() {
   window.addEventListener('hashchange', handleHashRoute);
 });
 
-function loadInitialData() {
+function loadInitialData(force) {
+  // TTL-кеш: якщо дані свіжі й не force — не качаємо
+  if (!force && isCacheFresh(state._clientsFetchedAt) && state.clients.length) {
+    if (typeof renderClientList === 'function') renderClientList();
+    if (typeof renderClientsTable === 'function') renderClientsTable();
+    updateSidebarCounts();
+    var hash = window.location.hash || '#dashboard';
+    if (hash === '#dashboard' && typeof renderDashboardOverview === 'function') {
+      renderDashboardOverview();
+    }
+    return;
+  }
+
   google.script.run.withSuccessHandler(function(clients) {
     state.clients = clients || [];
+    state._clientsFetchedAt = Date.now();
+    state._initialDataLoaded = true;
     if (typeof renderClientList === 'function') renderClientList();
     if (typeof renderClientsTable === 'function') renderClientsTable();
     updateSidebarCounts();

@@ -60,9 +60,18 @@ function loadAllTasksForPage() {
     return;
   }
 
-  if (loader) loader.style.display = 'flex';
+  // --- Використовуємо кеш якщо свіжий ---
+  if (isCacheFresh(state._allTasksFetchedAt) && state.allTasks && state.allTasks.length) {
+    if (loader) loader.style.display = 'none';
+    if (empty) empty.style.display = 'none';
+    filterTasksList();
+    return;
+  }
+
+  // --- Skeleton замість spinner ---
+  if (loader) loader.style.display = 'none';
   if (empty) empty.style.display = 'none';
-  grid.innerHTML = '';
+  grid.innerHTML = skeletonTaskCards(6);
 
   var remaining = clients.length;
   var allTasks = [];
@@ -82,6 +91,7 @@ function loadAllTasksForPage() {
         });
         if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
         state.allTasks = allTasks;
+        state._allTasksFetchedAt = Date.now();
         filterTasksList();
       }
     }).withFailureHandler(function(e) {
@@ -179,7 +189,7 @@ function renderTasksList(list) {
     var statusBadge = getStatusBadge(t.status);
     var desc = truncate(t.system_prompt || t.description || '', 100);
 
-    h += '<div class="task-card ' + statusCls + '" onclick="navigateTo(\'#task/' + t.id + '\')">' +
+    h += '<div class="task-card ' + statusCls + '" onclick="navigateTo(\'#task/' + t.id + '\')" onmouseenter="prefetchTask(\'' + t.id + '\')">' +
       '<div class="task-card-header">' +
         '<div class="task-card-name">' + escapeHtml(t.name || 'Без назви') + '</div>' +
         '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();confirmDeleteTaskFromList(\'' + t.id + '\', \'' + escapeHtml(t.name || '') + '\')" title="Видалити" style="padding:3px 7px;color:var(--text-muted);">×</button>' +
@@ -204,13 +214,28 @@ function getStatusBadge(status) {
 
 function confirmDeleteTaskFromList(tid, name) {
   if (!confirm('Видалити задачу «' + (name || 'Без назви') + '» та всі її тексти?')) return;
+
+  // Optimistic: одразу видаляємо з UI
+  var backup = state.allTasks.slice();
+  state.allTasks = state.allTasks.filter(function(t) { return String(t.id) !== String(tid); });
+  filterTasksList();
+
+  // Видаляємо з localStorage "Нещодавнє"
+  try {
+    var list = JSON.parse(localStorage.getItem('tg_recent_tasks') || '[]');
+    list = list.filter(function(t) { return t.id !== tid; });
+    localStorage.setItem('tg_recent_tasks', JSON.stringify(list));
+    if (typeof renderRecentTasks === 'function') renderRecentTasks();
+  } catch (e) {}
+
   google.script.run.withSuccessHandler(function() {
     showToast('Задачу видалено', 'success');
-    // Видаляємо з локального списку і перерендерюємо
-    state.allTasks = (state.allTasks || []).filter(function(t) { return String(t.id) !== String(tid); });
-    filterTasksList();
+    invalidateTasksCache();
   }).withFailureHandler(function(e) {
-    showToast(e.message, 'error');
+    // Rollback
+    state.allTasks = backup;
+    filterTasksList();
+    showToast('Не вдалося видалити: ' + e.message, 'error');
   }).deleteTask(tid);
 }
 </script>

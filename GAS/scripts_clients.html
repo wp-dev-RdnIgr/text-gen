@@ -70,6 +70,8 @@ function saveClientFromModal() {
   google.script.run.withSuccessHandler(function() {
     closeModal('modal-client');
     showToast(id ? 'Клієнта оновлено' : 'Клієнта створено', 'success');
+    invalidateClientsCache();
+    invalidateTasksCache();
     loadInitialData();
     // Перерендер сторінки клієнтів якщо ми на ній
     if (window.location.hash === '#clients') {
@@ -82,15 +84,27 @@ function saveClientFromModal() {
 
 function deleteClientConfirm(cid) {
   if (!confirm('Видалити клієнта та всі його задачі?')) return;
+
+  // Optimistic: одразу видаляємо з UI
+  var backup = (state.clients || []).slice();
+  state.clients = state.clients.filter(function(c) { return String(c.id) !== String(cid); });
+  if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
+  if (window.location.hash === '#clients' && typeof renderClientsGrid === 'function') renderClientsGrid();
+
+  // Також з кешу задач
+  invalidateTasksCache();
+  state.allTasks = (state.allTasks || []).filter(function(t) { return String(t._clientId) !== String(cid); });
+
   google.script.run.withSuccessHandler(function() {
     showToast('Клієнта видалено', 'success');
     state.selectedClientId = null;
-    loadInitialData();
-    if (window.location.hash === '#clients') {
-      setTimeout(renderClientsTable, 300);
-    }
+    state._clientsFetchedAt = Date.now(); // кеш залишається актуальним після optimistic update
   }).withFailureHandler(function(e) {
-    showToast(e.message, 'error');
+    // Rollback
+    state.clients = backup;
+    if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
+    if (typeof renderClientsGrid === 'function') renderClientsGrid();
+    showToast('Не вдалося видалити: ' + e.message, 'error');
   }).deleteClient(cid);
 }
 
@@ -106,6 +120,14 @@ function renderClientsGrid() {
   if (!grid) return;
 
   var clients = state.clients || [];
+
+  // Якщо клієнтів ще немає у state — показати skeleton
+  if (!clients.length && !state._initialDataLoaded) {
+    grid.innerHTML = skeletonClientCards(4);
+    if (empty) empty.style.display = 'none';
+    return;
+  }
+
   if (!clients.length) {
     grid.innerHTML = '';
     if (empty) empty.style.display = 'flex';
@@ -113,8 +135,19 @@ function renderClientsGrid() {
   }
   if (empty) empty.style.display = 'none';
 
-  // Якщо лічильники задач ще не завантажені — підвантажимо їх у фоні
+  // Якщо лічильники задач ще не завантажені і в кеші є allTasks — використати його
   var needsCounts = clients.some(function(c) { return c.tasks_count == null; });
+  if (needsCounts && isCacheFresh(state._allTasksFetchedAt) && state.allTasks && state.allTasks.length) {
+    var counts = {};
+    state.allTasks.forEach(function(t) {
+      counts[t._clientId] = (counts[t._clientId] || 0) + 1;
+    });
+    clients.forEach(function(c) { c.tasks_count = counts[c.id] || 0; });
+    needsCounts = false;
+    if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
+  }
+
+  // Fallback: якщо досі немає лічильників — підвантажити у фоні (N+1)
   if (needsCounts) {
     var remaining = clients.length;
     clients.forEach(function(cl) {
@@ -123,7 +156,7 @@ function renderClientsGrid() {
         remaining--;
         if (remaining === 0) {
           if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
-          renderClientsGrid(); // перерендерити з актуальними цифрами
+          renderClientsGrid();
         }
       }).withFailureHandler(function() {
         remaining--;
