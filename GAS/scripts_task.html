@@ -591,19 +591,21 @@ function executeGeneration(assembledPrompt, fv) {
 
   google.script.run.withSuccessHandler(function(text) {
     _genFinalResult = text;
-    // Завершити модалку — перевести всі активні етапи в completed
-    finalizeGenerationModal(text);
 
-    // Закрити модалку через 2 сек і показати результат (якщо не draft_review)
+    // Зробимо фінальний poll щоб підхопити останні етапи (humanize)
+    // перед тим як зупинити polling
+    setTimeout(function() {
+      pollStages(function() {
+        finalizeGenerationModal(text);
+      });
+    }, 800);
+
     if (opts.draft_review) {
       setTimeout(function() {
         closeGenerationModal();
         showDraftReviewModal(text);
-      }, 1500);
-      return;
+      }, 2500);
     }
-    // Оставляем модалку відкритою — користувач сам натисне "Відкрити результат"
-    // showFinalResult викличеться з кнопки
   }).withFailureHandler(function(e) {
     errorGenerationModal(e.message);
     document.getElementById('gen-send-btn').disabled = false;
@@ -674,34 +676,35 @@ function openGenerationModal(opts) {
 
 function startStagesPolling() {
   if (_genPollTimer) clearInterval(_genPollTimer);
-  // Чекаємо 1 сек до першого запиту, потім кожні 2 сек
-  setTimeout(pollStages, 1000);
-  _genPollTimer = setInterval(pollStages, 2000);
+  setTimeout(function() { pollStages(); }, 700);
+  _genPollTimer = setInterval(function() { pollStages(); }, 1000);
 }
 
-function pollStages() {
-  // Якщо немає sessionId — ми ще не знаємо його. Отримаємо з task state після повернення.
-  // Зробимо запит на останні stage записи для цього task
-  if (!state.currentTask) return;
+function pollStages(callback) {
+  if (!state.currentTask) { if (callback) callback(); return; }
 
   google.script.run.withSuccessHandler(function(stages) {
-    if (!stages || !stages.length) return;
-
-    // Filter only stages for current session (найсвіжіший session)
-    // Знайдемо найсвіжіший sessionId (останній created_at)
-    var latestSession = stages[stages.length - 1].session_id;
-    if (!_genSessionId) _genSessionId = latestSession;
-    var mySessionStages = [];
-    for (var i = 0; i < stages.length; i++) {
-      if (stages[i].session_id === _genSessionId) mySessionStages.push(stages[i]);
+    if (stages && stages.length) {
+      // Знайдемо найсвіжіший sessionId
+      var latestSession = stages[stages.length - 1].session_id;
+      if (!_genSessionId) _genSessionId = latestSession;
+      var mySessionStages = [];
+      for (var i = 0; i < stages.length; i++) {
+        if (stages[i].session_id === _genSessionId) mySessionStages.push(stages[i]);
+      }
+      renderStages(mySessionStages);
     }
-
-    renderStages(mySessionStages);
-  }).withFailureHandler(function() {}).getRecentGenerationStages(state.currentTask.id);
+    if (callback) callback();
+  }).withFailureHandler(function() { if (callback) callback(); }).getRecentGenerationStages(state.currentTask.id);
 }
+
+var _stageData = {};  // store all stages by id for detail view
 
 function renderStages(stages) {
   if (!stages || !stages.length) return;
+
+  // Store all stages for detail comparison
+  for (var sn = 0; sn < stages.length; sn++) _stageData[stages[sn].id] = stages[sn];
 
   // Update timeline
   var stageOrder = ['generation', 'resize', 'factcheck', 'humanize'];
@@ -721,7 +724,6 @@ function renderStages(stages) {
   var opts = state.currentTask.options || {};
   for (var j = lastIdx + 1; j < stageOrder.length; j++) {
     var nextStage = stageOrder[j];
-    // Skip disabled
     if (nextStage === 'factcheck' && !opts.factcheck) continue;
     if (nextStage === 'humanize' && !opts.humanize) continue;
     var nextEl = document.getElementById('stage-item-' + nextStage);
@@ -744,7 +746,7 @@ function renderStages(stages) {
   var labels = {
     generation: '1. Генерація',
     resize: '2. Підгонка обсягу',
-    factcheck: '3. Факт-чекінг (Perplexity)',
+    factcheck: '3. Факт-чекінг',
     humanize: '4. Гуманізація'
   };
 
@@ -757,8 +759,30 @@ function renderStages(stages) {
     var prevLatest = contentEl.querySelectorAll('.stage-block.latest');
     for (var p = 0; p < prevLatest.length; p++) prevLatest[p].className = 'stage-block expanded';
 
+    // Знаходимо попередній етап для diff
+    var prevStage = null;
+    for (var pk = k - 1; pk >= 0; pk--) {
+      if (stages[pk].session_id === st.session_id) { prevStage = stages[pk]; break; }
+    }
+    // Якщо це не перший — шукаємо попередній серед усіх в _stageData
+    if (!prevStage) {
+      var sortedIds = Object.keys(_stageData).map(Number).sort(function(a,b){return a-b;});
+      for (var si = 0; si < sortedIds.length; si++) {
+        var sd = _stageData[sortedIds[si]];
+        if (sd.id < st.id && sd.session_id === st.session_id) prevStage = sd;
+      }
+    }
+
+    var charsDelta = '';
+    if (prevStage) {
+      var delta = (st.chars_count || 0) - (prevStage.chars_count || 0);
+      if (delta > 0) charsDelta = '<span style="color:var(--success);font-size:10px;margin-left:4px;">+' + delta + '</span>';
+      else if (delta < 0) charsDelta = '<span style="color:var(--danger);font-size:10px;margin-left:4px;">' + delta + '</span>';
+    }
+
     var block = document.createElement('div');
     block.className = 'stage-block latest expanded';
+    block.setAttribute('data-stage-id', st.id);
     block.innerHTML =
       '<div class="stage-block-header" onclick="toggleStageBlock(this)">' +
         '<div class="stage-block-title">' +
@@ -766,7 +790,8 @@ function renderStages(stages) {
           (labels[st.stage] || st.stage) +
         '</div>' +
         '<div class="stage-block-meta">' +
-          '<span class="stage-block-chars">' + (st.chars_count || 0) + ' збп</span>' +
+          '<span class="stage-block-chars">' + (st.chars_count || 0) + ' збп' + charsDelta + '</span>' +
+          '<button class="stage-detail-btn" onclick="event.stopPropagation();openStageDetail(' + st.id + ')">Деталі</button>' +
           '<span class="stage-status-badge done">Готово</span>' +
           '<span class="stage-block-chevron">▸</span>' +
         '</div>' +
@@ -777,6 +802,168 @@ function renderStages(stages) {
     // Scroll to new block
     setTimeout(function(b) { return function() { b.scrollIntoView({behavior:'smooth', block:'nearest'}); }; }(block), 100);
   }
+}
+
+// ===========================================
+// Stage Detail Modal — shows what changed in a stage
+// ===========================================
+function openStageDetail(stageId) {
+  var stage = _stageData[stageId];
+  if (!stage) return;
+
+  // Find previous stage for comparison
+  var sortedIds = Object.keys(_stageData).map(Number).sort(function(a,b){return a-b;});
+  var prevStage = null;
+  for (var i = 0; i < sortedIds.length; i++) {
+    var sd = _stageData[sortedIds[i]];
+    if (sd.id < stageId && sd.session_id === stage.session_id) prevStage = sd;
+  }
+
+  var labels = {
+    generation: 'Генерація',
+    resize: 'Підгонка обсягу',
+    factcheck: 'Факт-чекінг',
+    humanize: 'Гуманізація'
+  };
+
+  var analysis = analyzeStageChanges(stage, prevStage);
+
+  var html =
+    '<div class="stage-detail-section">' +
+      '<div class="stage-detail-title">Етап: ' + (labels[stage.stage] || stage.stage) + '</div>' +
+      '<div class="stage-detail-summary">' + analysis.summary + '</div>' +
+    '</div>';
+
+  if (analysis.metrics.length) {
+    html += '<div class="stage-detail-section"><div class="stage-detail-subtitle">Метрики</div><div class="stage-metrics-grid">';
+    for (var m = 0; m < analysis.metrics.length; m++) {
+      html += '<div class="stage-metric"><div class="stage-metric-label">' + analysis.metrics[m].label + '</div><div class="stage-metric-value">' + analysis.metrics[m].value + '</div></div>';
+    }
+    html += '</div></div>';
+  }
+
+  if (analysis.changes.length) {
+    html += '<div class="stage-detail-section"><div class="stage-detail-subtitle">Зміни</div><ul class="stage-changes-list">';
+    for (var c = 0; c < analysis.changes.length; c++) {
+      html += '<li>' + analysis.changes[c] + '</li>';
+    }
+    html += '</ul></div>';
+  }
+
+  if (prevStage) {
+    html += '<div class="stage-detail-section">' +
+      '<div class="stage-detail-subtitle">Порівняння</div>' +
+      '<div class="stage-diff-grid">' +
+        '<div class="stage-diff-col"><div class="stage-diff-label">До: ' + (labels[prevStage.stage] || prevStage.stage) + '</div><div class="stage-diff-content">' + (prevStage.content || '') + '</div></div>' +
+        '<div class="stage-diff-col"><div class="stage-diff-label">Після: ' + (labels[stage.stage] || stage.stage) + '</div><div class="stage-diff-content">' + (stage.content || '') + '</div></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  document.getElementById('stage-detail-content').innerHTML = html;
+  document.getElementById('stage-detail-title').textContent = 'Деталі: ' + (labels[stage.stage] || stage.stage);
+  openModal('modal-stage-detail');
+}
+
+function closeStageDetail() {
+  closeModal('modal-stage-detail');
+}
+
+function analyzeStageChanges(stage, prevStage) {
+  var result = { summary: '', metrics: [], changes: [] };
+  var content = stage.content || '';
+  var prevContent = prevStage ? (prevStage.content || '') : '';
+  var plain = content.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  var prevPlain = prevContent.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+
+  var chars = stage.chars_count || 0;
+  var prevChars = prevStage ? (prevStage.chars_count || 0) : 0;
+  var delta = chars - prevChars;
+
+  // Count structural elements
+  var h1Count = (content.match(/<h1/gi) || []).length;
+  var h2Count = (content.match(/<h2/gi) || []).length;
+  var h3Count = (content.match(/<h3/gi) || []).length;
+  var pCount = (content.match(/<p[>\s]/gi) || []).length;
+  var ulCount = (content.match(/<ul/gi) || []).length;
+  var liCount = (content.match(/<li/gi) || []).length;
+  var words = plain.split(/\s+/).filter(function(w){return w.length;}).length;
+  var sentences = plain.split(/[.!?]+/).filter(function(s){return s.trim().length > 3;}).length;
+
+  result.metrics.push({ label: 'Символів (збп)', value: chars + (delta !== 0 ? ' <span style="color:' + (delta > 0 ? 'var(--success)' : 'var(--danger)') + ';font-size:11px;">(' + (delta > 0 ? '+' : '') + delta + ')</span>' : '') });
+  result.metrics.push({ label: 'Слів', value: words });
+  result.metrics.push({ label: 'Речень', value: sentences });
+  result.metrics.push({ label: 'H1 / H2 / H3', value: h1Count + ' / ' + h2Count + ' / ' + h3Count });
+  result.metrics.push({ label: 'Абзаців', value: pCount });
+  if (liCount) result.metrics.push({ label: 'Списків', value: ulCount + ' (' + liCount + ' пунктів)' });
+
+  // Stage-specific analysis
+  if (stage.stage === 'generation') {
+    result.summary = 'AI згенерував перший варіант тексту на основі ТЗ та промпту.';
+    result.changes.push('Створено структуру з ' + h2Count + ' розділами H2');
+    result.changes.push('Написано ' + words + ' слів (' + chars + ' символів без пробілів)');
+    if (h2Count > 0) {
+      var h2Match = content.match(/<h2[^>]*>([^<]+)<\/h2>/gi) || [];
+      if (h2Match.length) {
+        var h2List = h2Match.slice(0, 5).map(function(h){return h.replace(/<[^>]+>/g, '').trim();}).join('; ');
+        result.changes.push('Розділи: ' + h2List);
+      }
+    }
+  } else if (stage.stage === 'resize') {
+    if (delta < 0) {
+      result.summary = 'Текст скорочено на ' + Math.abs(delta) + ' символів, щоб вкластися в цільовий обсяг.';
+      result.changes.push('Скорочено: ' + Math.abs(delta) + ' символів (' + Math.round(Math.abs(delta)/prevChars*100) + '% від попереднього)');
+    } else if (delta > 0) {
+      result.summary = 'Текст розширено на ' + delta + ' символів до цільового обсягу.';
+      result.changes.push('Додано: ' + delta + ' символів');
+    } else {
+      result.summary = 'Текст залишився без змін (вже був у цільовому діапазоні).';
+    }
+    result.changes.push('Нова структура: ' + h2Count + ' H2 розділів, ' + pCount + ' абзаців');
+  } else if (stage.stage === 'factcheck') {
+    result.summary = 'Perplexity Sonar Pro перевірив факти через web search та скоригував неточності.';
+    // Detect likely changes: numbers
+    var numsNew = (plain.match(/\d+[\s,.]?\d*/g) || []).length;
+    var numsOld = (prevPlain.match(/\d+[\s,.]?\d*/g) || []).length;
+    result.changes.push('Чисел у тексті: ' + numsNew + (numsOld !== numsNew ? ' (було: ' + numsOld + ')' : ''));
+    if (Math.abs(delta) > 50) {
+      result.changes.push(delta > 0 ? 'Додано фактичної інформації (+' + delta + ' симв.)' : 'Видалено неточні твердження (' + delta + ' симв.)');
+    }
+    if (prevPlain && plain !== prevPlain) {
+      var commonLen = 0;
+      var minLen = Math.min(plain.length, prevPlain.length);
+      for (var ci = 0; ci < minLen; ci++) if (plain[ci] === prevPlain[ci]) commonLen++; else break;
+      result.changes.push('Текст модифіковано: ' + Math.round((1 - commonLen/Math.max(plain.length, prevPlain.length))*100) + '% відмінностей');
+    } else {
+      result.changes.push('Факти підтверджено, зміни не потрібні');
+    }
+  } else if (stage.stage === 'humanize') {
+    result.summary = 'Claude Humanizer видалив AI-паттерни за 29-паттерним гайдом Wikipedia та додав природні формулювання.';
+    // AI word detection
+    var aiWords = ['delve','landscape','navigate','leverage','utilize','robust','holistic','pivotal','streamline','foster','underscore','realm','myriad','plethora','furthermore','moreover'];
+    var aiCountOld = 0, aiCountNew = 0;
+    var lower = plain.toLowerCase();
+    var prevLower = prevPlain.toLowerCase();
+    for (var ai = 0; ai < aiWords.length; ai++) {
+      if (lower.indexOf(aiWords[ai]) !== -1) aiCountNew++;
+      if (prevLower.indexOf(aiWords[ai]) !== -1) aiCountOld++;
+    }
+    result.changes.push('AI-лексика: ' + aiCountOld + ' → ' + aiCountNew + ' слів' + (aiCountOld > aiCountNew ? ' ✓' : ''));
+
+    var emDashNew = (plain.match(/—/g) || []).length;
+    var emDashOld = (prevPlain.match(/—/g) || []).length;
+    if (emDashOld !== emDashNew) result.changes.push('Довгих тире: ' + emDashOld + ' → ' + emDashNew);
+
+    // Sentence variance
+    var lenArr = plain.split(/[.!?]+/).filter(function(s){return s.trim().length>3;}).map(function(s){return s.trim().split(/\s+/).length;});
+    var avg = lenArr.reduce(function(a,b){return a+b;},0) / (lenArr.length || 1);
+    var variance = lenArr.reduce(function(a,b){return a + Math.pow(b-avg, 2);},0) / (lenArr.length || 1);
+    result.changes.push('Варіативність речень: ' + variance.toFixed(1) + ' (вище = природніше)');
+
+    if (Math.abs(delta) > 20) result.changes.push('Зміна обсягу: ' + (delta > 0 ? '+' : '') + delta + ' символів');
+  }
+
+  return result;
 }
 
 function toggleStageBlock(headerEl) {

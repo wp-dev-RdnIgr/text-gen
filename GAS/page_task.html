@@ -361,6 +361,26 @@
   </div>
 </div>
 
+<!-- Модалка: Деталі етапу -->
+<div id="modal-stage-detail" class="modal-overlay" style="display:none;">
+  <div class="stages-modal-card" style="max-width:1000px;">
+    <div class="stages-modal-header">
+      <div>
+        <div class="stages-modal-title" id="stage-detail-title">Деталі етапу</div>
+        <div class="stages-modal-subtitle">Що змінилося на цьому етапі</div>
+      </div>
+      <button class="modal-close" onclick="closeStageDetail()">&times;</button>
+    </div>
+    <div class="stages-modal-body">
+      <div id="stage-detail-content"></div>
+    </div>
+    <div class="stages-modal-footer">
+      <div class="stages-footer-info"></div>
+      <button class="btn btn-primary" onclick="closeStageDetail()">Закрити</button>
+    </div>
+  </div>
+</div>
+
 <!-- Модалка: Прогрес генерації (етапи) -->
 <div id="modal-generation-progress" class="modal-overlay" style="display:none;">
   <div class="stages-modal-card">
