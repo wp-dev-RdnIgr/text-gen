@@ -274,16 +274,16 @@
   </div>
 </div>
 
-<!-- Модалка: Огляд/редагування промту -->
+<!-- Модалка: Огляд / редагування промту -->
 <div id="modal-prompt-editor" class="modal-overlay" style="display:none;">
-  <div class="modal-card" style="max-width:700px;">
+  <div class="modal-card" style="max-width:720px;">
     <div class="modal-header">
       <h3 id="prompt-modal-title">Промт</h3>
       <button class="modal-close" onclick="closeModal('modal-prompt-editor')">&times;</button>
     </div>
     <div class="modal-body">
-      <textarea id="prompt-modal-textarea" class="input-field textarea-mono" rows="18" style="min-height:300px;"></textarea>
-      <div id="prompt-modal-hint" class="text-secondary" style="margin-top:6px;font-size:10px;"></div>
+      <textarea id="prompt-modal-textarea" class="input-field textarea-mono" rows="18" style="min-height:320px;"></textarea>
+      <div id="prompt-modal-hint" class="text-secondary" style="margin-top:8px; font-size:11px;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-prompt-editor')">Скасувати</button>
@@ -292,9 +292,9 @@
   </div>
 </div>
 
-<!-- Модалка: Добавить свой блок -->
+<!-- Модалка: Додати гнучкий блок -->
 <div id="modal-add-flex-block" class="modal-overlay" style="display:none;">
-  <div class="modal-card" style="max-width:400px;">
+  <div class="modal-card" style="max-width:420px;">
     <div class="modal-header">
       <h3>Додати блок</h3>
       <button class="modal-close" onclick="closeModal('modal-add-flex-block')">&times;</button>
@@ -305,7 +305,7 @@
         <input type="text" id="new-flex-label" class="input-field" placeholder="Наприклад: Цільова аудиторія">
       </div>
       <div class="field-group">
-        <label class="field-label">Тип</label>
+        <label class="field-label">Тип поля</label>
         <select id="new-flex-type" class="input-field">
           <option value="textarea">Текстове поле</option>
           <option value="repeatable">Повторюване поле (список)</option>
@@ -321,20 +321,20 @@
 
 <!-- Модалка: Клон голосу (Voice Clone) -->
 <div id="modal-voice-clone" class="modal-overlay" style="display:none;">
-  <div class="modal-card" style="max-width:700px;">
+  <div class="modal-card" style="max-width:720px;">
     <div class="modal-header">
       <h3>Клон голосу</h3>
       <button class="modal-close" onclick="closeModal('modal-voice-clone')">&times;</button>
     </div>
     <div class="modal-body">
-      <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#92690C;">
-        <strong>Як це працює:</strong> Додайте 1-4 тексти, написані цільовим голосом (ваші статті, або статті в стилі, який подобається). Мінімум 200 слів кожен. Система проаналізує: ритм речень, лексику, тон, структуру, пунктуацію — і створить "голосовий профіль" для генерації.
+      <div style="background:var(--warning-light); border:1px solid var(--warning-border); border-radius:var(--radius); padding:12px 16px; margin-bottom:16px; font-size:12px; color:#92690C; line-height:1.55;">
+        <strong>Як це працює:</strong> Додайте 1–4 тексти, написані цільовим голосом (ваші статті або статті в стилі, який подобається). Мінімум 200 слів кожен. Система проаналізує ритм речень, лексику, тон, структуру й пунктуацію — і створить «голосовий профіль» для генерації.
       </div>
       <div id="voice-ref-texts-container">
         <!-- Динамічно: textarea для кожного тексту -->
       </div>
-      <button class="btn btn-sm" id="voice-add-ref-btn" onclick="addVoiceRefText()" style="margin-top:8px;">+ Додати текст</button>
-      <div id="voice-profile-status" style="margin-top:12px;"></div>
+      <button class="btn btn-sm" id="voice-add-ref-btn" onclick="addVoiceRefText()" style="margin-top:10px;">＋ Додати текст</button>
+      <div id="voice-profile-status" style="margin-top:14px;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-voice-clone')">Скасувати</button>
@@ -345,21 +345,21 @@
 
 <!-- Модалка: Інтерв'ю (Interview Extraction) -->
 <div id="modal-interview" class="modal-overlay" style="display:none;">
-  <div class="modal-card" style="max-width:700px;">
+  <div class="modal-card" style="max-width:720px;">
     <div class="modal-header">
       <h3>Інтерв'ю — ваш досвід</h3>
       <button class="modal-close" onclick="skipInterview()">&times;</button>
     </div>
     <div class="modal-body">
-      <div style="background:#EBF5FF;border:1px solid #BDD7F5;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#1A5FB4;">
-        <strong>Навіщо це:</strong> Ваші особисті відповіді зроблять текст автентичним. Конкретні числа, історії та досвід — це те, що відрізняє живий текст від AI. Відповідайте як розмовляєте — не треба "красиво".
+      <div style="background:var(--primary-light); border:1px solid var(--primary-border); border-radius:var(--radius); padding:12px 16px; margin-bottom:16px; font-size:12px; color:var(--primary); line-height:1.55;">
+        <strong>Навіщо це:</strong> Ваші особисті відповіді зроблять текст автентичним. Конкретні числа, історії та досвід — це те, що відрізняє живий текст від AI. Відповідайте, як ви говорите, — не треба «красиво».
       </div>
       <div id="interview-questions-container">
         <!-- Динамічно: питання + textarea для відповідей -->
       </div>
-      <div id="interview-loading" style="display:none;text-align:center;padding:24px;">
-        <div class="loader-dots"><span></span><span></span><span></span></div>
-        <p style="margin-top:12px;color:#888;font-size:12px;">Генерація питань по темі...</p>
+      <div id="interview-loading" style="display:none; text-align:center; padding:32px;">
+        <div class="loader-dots" style="justify-content:center;"><span></span><span></span><span></span></div>
+        <p style="margin-top:14px; color:var(--text-secondary); font-size:13px;">Генеруємо питання по темі…</p>
       </div>
     </div>
     <div class="modal-footer">
@@ -371,16 +371,16 @@
 
 <!-- Модалка: Перегляд чернетки (Draft Review) -->
 <div id="modal-draft-review" class="modal-overlay" style="display:none;">
-  <div class="modal-card" style="max-width:800px;">
+  <div class="modal-card" style="max-width:820px;">
     <div class="modal-header">
       <h3>Перегляд чернетки</h3>
       <button class="modal-close" onclick="closeModal('modal-draft-review')">&times;</button>
     </div>
     <div class="modal-body">
-      <div id="draft-content" style="max-height:400px;overflow-y:auto;border:1px solid #E5E5E0;border-radius:8px;padding:16px;margin-bottom:12px;font-size:13px;line-height:1.7;"></div>
+      <div id="draft-content" style="max-height:420px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; margin-bottom:14px; font-size:14px; line-height:1.75; color:var(--text); background:var(--bg-subtle);"></div>
       <div class="field-group">
         <label class="field-label">Зворотній зв'язок (якщо потрібні зміни)</label>
-        <textarea id="draft-feedback" class="input-field" rows="4" placeholder="Що змінити, що додати, що прибрати..."></textarea>
+        <textarea id="draft-feedback" class="input-field" rows="4" placeholder="Що змінити, що додати, що прибрати…"></textarea>
       </div>
     </div>
     <div class="modal-footer">
@@ -393,7 +393,7 @@
 
 <!-- Модалка: Імпорт даних з Google Sheets -->
 <div id="modal-task-import" class="modal-overlay" style="display:none;">
-  <div class="modal-card" style="max-width:650px;">
+  <div class="modal-card" style="max-width:660px;">
     <div class="modal-header">
       <h3>Імпорт з Google Sheets</h3>
       <button class="modal-close" onclick="closeModal('modal-task-import')">&times;</button>
@@ -402,16 +402,16 @@
       <div id="task-import-step-url">
         <div class="field-group">
           <label class="field-label">Посилання на таблицю</label>
-          <input type="text" id="task-import-url" class="input-field" placeholder="https://docs.google.com/spreadsheets/d/...">
+          <input type="text" id="task-import-url" class="input-field" placeholder="https://docs.google.com/spreadsheets/d/…">
         </div>
         <button class="btn btn-primary btn-block" id="task-import-btn" onclick="taskImportLoadRows()">Зчитати</button>
-        <div id="task-import-loading" style="display:none;text-align:center;padding:16px;">
-          <div class="loader-inline">Зчитування...</div>
+        <div id="task-import-loading" style="display:none; text-align:center; padding:18px;">
+          <div class="loader-inline">Зчитування…</div>
         </div>
       </div>
       <div id="task-import-step-select" style="display:none;">
-        <p class="text-secondary" style="margin-bottom:8px;">Оберіть рядок:</p>
-        <div id="task-import-rows-list" style="max-height:350px;overflow-y:auto;"></div>
+        <p class="text-secondary" style="margin-bottom:10px;">Оберіть рядок:</p>
+        <div id="task-import-rows-list" style="max-height:380px; overflow-y:auto;"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -423,11 +423,11 @@
 
 <!-- Модалка: Прелоадер імпорту -->
 <div id="modal-import-loading" class="modal-overlay" style="display:none;">
-  <div class="modal-card" style="max-width:400px;text-align:center;">
-    <div style="padding:32px 16px;">
-      <div class="loader-spinner" style="margin:0 auto 16px;"></div>
-      <h3 style="margin-bottom:8px;">AI обробляє дані</h3>
-      <p style="color:var(--text-secondary);font-size:13px;">Зіставляємо колонки таблиці з полями задачі.<br>Це може зайняти 10-30 секунд...</p>
+  <div class="modal-card" style="max-width:420px; text-align:center;">
+    <div style="padding:36px 20px 32px;">
+      <div class="loader-spinner" style="margin:0 auto 18px;"></div>
+      <h3 style="margin-bottom:8px; font-size:15px; font-weight:600;">AI обробляє дані</h3>
+      <p style="color:var(--text-secondary); font-size:13px; line-height:1.55;">Зіставляємо колонки таблиці з полями задачі.<br>Це може зайняти 10–30 секунд…</p>
     </div>
   </div>
 </div>
