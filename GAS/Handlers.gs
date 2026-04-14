@@ -1,5 +1,5 @@
 // ===========================================
-// Handlers.gs - Все данные через n8n → PostgreSQL
+// Handlers.gs — Усі дані через n8n → PostgreSQL
 // OpenAI и AI-маппинг тоже через n8n
 // ===========================================
 
@@ -69,7 +69,7 @@ function callPromptEngine(systemPrompt, userPrompt, options) {
 
 // escSQL, jsonSQL видалено — весь SQL тепер в n8n
 
-// --- Клиенты ---
+// --- Клієнти ---
 
 function getClients() {
   return callCrudApi('getClients');
@@ -130,7 +130,7 @@ function saveTaskTemplate(d) {
   var rows = callCrudApi('saveTaskTemplate', d);
   var result = Array.isArray(rows) ? (rows[0] || null) : rows;
   if (!result || !result.id) {
-    // Fallback: вернуть объект с id из params если есть
+    // Fallback: повернути обʼєкт з id з params якщо є
     if (d.id) { result = d; }
     else { throw new Error('Не вдалося зберегти шаблон'); }
   }

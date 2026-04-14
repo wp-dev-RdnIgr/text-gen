@@ -11,7 +11,7 @@ function renderTasksPage() {
   populateTasksFilters();
   loadAllTasksForPage();
 
-  // Якщо зайшли через "Открыть клієнта" з дашборду — застосовуємо filter
+  // Якщо зайшли через "Відкрити клієнта" з дашборду — застосовуємо filter
   if (state.filterClientId) {
     var sel = document.getElementById('tasks-filter-client');
     if (sel) sel.value = state.filterClientId;

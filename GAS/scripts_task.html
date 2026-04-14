@@ -60,7 +60,7 @@ function loadTaskScreen(taskId) {
     // Обновить превью промптов
     updatePromptPreviews();
 
-    // Сбросить UI генерации
+    // Скинути UI генерації
     document.getElementById('gen-result').style.display = 'none';
     document.getElementById('gen-loading').style.display = 'none';
     document.getElementById('gen-user-input').value = '';
@@ -217,7 +217,7 @@ function renderActiveFlexBlocks() {
     h += '<button class="flex-block-close" onclick="event.stopPropagation();toggleFlexBlock(\'' + b.key + '\')" title="Вимкнути">&times;</button>';
     h += '</div>';
 
-    // Раскрывающееся тело
+    // Розгортуване тіло
     if (isExpanded) {
       var isEditing = !hasValue || !!_editingFlexBlocks[b.key];
       h += '<div class="flex-accordion-body">';
@@ -391,7 +391,7 @@ function confirmAddFlexBlock() {
   showToast('Блок «' + label + '» додано', 'success');
 }
 
-// --- Сохранение field values ---
+// --- Збереження field values ---
 function saveFieldValues() {
   var task = state.currentTask;
   if (!task) return;
@@ -525,7 +525,7 @@ function wizardBack() {
   goToWizardStep(Math.max(1, (state.currentWizardStep || 1) - 1));
 }
 
-// --- Сохранение настроек ---
+// --- Збереження налаштувань ---
 function saveTaskName() {
   if (!state.currentTask) return;
   state.currentTask.name = document.getElementById('task-name-input').value.trim();

@@ -16,7 +16,7 @@ function loadEditorScreen(taskId, textId) {
   }
 
   google.script.run.withSuccessHandler(function(text) {
-    if (!text) { showToast('Текст не найден', 'error'); return; }
+    if (!text) { showToast('Текст не знайдено', 'error'); return; }
     state.editorText = text;
 
     // Если нет блоков — парсим из контента
@@ -24,7 +24,7 @@ function loadEditorScreen(taskId, textId) {
       text.blocks = parseContentToBlocks(text.content);
     }
 
-    // Загрузить имя задачи
+    // Завантажити назву задачі
     google.script.run.withSuccessHandler(function(task) {
       if (task) {
         backLink.textContent = task.name || 'Задача';
@@ -130,15 +130,15 @@ function renderEditorBlocks() {
 
     // Тулбар блока
     var toolbar = '<div class="block-toolbar">' +
-      '<button class="block-toolbar-btn" onclick="event.stopPropagation();regenerateBlock(' + index + ')" title="Перегенерировать этот блок">&#x21bb; Перегенерировать</button>' +
+      '<button class="block-toolbar-btn" onclick="event.stopPropagation();regenerateBlock(' + index + ')" title="Перегенерувати цей блок">&#x21bb; Перегенерувати</button>' +
       '<div class="block-toolbar-sep"></div>' +
-      '<button class="block-toolbar-btn" onclick="event.stopPropagation();openBlockCommentModal(' + index + ')" title="Перегенерировать с комментарием">&#x270E; С комментарием</button>' +
+      '<button class="block-toolbar-btn" onclick="event.stopPropagation();openBlockCommentModal(' + index + ')" title="Перегенерувати з коментарем">&#x270E; З коментарем</button>' +
       '<div class="block-toolbar-sep"></div>' +
       (index < blocks.length - 1 ?
-        '<button class="block-toolbar-btn" onclick="event.stopPropagation();mergeBlocks(' + index + ')" title="Объединить с следующим блоком">&#x2194; Объединить</button>' +
+        '<button class="block-toolbar-btn" onclick="event.stopPropagation();mergeBlocks(' + index + ')" title="Об\'єднати з наступним блоком">&#x2194; Об\'єднати</button>' +
         '<div class="block-toolbar-sep"></div>'
       : '') +
-      '<button class="block-toolbar-btn" onclick="event.stopPropagation();promptSplitBlock(' + index + ')" title="Разбить блок на два">&#x2702; Разбить</button>' +
+      '<button class="block-toolbar-btn" onclick="event.stopPropagation();promptSplitBlock(' + index + ')" title="Розбити блок на два">&#x2702; Розбити</button>' +
     '</div>';
 
     h += '<div class="editor-block' + activeClass + '" data-index="' + index + '" onclick="toggleBlock(' + index + ')">' +
@@ -171,7 +171,7 @@ function regenerateBlock(index) {
     blockEl.innerHTML += '<div class="block-loader">Генерація блоку через AI...</div>';
   }
 
-  showToast('Перегенерація блоку...', 'info');
+  showToast('Перегенерація блоку…', 'info');
 
   google.script.run.withSuccessHandler(function(updated) {
     state.editorText = updated;
@@ -217,7 +217,7 @@ function confirmBlockRegeneration() {
     blockEl.innerHTML += '<div class="block-loader">Генерация с комментарием...</div>';
   }
 
-  showToast('Перегенерація блоку' + (comment ? ' з коментарем...' : '...'), 'info');
+  showToast('Перегенерація блоку' + (comment ? ' з коментарем…' : '…'), 'info');
 
   google.script.run.withSuccessHandler(function(updated) {
     state.editorText = updated;
@@ -233,9 +233,9 @@ function confirmBlockRegeneration() {
   }).regenerateBlockWithAI(t.id, index, comment);
 }
 
-// --- Полная перегенерация ---
+// --- Повна перегенерація ---
 function regenerateFullText() {
-  if (!confirm('Перегенерировать весь текст? Текущий текст будет заменён.')) return;
+  if (!confirm('Перегенерувати весь текст? Поточний текст буде замінено.')) return;
 
   var t = state.editorText;
   if (!t) return;
@@ -244,11 +244,11 @@ function regenerateFullText() {
   if (container) {
     container.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:60px;">' +
       '<div class="loader-dots"><span></span><span></span><span></span></div>' +
-      '<p style="margin-top:16px;color:#888;font-size:13px;">Полная перегенерация текста...</p>' +
+      '<p style="margin-top:16px;color:var(--text-secondary);font-size:13px;">Повна перегенерація тексту…</p>' +
     '</div>';
   }
 
-  showToast('Повна перегенерація через AI...', 'info');
+  showToast('Повна перегенерація через AI…', 'info');
 
   google.script.run.withSuccessHandler(function(updated) {
     state.editorText = updated;
@@ -277,7 +277,7 @@ function closeRegenComment() {
 
 function regenerateFullTextWithComment() {
   var comment = document.getElementById('editor-regen-comment-text').value.trim();
-  if (!comment) { showToast('Введите комментарий', 'error'); return; }
+  if (!comment) { showToast('Введіть коментар', 'error'); return; }
   closeRegenComment();
 
   var t = state.editorText;
@@ -287,12 +287,12 @@ function regenerateFullTextWithComment() {
   if (container) {
     container.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:60px;">' +
       '<div class="loader-dots"><span></span><span></span><span></span></div>' +
-      '<p style="margin-top:16px;color:#888;font-size:13px;">Перегенерация с учётом комментария...</p>' +
-      '<p style="color:#AAA;font-size:11px;margin-top:4px;">«' + escapeHtml(truncate(comment, 60)) + '»</p>' +
+      '<p style="margin-top:16px;color:var(--text-secondary);font-size:13px;">Перегенерація з урахуванням коментаря…</p>' +
+      '<p style="color:var(--text-muted);font-size:11px;margin-top:4px;">«' + escapeHtml(truncate(comment, 60)) + '»</p>' +
     '</div>';
   }
 
-  showToast('Перегенерація з коментарем через AI...', 'info');
+  showToast('Перегенерація з коментарем через AI…', 'info');
 
   google.script.run.withSuccessHandler(function(updated) {
     state.editorText = updated;
@@ -306,7 +306,7 @@ function regenerateFullTextWithComment() {
   }).regenerateFullTextWithAI(t.id, comment);
 }
 
-// --- Объединение блоков ---
+// --- Об'єднання блоків ---
 function mergeBlocks(index) {
   var t = state.editorText;
   if (!t || !t.blocks || index + 1 >= t.blocks.length) return;
@@ -314,9 +314,9 @@ function mergeBlocks(index) {
   var block = t.blocks[index];
   var nextBlock = t.blocks[index + 1];
 
-  // Объединяем контент
+  // Об'єднуємо контент
   if (block.type === 'heading' && nextBlock.type === 'paragraph') {
-    // Заголовок + абзац = объединяем в абзац
+    // Заголовок + абзац = об'єднуємо в абзац
     block.type = 'paragraph';
     block.tag = 'p';
     block.content = block.content + '. ' + nextBlock.content;
@@ -334,7 +334,7 @@ function mergeBlocks(index) {
 
   state.activeBlockIndex = -1;
   renderEditorBlocks();
-  showToast('Блоки объединены', 'success');
+  showToast('Блоки об\'єднано', 'success');
 }
 
 // --- Разбивка блока ---
@@ -348,7 +348,7 @@ function promptSplitBlock(index) {
   // Ищем точку разделения: середина по предложениям
   var sentences = content.split(/(?<=[.!?])\s+/);
   if (sentences.length < 2) {
-    showToast('Блок слишком короткий для разбивки', 'error');
+    showToast('Блок занадто короткий для розбиття', 'error');
     return;
   }
 
@@ -356,7 +356,7 @@ function promptSplitBlock(index) {
   var part1 = sentences.slice(0, midPoint).join(' ');
   var part2 = sentences.slice(midPoint).join(' ');
 
-  // Создаём новый блок
+  // Створюємо новий блок
   var newBlock = {
     id: 'b_' + Date.now(),
     type: block.type,
@@ -375,6 +375,6 @@ function promptSplitBlock(index) {
 
   state.activeBlockIndex = -1;
   renderEditorBlocks();
-  showToast('Блок разбит на два', 'success');
+  showToast('Блок розбито на два', 'success');
 }
 </script>
