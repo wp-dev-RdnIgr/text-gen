@@ -581,25 +581,249 @@ function startGeneration() {
 }
 
 function executeGeneration(assembledPrompt, fv) {
-  // Показать лоадер
   document.getElementById('gen-result').style.display = 'none';
-  document.getElementById('gen-loading').style.display = 'block';
   document.getElementById('gen-send-btn').disabled = true;
 
   var opts = state.currentTask.options || {};
 
+  // Відкрити модалку етапів
+  openGenerationModal(opts);
+
   google.script.run.withSuccessHandler(function(text) {
-    // If draft review enabled → show draft modal for approval
+    _genFinalResult = text;
+    // Завершити модалку — перевести всі активні етапи в completed
+    finalizeGenerationModal(text);
+
+    // Закрити модалку через 2 сек і показати результат (якщо не draft_review)
     if (opts.draft_review) {
-      showDraftReviewModal(text);
+      setTimeout(function() {
+        closeGenerationModal();
+        showDraftReviewModal(text);
+      }, 1500);
       return;
     }
-    // No draft review → show final result directly
-    showFinalResult(text);
+    // Оставляем модалку відкритою — користувач сам натисне "Відкрити результат"
+    // showFinalResult викличеться з кнопки
   }).withFailureHandler(function(e) {
-    showToast(e.message, 'error');
-    resetGenUI();
+    errorGenerationModal(e.message);
+    document.getElementById('gen-send-btn').disabled = false;
   }).generateTextWithAI(state.currentTask.id, assembledPrompt, fv);
+}
+
+// ===========================================
+// Generation Stages Modal — progress timeline
+// ===========================================
+var _genSessionId = null;
+var _genPollTimer = null;
+var _genFinalResult = null;
+var _genStagesShown = {};
+var _genStartTime = null;
+
+function openGenerationModal(opts) {
+  _genSessionId = null;
+  _genStagesShown = {};
+  _genFinalResult = null;
+  _genStartTime = Date.now();
+  opts = opts || {};
+
+  // Reset всіх етапів
+  var stages = ['generation', 'resize', 'factcheck', 'humanize', 'save'];
+  for (var i = 0; i < stages.length; i++) {
+    var el = document.getElementById('stage-item-' + stages[i]);
+    if (el) el.className = 'stage-item pending';
+  }
+
+  // Підсвітити які етапи включені
+  document.getElementById('stage-meta-factcheck').textContent = opts.factcheck ? 'увімкнено' : 'вимкнено';
+  document.getElementById('stage-meta-humanize').textContent = opts.humanize ? 'увімкнено' : 'вимкнено';
+  document.getElementById('stage-meta-generation').textContent = 'очікує';
+  document.getElementById('stage-meta-resize').textContent = 'опц.';
+  document.getElementById('stage-meta-save').textContent = 'очікує';
+
+  // Disabled етапи
+  if (!opts.factcheck) {
+    var fcEl = document.getElementById('stage-item-factcheck');
+    fcEl.style.opacity = '0.4';
+  } else {
+    document.getElementById('stage-item-factcheck').style.opacity = '1';
+  }
+  if (!opts.humanize) {
+    var humEl = document.getElementById('stage-item-humanize');
+    humEl.style.opacity = '0.4';
+  } else {
+    document.getElementById('stage-item-humanize').style.opacity = '1';
+  }
+
+  // Активуємо перший етап
+  document.getElementById('stage-item-generation').className = 'stage-item active';
+  document.getElementById('stages-subtitle').textContent = 'Генерація тексту AI моделлю...';
+  document.getElementById('stages-footer-info').textContent = 'Запущено. Очікуємо результати...';
+  document.getElementById('stages-open-btn').style.display = 'none';
+
+  // Очистити content
+  document.getElementById('stages-content').innerHTML =
+    '<div style="text-align:center;color:var(--text-muted);padding:40px 20px;">' +
+    '<div class="loader-spinner" style="margin:0 auto 16px;"></div>' +
+    '<div style="font-size:13px;">AI пише текст...</div></div>';
+
+  openModal('modal-generation-progress');
+
+  // Почати polling (sessionId ще немає — отримаємо з першого stage)
+  startStagesPolling();
+}
+
+function startStagesPolling() {
+  if (_genPollTimer) clearInterval(_genPollTimer);
+  // Чекаємо 1 сек до першого запиту, потім кожні 2 сек
+  setTimeout(pollStages, 1000);
+  _genPollTimer = setInterval(pollStages, 2000);
+}
+
+function pollStages() {
+  // Якщо немає sessionId — ми ще не знаємо його. Отримаємо з task state після повернення.
+  // Зробимо запит на останні stage записи для цього task
+  if (!state.currentTask) return;
+
+  google.script.run.withSuccessHandler(function(stages) {
+    if (!stages || !stages.length) return;
+
+    // Filter only stages for current session (найсвіжіший session)
+    // Знайдемо найсвіжіший sessionId (останній created_at)
+    var latestSession = stages[stages.length - 1].session_id;
+    if (!_genSessionId) _genSessionId = latestSession;
+    var mySessionStages = [];
+    for (var i = 0; i < stages.length; i++) {
+      if (stages[i].session_id === _genSessionId) mySessionStages.push(stages[i]);
+    }
+
+    renderStages(mySessionStages);
+  }).withFailureHandler(function() {}).getRecentGenerationStages(state.currentTask.id);
+}
+
+function renderStages(stages) {
+  if (!stages || !stages.length) return;
+
+  // Update timeline
+  var stageOrder = ['generation', 'resize', 'factcheck', 'humanize'];
+  for (var i = 0; i < stages.length; i++) {
+    var s = stages[i];
+    var el = document.getElementById('stage-item-' + s.stage);
+    if (el && s.status === 'completed') {
+      el.className = 'stage-item completed';
+      var metaEl = document.getElementById('stage-meta-' + s.stage);
+      if (metaEl) metaEl.textContent = (s.chars_count || 0) + ' збп';
+    }
+  }
+
+  // Активуємо наступний етап
+  var lastStage = stages[stages.length - 1].stage;
+  var lastIdx = stageOrder.indexOf(lastStage);
+  var opts = state.currentTask.options || {};
+  for (var j = lastIdx + 1; j < stageOrder.length; j++) {
+    var nextStage = stageOrder[j];
+    // Skip disabled
+    if (nextStage === 'factcheck' && !opts.factcheck) continue;
+    if (nextStage === 'humanize' && !opts.humanize) continue;
+    var nextEl = document.getElementById('stage-item-' + nextStage);
+    if (nextEl && nextEl.className.indexOf('completed') === -1) {
+      nextEl.className = 'stage-item active';
+      var subtitles = {
+        resize: 'Підгонка обсягу тексту...',
+        factcheck: 'Perplexity перевіряє факти через web search...',
+        humanize: 'Гуманізація: видалення AI-паттернів...'
+      };
+      document.getElementById('stages-subtitle').textContent = subtitles[nextStage] || 'Обробка...';
+      break;
+    }
+  }
+
+  // Render content blocks (only new ones)
+  var contentEl = document.getElementById('stages-content');
+  if (Object.keys(_genStagesShown).length === 0) contentEl.innerHTML = '';
+
+  var labels = {
+    generation: '1. Генерація',
+    resize: '2. Підгонка обсягу',
+    factcheck: '3. Факт-чекінг (Perplexity)',
+    humanize: '4. Гуманізація'
+  };
+
+  for (var k = 0; k < stages.length; k++) {
+    var st = stages[k];
+    if (_genStagesShown[st.id]) continue;
+    _genStagesShown[st.id] = true;
+
+    // Remove "latest" class from others
+    var prevLatest = contentEl.querySelectorAll('.stage-block.latest');
+    for (var p = 0; p < prevLatest.length; p++) prevLatest[p].className = 'stage-block expanded';
+
+    var block = document.createElement('div');
+    block.className = 'stage-block latest expanded';
+    block.innerHTML =
+      '<div class="stage-block-header" onclick="toggleStageBlock(this)">' +
+        '<div class="stage-block-title">' +
+          '<div class="stage-block-icon">✓</div>' +
+          (labels[st.stage] || st.stage) +
+        '</div>' +
+        '<div class="stage-block-meta">' +
+          '<span class="stage-block-chars">' + (st.chars_count || 0) + ' збп</span>' +
+          '<span class="stage-status-badge done">Готово</span>' +
+          '<span class="stage-block-chevron">▸</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="stage-block-body">' + (st.content || '') + '</div>';
+    contentEl.appendChild(block);
+
+    // Scroll to new block
+    setTimeout(function(b) { return function() { b.scrollIntoView({behavior:'smooth', block:'nearest'}); }; }(block), 100);
+  }
+}
+
+function toggleStageBlock(headerEl) {
+  var block = headerEl.parentNode;
+  if (block.className.indexOf('expanded') !== -1) {
+    block.className = block.className.replace(' expanded', '');
+  } else {
+    block.className += ' expanded';
+  }
+}
+
+function finalizeGenerationModal(result) {
+  if (_genPollTimer) { clearInterval(_genPollTimer); _genPollTimer = null; }
+
+  // Mark save as completed
+  document.getElementById('stage-item-save').className = 'stage-item completed';
+  document.getElementById('stage-meta-save').textContent = 'збережено';
+  document.getElementById('stages-subtitle').textContent = 'Готово ✓';
+
+  var elapsed = Math.round((Date.now() - _genStartTime) / 1000);
+  document.getElementById('stages-footer-info').textContent = 'Готово за ' + elapsed + ' сек';
+  document.getElementById('stages-open-btn').style.display = 'inline-flex';
+  document.getElementById('stages-cancel-btn').textContent = 'Закрити';
+
+  _genFinalResult = result;
+}
+
+function errorGenerationModal(msg) {
+  if (_genPollTimer) { clearInterval(_genPollTimer); _genPollTimer = null; }
+  document.getElementById('stages-subtitle').textContent = 'Помилка ✗';
+  document.getElementById('stages-footer-info').textContent = 'Помилка: ' + msg;
+
+  // Mark current active as error
+  var active = document.querySelectorAll('.stage-item.active');
+  for (var i = 0; i < active.length; i++) active[i].className = 'stage-item error';
+  showToast(msg, 'error');
+}
+
+function closeGenerationModal() {
+  if (_genPollTimer) { clearInterval(_genPollTimer); _genPollTimer = null; }
+  closeModal('modal-generation-progress');
+  document.getElementById('gen-send-btn').disabled = false;
+}
+
+function openFinalText() {
+  closeGenerationModal();
+  if (_genFinalResult) showFinalResult(_genFinalResult);
 }
 
 function saveLastGenToGDoc() {

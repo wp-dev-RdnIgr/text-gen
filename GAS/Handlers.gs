@@ -189,22 +189,102 @@ function generateInterviewQuestions(taskId, topic) {
 
 function generateTextWithAI(taskId, assembledPrompt, fieldValues) {
   var task = getTask(taskId);
+  var sessionId = 'gen_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
   var response = UrlFetchApp.fetch(N8N_AGENT_URL, {
     method: 'post',
     contentType: 'application/json',
     payload: JSON.stringify({
+      sessionId: sessionId,
       taskId: taskId,
       assembledPrompt: assembledPrompt,
       systemPrompt: task ? task.system_prompt || '' : '',
       userPrompt: assembledPrompt,
-      fieldValues: fieldValues || {}
+      fieldValues: fieldValues || {},
+      llm_provider: task ? task.llm_provider : ''
     }),
     muteHttpExceptions: true
   });
   var code = response.getResponseCode();
   var text = response.getContentText();
   if (code !== 200 || !text) throw new Error('Agent error (' + code + ')');
-  return JSON.parse(text);
+  var result = JSON.parse(text);
+  result.sessionId = sessionId;
+  return result;
+}
+
+// --- Останні етапи генерації для задачі (знайти активну сесію) ---
+
+function getRecentGenerationStages(taskId) {
+  if (!taskId) return [];
+  var response = UrlFetchApp.fetch('https://n8n.rnd.webpromo.tools/webhook/textgen-sql', {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({
+      query: "SELECT id, session_id, stage, status, content, chars_count, created_at FROM textgen.generation_stages WHERE task_id=" + parseInt(taskId, 10) + " AND created_at > NOW() - INTERVAL '10 minutes' ORDER BY id ASC"
+    }),
+    muteHttpExceptions: true
+  });
+  var text = response.getContentText();
+  if (!text) return [];
+  try {
+    return JSON.parse(text) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// --- Отримати етапи генерації для session (polling) ---
+
+function getGenerationStages(sessionId) {
+  if (!sessionId) return [];
+  var response = UrlFetchApp.fetch('https://n8n.rnd.webpromo.tools/webhook/textgen-sql', {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({
+      query: "SELECT id, stage, status, content, chars_count, created_at FROM textgen.generation_stages WHERE session_id='" + sessionId.replace(/'/g, "''") + "' ORDER BY id ASC"
+    }),
+    muteHttpExceptions: true
+  });
+  var text = response.getContentText();
+  if (!text) return [];
+  try {
+    return JSON.parse(text) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// --- Запустити генерацію асинхронно (не блокувати UI) ---
+
+function startGenerationAsync(taskId, assembledPrompt, fieldValues) {
+  var sessionId = 'gen_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+  var task = getTask(taskId);
+  // Не чекаємо відповіді — просто запускаємо
+  // GAS UrlFetchApp не підтримує async, тому це блокуючий виклик
+  // Але поверне sessionId одразу для polling
+  try {
+    var response = UrlFetchApp.fetch(N8N_AGENT_URL, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({
+        sessionId: sessionId,
+        taskId: taskId,
+        assembledPrompt: assembledPrompt,
+        systemPrompt: task ? task.system_prompt || '' : '',
+        userPrompt: assembledPrompt,
+        fieldValues: fieldValues || {},
+        llm_provider: task ? task.llm_provider : ''
+      }),
+      muteHttpExceptions: true
+    });
+    var text = response.getContentText();
+    if (text) {
+      var result = JSON.parse(text);
+      result.sessionId = sessionId;
+      return result;
+    }
+  } catch (e) {}
+  return { sessionId: sessionId };
 }
 
 // --- Зберігання в Google Doc (через n8n) ---
