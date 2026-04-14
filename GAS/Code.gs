@@ -1,43 +1,43 @@
 // ===========================================
-// Code.gs - Точка входа, роутинг, меню
+// Code.gs — Точка входу, роутинг, меню
 // ===========================================
 
 /**
- * Создает меню в Google Sheets (если используется как add-on)
+ * Створює меню в Google Sheets (якщо використовується як add-on)
  */
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu('Генератор текстов')
-    .addItem('Открыть панель', 'openSidebar')
-    .addItem('Заполнить демо-данные', 'seedData')
-    .addItem('Сбросить данные', 'resetData')
+    .createMenu('Генератор текстів')
+    .addItem('Відкрити панель', 'openSidebar')
+    .addItem('Заповнити демо-дані', 'seedData')
+    .addItem('Скинути дані', 'resetData')
     .addToUi();
 }
 
 /**
- * Открывает sidebar
+ * Відкриває sidebar
  */
 function openSidebar() {
   var html = HtmlService.createTemplateFromFile('webapp')
     .evaluate()
-    .setTitle('Генератор текстов')
+    .setTitle('Генератор текстів')
     .setWidth(400);
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
 /**
- * Точка входа для Web App (standalone)
+ * Точка входу для Web App (standalone)
  */
 function doGet(e) {
   var template = HtmlService.createTemplateFromFile('webapp');
   return template.evaluate()
-    .setTitle('TextGen — Генератор контента')
+    .setTitle('TextGen — Генератор контенту')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
 /**
- * Подключает HTML-файл (для include)
+ * Підключає HTML-файл (для include)
  */
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();

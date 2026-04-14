@@ -1,28 +1,40 @@
-<!-- Экран: Управление клиентами -->
+<!-- Екран: Клієнти -->
 <div id="screen-clients" class="screen" style="display:none;">
-  <div class="content-header" style="padding: 24px;">
-    <div class="content-header-info">
-      <h1 class="page-title">Управление клиентами</h1>
-    </div>
-    <div class="content-header-actions">
-      <button class="btn btn-primary" onclick="openClientModal()">+ Добавить клиента</button>
-    </div>
-  </div>
+  <div class="page-wrap">
 
-  <div class="table-container" style="padding: 0 24px;">
-    <table class="data-table clients-table">
-      <thead>
-        <tr>
-          <th>Название</th>
-          <th>Сайт</th>
-          <th>Ниша</th>
-          <th>Задач</th>
-          <th style="width:120px;">Действия</th>
-        </tr>
-      </thead>
-      <tbody id="clients-table-body">
-        <!-- Заполняется динамически -->
-      </tbody>
-    </table>
+    <div class="content-header">
+      <div class="content-header-info">
+        <div>
+          <h1 class="page-title">Клієнти</h1>
+          <div class="page-subtitle">Керуйте клієнтами та швидко переходьте до їхніх задач</div>
+        </div>
+      </div>
+      <div class="content-header-actions">
+        <button class="btn btn-primary" onclick="openClientModal()">
+          <span style="font-size:14px;">＋</span> Додати клієнта
+        </button>
+      </div>
+    </div>
+
+    <!-- Search -->
+    <div style="margin-bottom: 18px;">
+      <input type="text" id="clients-grid-search" class="input-field"
+        placeholder="Пошук клієнта за назвою, нішею або доменом…"
+        oninput="filterClientsGrid()">
+    </div>
+
+    <!-- Grid -->
+    <div id="clients-grid-container" class="clients-grid">
+      <!-- Заповнюється через renderClientsGrid() -->
+    </div>
+
+    <!-- Empty state -->
+    <div id="clients-empty-state" class="empty-state" style="display:none;">
+      <div class="empty-state-icon">☻</div>
+      <div class="empty-state-title">Ще немає клієнтів</div>
+      <div class="empty-state-desc">Створіть першого клієнта, щоб почати генерувати для нього тексти.</div>
+      <button class="btn btn-primary" onclick="openClientModal()">Додати клієнта</button>
+    </div>
+
   </div>
 </div>

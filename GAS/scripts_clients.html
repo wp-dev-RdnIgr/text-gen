@@ -1,54 +1,37 @@
 <script>
 // ===========================================
-// scripts_clients.html - Управление клиентами
+// scripts_clients.html — Керування клієнтами
 // ===========================================
 
+// Legacy no-op (викликається зі старих шляхів; dashboard sidebar більше не існує)
 function renderClientList() {
   var c = document.getElementById('client-list');
   if (!c) return;
   if (!state.clients.length) {
-    c.innerHTML = '<div class="placeholder-message" style="height:100px"><p>Нет клиентов</p></div>';
+    c.innerHTML = '<div class="placeholder-message" style="height:100px"><p>Немає клієнтів</p></div>';
     return;
   }
   var h = '';
   state.clients.forEach(function(cl) {
-    var active = cl.id == state.selectedClientId ? ' active' : '';
-    h += '<div class="client-item' + active + '" onclick="selectClient(\'' + cl.id + '\')">' +
+    h += '<div class="client-item" onclick="openClientTasks(\'' + cl.id + '\')">' +
       '<div class="client-item-name">' + escapeHtml(cl.name) + '</div>' +
     '</div>';
   });
   c.innerHTML = h;
 }
 
-function filterClients(q) {
-  var items = document.querySelectorAll('.client-item');
-  q = q.toLowerCase();
-  for (var i = 0; i < items.length; i++) {
-    var name = items[i].querySelector('.client-item-name').textContent.toLowerCase();
-    items[i].style.display = name.indexOf(q) !== -1 ? '' : 'none';
-  }
-}
-
+// Legacy alias — тепер веде на розділ Задачі з фільтром по клієнту
 function selectClient(clientId) {
   state.selectedClientId = clientId;
-  renderClientList();
-  document.getElementById('dashboard-placeholder').style.display = 'none';
-  document.getElementById('dashboard-client-content').style.display = 'block';
-
-  // Показать лоадер
-  document.getElementById('tasks-loading').style.display = 'flex';
-  document.getElementById('tasks-grid').innerHTML = '';
-
-  google.script.run.withSuccessHandler(function(data) {
-    document.getElementById('tasks-loading').style.display = 'none';
-    state.dashboardTasks = data.tasks || [];
-    var client = data.client;
-    document.getElementById('dashboard-client-name').textContent = client ? client.name : '';
-    document.getElementById('dashboard-client-niche').textContent = client ? (client.niche || '') : '';
-    renderTaskCards();
-  }).getAllDataForDashboard(clientId);
 }
 
+// Clicking client card → opens Tasks page filtered by this client
+function openClientTasks(clientId) {
+  state.filterClientId = clientId;
+  navigateTo('#tasks');
+}
+
+// --- Client modal ---
 function openClientModal(clientId) {
   var t = document.getElementById('modal-client-title');
   document.getElementById('mc-id').value = '';
@@ -58,7 +41,7 @@ function openClientModal(clientId) {
   document.getElementById('mc-description').value = '';
 
   if (clientId) {
-    t.textContent = 'Редактировать клиента';
+    t.textContent = 'Редагувати клієнта';
     var cl = state.clients.find(function(c) { return c.id == clientId; });
     if (cl) {
       document.getElementById('mc-id').value = cl.id;
@@ -68,7 +51,7 @@ function openClientModal(clientId) {
       document.getElementById('mc-description').value = cl.notes || '';
     }
   } else {
-    t.textContent = 'Новый клиент';
+    t.textContent = 'Новий клієнт';
   }
   openModal('modal-client');
 }
@@ -80,62 +63,158 @@ function saveClientFromModal() {
     niche: document.getElementById('mc-niche').value.trim(),
     notes: document.getElementById('mc-description').value.trim()
   };
-  if (!d.name) { showToast('Укажите название', 'error'); return; }
+  if (!d.name) { showToast('Вкажіть назву', 'error'); return; }
   var id = document.getElementById('mc-id').value;
   if (id) d.id = id;
 
   google.script.run.withSuccessHandler(function() {
     closeModal('modal-client');
-    showToast(id ? 'Клиент обновлён' : 'Клиент создан', 'success');
+    showToast(id ? 'Клієнта оновлено' : 'Клієнта створено', 'success');
+    invalidateClientsCache();
+    invalidateTasksCache();
     loadInitialData();
-    if (state.selectedClientId) selectClient(state.selectedClientId);
+    // Перерендер сторінки клієнтів якщо ми на ній
+    if (window.location.hash === '#clients') {
+      setTimeout(renderClientsTable, 300);
+    }
   }).withFailureHandler(function(e) {
     showToast(e.message, 'error');
   }).saveClient(d);
 }
 
 function deleteClientConfirm(cid) {
-  if (!confirm('Удалить клиента и все его задачи?')) return;
+  if (!confirm('Видалити клієнта та всі його задачі?')) return;
+
+  // Optimistic: одразу видаляємо з UI
+  var backup = (state.clients || []).slice();
+  state.clients = state.clients.filter(function(c) { return String(c.id) !== String(cid); });
+  if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
+  if (window.location.hash === '#clients' && typeof renderClientsGrid === 'function') renderClientsGrid();
+
+  // Також з кешу задач
+  invalidateTasksCache();
+  state.allTasks = (state.allTasks || []).filter(function(t) { return String(t._clientId) !== String(cid); });
+
   google.script.run.withSuccessHandler(function() {
-    showToast('Клиент удалён', 'success');
+    showToast('Клієнта видалено', 'success');
     state.selectedClientId = null;
-    loadInitialData();
+    state._clientsFetchedAt = Date.now(); // кеш залишається актуальним після optimistic update
   }).withFailureHandler(function(e) {
-    showToast(e.message, 'error');
+    // Rollback
+    state.clients = backup;
+    if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
+    if (typeof renderClientsGrid === 'function') renderClientsGrid();
+    showToast('Не вдалося видалити: ' + e.message, 'error');
   }).deleteClient(cid);
 }
 
+// --- Main render: Clients Grid ---
+// (зберігаємо ім'я renderClientsTable для сумісності з роутером)
 function renderClientsTable() {
-  var tb = document.getElementById('clients-table-body');
-  if (!tb) return;
-  if (!state.clients.length) {
-    tb.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет клиентов</td></tr>';
+  renderClientsGrid();
+}
+
+function renderClientsGrid() {
+  var grid = document.getElementById('clients-grid-container');
+  var empty = document.getElementById('clients-empty-state');
+  if (!grid) return;
+
+  var clients = state.clients || [];
+
+  // Якщо клієнтів ще немає у state — показати skeleton
+  if (!clients.length && !state._initialDataLoaded) {
+    grid.innerHTML = skeletonClientCards(4);
+    if (empty) empty.style.display = 'none';
     return;
   }
-  var h = '';
-  state.clients.forEach(function(c) {
-    h += '<tr>' +
-      '<td><strong>' + escapeHtml(c.name) + '</strong></td>' +
-      '<td>' + escapeHtml(c.website || '—') + '</td>' +
-      '<td>' + escapeHtml(c.niche || '—') + '</td>' +
-      '<td id="client-tc-' + c.id + '">—</td>' +
-      '<td>' +
-        '<button class="btn btn-sm" onclick="selectClient(\'' + c.id + '\');navigateTo(\'#dashboard\')">Задачи</button> ' +
-        '<button class="btn btn-sm" onclick="openClientModal(\'' + c.id + '\')">Ред.</button> ' +
-        '<button class="btn btn-sm btn-danger" onclick="deleteClientConfirm(\'' + c.id + '\')">Уд.</button>' +
-      '</td></tr>';
-  });
-  tb.innerHTML = h;
 
-  // Загрузить кол-во задач порциями (не N+1)
-  var clientIds = state.clients.map(function(c) { return c.id; });
-  for (var ci = 0; ci < clientIds.length; ci++) {
-    (function(cid) {
-      google.script.run.withSuccessHandler(function(tasks) {
-        var el = document.getElementById('client-tc-' + cid);
-        if (el) el.textContent = (tasks || []).length;
-      }).getTasks(cid);
-    })(clientIds[ci]);
+  if (!clients.length) {
+    grid.innerHTML = '';
+    if (empty) empty.style.display = 'flex';
+    return;
   }
+  if (empty) empty.style.display = 'none';
+
+  // Якщо лічильники задач ще не завантажені і в кеші є allTasks — використати його
+  var needsCounts = clients.some(function(c) { return c.tasks_count == null; });
+  if (needsCounts && isCacheFresh(state._allTasksFetchedAt) && state.allTasks && state.allTasks.length) {
+    var counts = {};
+    state.allTasks.forEach(function(t) {
+      counts[t._clientId] = (counts[t._clientId] || 0) + 1;
+    });
+    clients.forEach(function(c) { c.tasks_count = counts[c.id] || 0; });
+    needsCounts = false;
+    if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
+  }
+
+  // Fallback: якщо досі немає лічильників — підвантажити у фоні (N+1)
+  if (needsCounts) {
+    var remaining = clients.length;
+    clients.forEach(function(cl) {
+      google.script.run.withSuccessHandler(function(tasks) {
+        cl.tasks_count = (tasks || []).length;
+        remaining--;
+        if (remaining === 0) {
+          if (typeof updateSidebarCounts === 'function') updateSidebarCounts();
+          renderClientsGrid();
+        }
+      }).withFailureHandler(function() {
+        remaining--;
+        if (remaining === 0) renderClientsGrid();
+      }).getTasks(cl.id);
+    });
+  }
+
+  var h = '';
+  clients.forEach(function(cl) {
+    var initials = (cl.name || '?').split(' ').map(function(w) { return w.charAt(0); }).join('').substring(0, 2).toUpperCase();
+    var niche = cl.niche ? escapeHtml(cl.niche) : '<span class="text-muted">Без ніші</span>';
+    var domain = cl.website ? escapeHtml(cl.website) : '';
+    var tasksCount = (cl.tasks_count != null) ? cl.tasks_count : '—';
+
+    h += '<div class="client-card" data-client-id="' + cl.id + '" data-search="' + escapeHtml((cl.name || '') + ' ' + (cl.niche || '') + ' ' + (cl.website || '')).toLowerCase() + '">' +
+      '<div style="display:flex; align-items:flex-start; gap:12px;">' +
+        '<div style="width:40px; height:40px; border-radius:10px; background:var(--bg-subtle); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:var(--text-secondary); flex-shrink:0;">' +
+          escapeHtml(initials) +
+        '</div>' +
+        '<div style="flex:1; min-width:0;">' +
+          '<div class="client-card-name">' + escapeHtml(cl.name) + '</div>' +
+          '<div class="client-card-meta">' + niche + (domain ? ' · ' + domain : '') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="client-card-stats">' +
+        '<span class="badge badge-neutral">' + tasksCount + ' задач</span>' +
+      '</div>' +
+      '<div class="client-card-actions">' +
+        '<button class="btn btn-sm" onclick="openClientTasks(\'' + cl.id + '\')">Задачі</button>' +
+        '<button class="btn btn-sm" onclick="openClientModal(\'' + cl.id + '\')">Редагувати</button>' +
+        '<button class="btn btn-sm btn-danger" onclick="deleteClientConfirm(\'' + cl.id + '\')">Видалити</button>' +
+      '</div>' +
+    '</div>';
+  });
+  grid.innerHTML = h;
+}
+
+function filterClientsGrid() {
+  var q = (document.getElementById('clients-grid-search') || {}).value || '';
+  q = q.toLowerCase().trim();
+  var cards = document.querySelectorAll('#clients-grid-container .client-card');
+  var visible = 0;
+  for (var i = 0; i < cards.length; i++) {
+    var hay = cards[i].getAttribute('data-search') || '';
+    if (!q || hay.indexOf(q) !== -1) {
+      cards[i].style.display = '';
+      visible++;
+    } else {
+      cards[i].style.display = 'none';
+    }
+  }
+  var empty = document.getElementById('clients-empty-state');
+  if (empty) empty.style.display = visible === 0 ? 'flex' : 'none';
+}
+
+// Legacy filterClients (used by dashboard inner sidebar — no-op now)
+function filterClients(q) {
+  // no-op
 }
 </script>

@@ -1,15 +1,15 @@
 // ===========================================
-// Seed.gs - Демо-данные (PostgreSQL)
+// Seed.gs — Демо-дані (PostgreSQL)
 // ===========================================
 
 function seedData() {
-  // Очистить таблицы
+  // Очистити таблиці
   execSQL("DELETE FROM textgen.generated_texts");
   execSQL("DELETE FROM textgen.tasks");
   execSQL("DELETE FROM textgen.task_templates");
   execSQL("DELETE FROM textgen.clients");
 
-  // Клиенты
+  // Клієнти
   execSQL("INSERT INTO textgen.clients (id, name, website, niche, notes) VALUES (1, '220Volt', 'https://220volt.com.ua', 'Електроніка та побутова техніка', '')");
   execSQL("INSERT INTO textgen.clients (id, name, website, niche, notes) VALUES (2, 'Technolex', 'https://technolex.com.ua', 'Юридичні послуги', 'Важливо: юридична точність формулювань')");
   execSQL("INSERT INTO textgen.clients (id, name, website, niche, notes) VALUES (3, 'MedService', 'https://medservice.ua', 'Медичні послуги', 'Не давати медичних рекомендацій')");

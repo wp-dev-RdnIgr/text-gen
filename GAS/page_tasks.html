@@ -1,0 +1,84 @@
+<!-- Екран: Задачі (cross-client) -->
+<div id="screen-tasks" class="screen" style="display:none;">
+  <div class="page-wrap">
+
+    <!-- Header -->
+    <div class="content-header">
+      <div class="content-header-info">
+        <div>
+          <h1 class="page-title">Задачі</h1>
+          <div class="page-subtitle" id="tasks-page-subtitle">Усі задачі з усіх клієнтів в одному місці</div>
+        </div>
+      </div>
+      <div class="content-header-actions">
+        <button class="btn btn-primary" onclick="dashboardCreateTask()">
+          <span style="font-size:14px;">＋</span> Створити задачу
+        </button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="content-card" style="padding: 16px 20px; margin-bottom: 18px;">
+      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+
+        <div style="flex:1; min-width:200px;">
+          <label class="field-label">Пошук</label>
+          <input type="text" id="tasks-search" class="input-field"
+            placeholder="Назва, опис, промпт…"
+            oninput="filterTasksList()">
+        </div>
+
+        <div style="min-width:200px;">
+          <label class="field-label">Клієнт</label>
+          <select id="tasks-filter-client" class="input-field" onchange="filterTasksList()">
+            <option value="">Усі клієнти</option>
+          </select>
+        </div>
+
+        <div style="min-width:160px;">
+          <label class="field-label">Статус</label>
+          <select id="tasks-filter-status" class="input-field" onchange="filterTasksList()">
+            <option value="">Усі статуси</option>
+            <option value="active">У роботі</option>
+            <option value="draft">Чернетка</option>
+            <option value="done">Готово</option>
+            <option value="error">Помилка</option>
+          </select>
+        </div>
+
+        <div style="min-width:180px;">
+          <label class="field-label">Шаблон</label>
+          <select id="tasks-filter-template" class="input-field" onchange="filterTasksList()">
+            <option value="">Усі шаблони</option>
+          </select>
+        </div>
+
+        <button class="btn btn-ghost" onclick="resetTasksFilters()" title="Скинути фільтри">Скинути</button>
+
+      </div>
+    </div>
+
+    <!-- Count summary -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <div class="text-secondary" id="tasks-count-label">—</div>
+      <div class="tabs">
+        <button class="tab active" data-sort="updated" onclick="setTasksSort('updated')">За оновленням</button>
+        <button class="tab" data-sort="created" onclick="setTasksSort('created')">За створенням</button>
+        <button class="tab" data-sort="name" onclick="setTasksSort('name')">За назвою</button>
+      </div>
+    </div>
+
+    <!-- Grid -->
+    <div id="tasks-loading-all" class="spinner" style="display:none;"></div>
+    <div id="tasks-all-grid" class="tasks-grid">
+      <!-- Заповнюється через renderTasksList() -->
+    </div>
+    <div id="tasks-all-empty" class="empty-state" style="display:none;">
+      <div class="empty-state-icon">✎</div>
+      <div class="empty-state-title">Задач не знайдено</div>
+      <div class="empty-state-desc">Спробуйте змінити фільтри або створіть нову задачу.</div>
+      <button class="btn btn-primary" onclick="dashboardCreateTask()">Створити задачу</button>
+    </div>
+
+  </div>
+</div>

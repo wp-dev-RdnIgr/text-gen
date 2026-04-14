@@ -1,9 +1,9 @@
 <script>
 // ===========================================
-// scripts_core.html - Стейт, роутер, утилиты
+// scripts_core.html — Стан, роутер, утиліти
 // ===========================================
 
-// --- Глобальный стейт ---
+// --- Глобальний стан ---
 var state = {
   clients: [],
   taskTemplates: [],
@@ -18,8 +18,78 @@ var state = {
   regenBlockIndex: -1,
   selectedTemplateId: null,
   tplClientIds: [],
+  // Нові поля для wizard / task list
+  allTasks: [],
+  tasksSort: 'updated',
+  filterClientId: null,
+  currentWizardStep: 1,
+  // --- TTL-кеші ---
+  _allTasksFetchedAt: 0,
+  _clientsFetchedAt: 0,
   _initialDataLoaded: false
 };
+
+// --- TTL-кеш константи ---
+var CACHE_TTL_MS = 30000; // 30 секунд
+
+// --- Skeleton helper ---
+function skeletonTaskCards(count) {
+  var h = '';
+  for (var i = 0; i < (count || 6); i++) {
+    h += '<div class="task-card" style="pointer-events:none;">' +
+      '<div class="skeleton skeleton-title" style="width:65%;"></div>' +
+      '<div class="skeleton skeleton-text" style="width:90%;"></div>' +
+      '<div class="skeleton skeleton-text" style="width:75%;"></div>' +
+      '<div style="display:flex;gap:6px;margin-top:10px;">' +
+        '<div class="skeleton" style="width:55px;height:16px;border-radius:999px;"></div>' +
+        '<div class="skeleton" style="width:70px;height:16px;border-radius:999px;"></div>' +
+      '</div>' +
+    '</div>';
+  }
+  return h;
+}
+
+function skeletonClientCards(count) {
+  var h = '';
+  for (var i = 0; i < (count || 4); i++) {
+    h += '<div class="client-card" style="pointer-events:none;">' +
+      '<div style="display:flex;gap:12px;align-items:flex-start;">' +
+        '<div class="skeleton" style="width:40px;height:40px;border-radius:10px;"></div>' +
+        '<div style="flex:1;">' +
+          '<div class="skeleton skeleton-title" style="width:70%;"></div>' +
+          '<div class="skeleton skeleton-text" style="width:55%;"></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="skeleton" style="width:70px;height:18px;border-radius:999px;margin-top:8px;"></div>' +
+    '</div>';
+  }
+  return h;
+}
+
+function isCacheFresh(timestamp) {
+  return timestamp && (Date.now() - timestamp < CACHE_TTL_MS);
+}
+
+function invalidateTasksCache() {
+  state._allTasksFetchedAt = 0;
+}
+
+function invalidateClientsCache() {
+  state._clientsFetchedAt = 0;
+}
+
+// --- Prefetch тасків на hover (кеш у state._prefetchedTasks) ---
+state._prefetchedTasks = state._prefetchedTasks || {};
+var _prefetchTimer = null;
+function prefetchTask(taskId) {
+  if (!taskId || state._prefetchedTasks[taskId]) return;
+  clearTimeout(_prefetchTimer);
+  _prefetchTimer = setTimeout(function() {
+    google.script.run.withSuccessHandler(function(task) {
+      if (task) state._prefetchedTasks[taskId] = task;
+    }).withFailureHandler(function() { /* ignore */ }).getTask(taskId);
+  }, 150); // невелика затримка — не стріляємо на миттєвих hover
+}
 
 // --- Утиліта: debounce ---
 function debounce(fn, delay) {
@@ -32,6 +102,7 @@ function debounce(fn, delay) {
 }
 
 // --- Autosave індикатор ---
+
 var _autosaveTimer = null;
 function showAutosaveStatus(status) {
   var el = document.getElementById('autosave-status');
@@ -60,27 +131,135 @@ function hideScreenLoader() {
   if (el) el.style.display = 'none';
 }
 
-// --- Инициализация ---
+// --- Ініціалізація ---
 document.addEventListener('DOMContentLoaded', function() {
+  restoreSidebarState();
   loadInitialData();
   handleHashRoute();
   window.addEventListener('hashchange', handleHashRoute);
 });
 
-function loadInitialData() {
+function loadInitialData(force) {
+  // TTL-кеш: якщо дані свіжі й не force — не качаємо
+  if (!force && isCacheFresh(state._clientsFetchedAt) && state.clients.length) {
+    if (typeof renderClientList === 'function') renderClientList();
+    if (typeof renderClientsTable === 'function') renderClientsTable();
+    updateSidebarCounts();
+    var hash = window.location.hash || '#dashboard';
+    if (hash === '#dashboard' && typeof renderDashboardOverview === 'function') {
+      renderDashboardOverview();
+    }
+    return;
+  }
+
+  // Один RPC замість двох+N — паралельна batch-підкачка на сервері
+  google.script.run.withSuccessHandler(function(data) {
+    data = data || {};
+    state.clients = data.clients || [];
+    state.taskTemplates = data.templates || [];
+    state.allTasks = data.tasks || [];
+    var now = Date.now();
+    state._clientsFetchedAt = now;
+    state._allTasksFetchedAt = now;
+    state._initialDataLoaded = true;
+
+    // Оновити всі UI елементи, що залежать від state
+    if (typeof renderClientList === 'function') renderClientList();
+    if (typeof renderClientsTable === 'function') renderClientsTable();
+    updateSidebarCounts();
+
+    var tplCountEl = document.getElementById('stat-templates-count');
+    if (tplCountEl) tplCountEl.textContent = state.taskTemplates.length;
+
+    // Перерендерити поточну сторінку якщо вона використовує ці дані
+    var hash = window.location.hash || '#dashboard';
+    if (hash === '#dashboard' && typeof renderDashboardOverview === 'function') {
+      renderDashboardOverview();
+    } else if (hash === '#tasks' && typeof renderTasksPage === 'function') {
+      renderTasksPage();
+    }
+  }).withFailureHandler(function(e) {
+    console.error('getBootstrap error, fallback to legacy:', e);
+    // Fallback: окремі виклики (для сумісності якщо Handlers.gs ще старий)
+    _loadInitialDataLegacy();
+  }).getBootstrap();
+
+  renderRecentTasks();
+}
+
+// Fallback (якщо getBootstrap недоступний)
+function _loadInitialDataLegacy() {
   google.script.run.withSuccessHandler(function(clients) {
     state.clients = clients || [];
-    renderClientList();
-    renderClientsTable();
+    state._clientsFetchedAt = Date.now();
+    state._initialDataLoaded = true;
+    if (typeof renderClientList === 'function') renderClientList();
+    if (typeof renderClientsTable === 'function') renderClientsTable();
+    updateSidebarCounts();
+    var hash = window.location.hash || '#dashboard';
+    if (hash === '#dashboard' && typeof renderDashboardOverview === 'function') {
+      renderDashboardOverview();
+    }
   }).withFailureHandler(function(e) {
     console.error('loadClients error:', e);
   }).getClients();
 
   google.script.run.withSuccessHandler(function(tt) {
     state.taskTemplates = tt || [];
+    var el = document.getElementById('stat-templates-count');
+    if (el) el.textContent = tt.length;
   }).withFailureHandler(function(e) {
     console.error('loadTaskTemplates error:', e);
   }).getTaskTemplates();
+}
+
+// --- Sidebar counts (Задачі / Клієнти) ---
+function updateSidebarCounts() {
+  var clientsEl = document.getElementById('sidebar-clients-count');
+  if (clientsEl && state.clients) {
+    clientsEl.textContent = state.clients.length || '';
+  }
+  var tasksEl = document.getElementById('sidebar-tasks-count');
+  if (tasksEl) {
+    var total = 0;
+    if (state.clients) {
+      for (var i = 0; i < state.clients.length; i++) {
+        total += (state.clients[i].tasks_count || 0);
+      }
+    }
+    tasksEl.textContent = total || '';
+  }
+}
+
+// --- Recent tasks (localStorage) ---
+function pushRecentTask(taskId, taskName) {
+  if (!taskId) return;
+  try {
+    var key = 'tg_recent_tasks';
+    var list = JSON.parse(localStorage.getItem(key) || '[]');
+    list = list.filter(function(t) { return t.id !== taskId; });
+    list.unshift({ id: taskId, name: taskName || 'Задача', ts: Date.now() });
+    if (list.length > 5) list = list.slice(0, 5);
+    localStorage.setItem(key, JSON.stringify(list));
+    renderRecentTasks();
+  } catch (e) {}
+}
+
+function renderRecentTasks() {
+  var host = document.getElementById('sidebar-recent');
+  if (!host) return;
+  var list = [];
+  try { list = JSON.parse(localStorage.getItem('tg_recent_tasks') || '[]'); } catch (e) {}
+  var html = '<div class="sidebar-section-title">Нещодавнє</div>';
+  if (!list.length) {
+    html += '<div class="sidebar-recent-item" style="color:var(--text-muted); cursor:default;"><span style="opacity:.6;">порожньо</span></div>';
+  } else {
+    for (var i = 0; i < list.length; i++) {
+      var t = list[i];
+      html += '<div class="sidebar-recent-item" onclick="navigateTo(\'#task/' + escapeHtml(t.id) + '\')" title="' + escapeHtml(t.name) + '">' + escapeHtml(t.name) + '</div>';
+    }
+  }
+  host.innerHTML = html;
 }
 
 // --- Роутер ---
@@ -95,6 +274,11 @@ function handleHashRoute() {
   switch (screen) {
     case '#dashboard':
       showScreen('screen-dashboard');
+      if (typeof renderDashboardOverview === 'function') renderDashboardOverview();
+      break;
+    case '#tasks':
+      showScreen('screen-tasks');
+      if (typeof renderTasksPage === 'function') renderTasksPage();
       break;
     case '#clients':
       showScreen('screen-clients');
@@ -138,11 +322,36 @@ function showScreen(id) {
 }
 
 function updateActiveNav(hash) {
-  var tabs = document.querySelectorAll('.nav-tab');
-  for (var i = 0; i < tabs.length; i++) {
-    tabs[i].classList.remove('active');
-    if (tabs[i].getAttribute('data-hash') === hash) tabs[i].classList.add('active');
+  // Підсвітка активного пункту sidebar (і старих .nav-tab для сумісності)
+  var items = document.querySelectorAll('[data-hash]');
+  for (var i = 0; i < items.length; i++) {
+    items[i].classList.remove('active');
+    if (items[i].getAttribute('data-hash') === hash) items[i].classList.add('active');
   }
+  // #task — також підсвічуємо "Задачі" в sidebar
+  if (hash === '#task') {
+    var tasksItem = document.querySelector('[data-hash="#tasks"]');
+    if (tasksItem) tasksItem.classList.add('active');
+  }
+}
+
+// --- Sidebar toggle (collapsed / expanded) ---
+function toggleSidebar() {
+  var sb = document.getElementById('app-sidebar');
+  if (!sb) return;
+  sb.classList.toggle('collapsed');
+  try {
+    localStorage.setItem('tg_sidebar_collapsed', sb.classList.contains('collapsed') ? '1' : '0');
+  } catch (e) {}
+}
+
+function restoreSidebarState() {
+  try {
+    if (localStorage.getItem('tg_sidebar_collapsed') === '1') {
+      var sb = document.getElementById('app-sidebar');
+      if (sb) sb.classList.add('collapsed');
+    }
+  } catch (e) {}
 }
 
 // --- Toast ---
@@ -157,6 +366,7 @@ function showToast(msg, type) {
 }
 
 // --- Модалки ---
+
 function openModal(id) {
   document.getElementById(id).style.display = 'flex';
 }
@@ -165,7 +375,7 @@ function closeModal(id) {
   document.getElementById(id).style.display = 'none';
 }
 
-// --- Утилиты ---
+// --- Утиліти ---
 function escapeHtml(s) {
   if (!s) return '';
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -189,7 +399,7 @@ function truncate(str, max) {
   return str.length > max ? str.substring(0, max) + '...' : str;
 }
 
-// --- Парсинг HTML в блоки ---
+// --- Парсинг HTML у блоки ---
 function parseContentToBlocks(html) {
   if (!html) return [];
   var div = document.createElement('div');
@@ -200,7 +410,7 @@ function parseContentToBlocks(html) {
   for (var i = 0; i < children.length; i++) {
     var node = children[i];
     if (node.nodeType === 3) {
-      // текстовый узел
+      // текстовий вузол
       var text = node.textContent.trim();
       if (text) {
         blocks.push({ id: 'b_' + Date.now() + '_' + i, type: 'paragraph', tag: 'p', content: text });
@@ -214,7 +424,7 @@ function parseContentToBlocks(html) {
       } else if (tagName === 'p') {
         blocks.push({ id: 'b_' + Date.now() + '_' + i, type: 'paragraph', tag: 'p', content: node.innerHTML });
       } else {
-        // div, section и т.п. — рекурсивно берём содержимое
+        // div, section тощо — рекурсивно беремо вміст
         var inner = node.innerHTML.trim();
         if (inner) {
           blocks.push({ id: 'b_' + Date.now() + '_' + i, type: 'paragraph', tag: 'p', content: inner });
@@ -226,7 +436,7 @@ function parseContentToBlocks(html) {
   return blocks;
 }
 
-// --- Сборка контента из блоков ---
+// --- Збирання контенту з блоків ---
 function buildContentFromBlocks(blocks) {
   return blocks.map(function(b) {
     if (b.type === 'heading') return '<' + b.tag + '>' + b.content + '</' + b.tag + '>';
@@ -235,22 +445,22 @@ function buildContentFromBlocks(blocks) {
   }).join('\n');
 }
 
-// --- Генерация фейкового контента (симуляция) ---
+// --- Генерація фейкового контенту (симуляція) ---
 function generateFakeContent(userInput) {
   var topic = userInput || 'Текст';
   if (topic.length > 80) topic = topic.substring(0, 80);
   return '<h1>' + escapeHtml(topic) + '</h1>\n' +
-    '<p>В данной статье рассмотрим ключевые аспекты темы «' + escapeHtml(topic) + '». Это важная тема, которая заслуживает подробного анализа.</p>\n' +
-    '<h2>Основные критерии</h2>\n' +
-    '<p>Современный рынок предлагает множество решений. Рассмотрим каждый из них подробнее, чтобы вы могли сделать оптимальный выбор.</p>\n' +
-    '<p>При выборе обратите внимание на качество, цену и отзывы других пользователей. Эти три фактора являются определяющими.</p>\n' +
-    '<h2>Практические рекомендации</h2>\n' +
-    '<p>Используйте наши рекомендации для достижения лучших результатов. Каждый совет проверен на практике.</p>\n' +
-    '<h2>Заключение</h2>\n' +
-    '<p>Используйте информацию из этой статьи для оптимального выбора. Мы уверены, что наши советы помогут вам принять правильное решение.</p>';
+    '<p>У цій статті розглянемо ключові аспекти теми «' + escapeHtml(topic) + '». Це важлива тема, що заслуговує на детальний аналіз.</p>\n' +
+    '<h2>Основні критерії</h2>\n' +
+    '<p>Сучасний ринок пропонує безліч рішень. Розглянемо кожне з них детальніше, щоб ви могли зробити оптимальний вибір.</p>\n' +
+    '<p>Під час вибору зверніть увагу на якість, ціну та відгуки інших користувачів. Ці три фактори є визначальними.</p>\n' +
+    '<h2>Практичні рекомендації</h2>\n' +
+    '<p>Використовуйте наші рекомендації для досягнення кращих результатів. Кожна порада перевірена на практиці.</p>\n' +
+    '<h2>Висновок</h2>\n' +
+    '<p>Використовуйте інформацію з цієї статті для оптимального вибору. Ми впевнені, що наші поради допоможуть вам ухвалити правильне рішення.</p>';
 }
 
-// --- Сборка промпта из полей ---
+// --- Збирання промпта з полів ---
 function assemblePrompt(promptTemplate, fieldValues) {
   if (!promptTemplate && !fieldValues) return '';
   var result = promptTemplate || '';
@@ -260,7 +470,7 @@ function assemblePrompt(promptTemplate, fieldValues) {
     language: 'Мова', volume: "Об'єм (збп)"
   };
 
-  // 1. Подставить {{переменные}} в шаблон
+  // 1. Підставити {{змінні}} в шаблон
   for (var key in fieldValues) {
     var val = fieldValues[key];
     if (Array.isArray(val)) {
@@ -272,10 +482,10 @@ function assemblePrompt(promptTemplate, fieldValues) {
       usedKeys[key] = true;
     }
   }
-  // Удалить оставшиеся незамененные переменные
+  // Видалити невикористані змінні
   result = result.replace(/\{\{\w+\}\}/g, '');
 
-  // 2. Все поля, которые НЕ попали через {{переменные}} — добавить в конец
+  // 2. Усі поля, які НЕ потрапили через {{змінні}} — додати в кінець
   var extras = [];
   for (var k in fieldValues) {
     if (usedKeys[k]) continue;
@@ -294,7 +504,7 @@ function assemblePrompt(promptTemplate, fieldValues) {
   return result.trim();
 }
 
-// --- Генерация ключа из названия ---
+// --- Генерація ключа з назви ---
 function generateFlexKey(label) {
   var cyr = {'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'e','ж':'zh','з':'z','и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh','щ':'shch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya','і':'i','ї':'yi','є':'ye','ґ':'g'};
   var r = label.toLowerCase().trim(), out = '';
@@ -309,6 +519,7 @@ function generateFlexKey(label) {
 }
 
 // --- Мультиселект ---
+
 function toggleMultiselect(boxId) {
   var dd = document.getElementById(boxId + '-dropdown');
   if (!dd) return;
