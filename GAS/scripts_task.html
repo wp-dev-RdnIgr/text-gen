@@ -640,46 +640,37 @@ function startGeneration() {
   var startCard = document.getElementById('gen-start-card');
   if (startCard) startCard.style.display = 'none';
 
-  // Зібрати всі field values
+  // Зібрати всі field values з форми (зберігаються у task.field_values)
   saveFieldValues();
 
   var task = state.currentTask;
   var fv = task.field_values || {};
 
-  // Зібрати промпт (включно з жорсткими volume-інструкціями)
-  var assembledPrompt = assemblePrompt(task.user_prompt || '', fv);
+  // ⚠️ СИРИЙ user_prompt — БЕЗ підстановки на клієнті.
+  //    {{key}} залишаються як текст. Підстановку зробить n8n agent
+  //    (Build Agent Prompt), маючи field_values окремо.
+  var rawUserPrompt = task.user_prompt || '';
 
-  // Додаткові інструкції
+  // Додаткові інструкції від юзера (dodatki)
   var extra = document.getElementById('gen-user-input').value.trim();
   if (extra) {
-    assembledPrompt += '\n\nДодаткові інструкції:\n' + extra;
+    rawUserPrompt += '\n\nДодаткові інструкції:\n' + extra;
   }
 
-  // Розрахувати числові межі обʼєму і передати окремо
-  var vRange = (typeof parseVolumeRange === 'function') ? parseVolumeRange(fv.volume) : null;
-  if (vRange) {
-    fv._volumeMin = vRange.min;
-    fv._volumeMax = vRange.max;
-    fv._volumeTarget = vRange.target;
-    console.log('[TextGen] Volume range parsed:', vRange);
-  } else if (fv.volume) {
-    console.warn('[TextGen] Volume value could not be parsed:', fv.volume);
-  }
-
-  // Debug log (видно в консолі браузера)
-  console.log('[TextGen] Assembled prompt:\n', assembledPrompt);
-  console.log('[TextGen] Field values:', fv);
-
-  if (!assembledPrompt.trim()) {
+  if (!rawUserPrompt.trim()) {
     showToast('Заповніть поля або додайте промт', 'error');
     return;
   }
+
+  // Debug
+  console.log('[TextGen] Raw user prompt:\n', rawUserPrompt);
+  console.log('[TextGen] Field values:', fv);
 
   var opts = task.options || {};
 
   // Step 1: If interview enabled → generate questions first
   if (opts.interview) {
-    _pendingGenArgs = { assembledPrompt: assembledPrompt, fv: fv };
+    _pendingGenArgs = { assembledPrompt: rawUserPrompt, fv: fv };
     document.getElementById('gen-result').style.display = 'none';
     document.getElementById('gen-loading').style.display = 'block';
     document.getElementById('gen-send-btn').disabled = true;
@@ -693,13 +684,13 @@ function startGeneration() {
       resetGenUI();
       showToast('Помилка генерації питань: ' + e.message, 'error');
       // Fallback: continue without interview
-      executeGeneration(assembledPrompt, fv);
+      executeGeneration(rawUserPrompt, fv);
     }).generateInterviewQuestions(task.id, topic);
     return;
   }
 
   // No interview → go straight to generation
-  executeGeneration(assembledPrompt, fv);
+  executeGeneration(rawUserPrompt, fv);
 }
 
 function executeGeneration(assembledPrompt, fv) {
