@@ -646,6 +646,17 @@ function startGeneration() {
     assembledPrompt += '\n\nДодаткові інструкції:\n' + extra;
   }
 
+  // Розрахувати числові межі обʼєму і передати окремо
+  var vRange = (typeof parseVolumeRange === 'function') ? parseVolumeRange(fv.volume) : null;
+  if (vRange) {
+    fv._volumeMin = vRange.min;
+    fv._volumeMax = vRange.max;
+    fv._volumeTarget = vRange.target;
+    console.log('[TextGen] Volume range parsed:', vRange);
+  } else if (fv.volume) {
+    console.warn('[TextGen] Volume value could not be parsed:', fv.volume);
+  }
+
   // Debug log (видно в консолі браузера)
   console.log('[TextGen] Assembled prompt:\n', assembledPrompt);
   console.log('[TextGen] Field values:', fv);

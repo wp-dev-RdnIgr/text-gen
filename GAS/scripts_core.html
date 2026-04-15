@@ -501,54 +501,92 @@ function assemblePrompt(promptTemplate, fieldValues) {
     result += '\n\nДодаткові дані:\n' + extras.join('\n');
   }
 
-  // 3. Жорсткі інструкції щодо обʼєму (якщо заданий)
-  var volumeInstruction = buildVolumeInstruction(fieldValues && fieldValues.volume);
-  if (volumeInstruction) {
-    result += '\n\n' + volumeInstruction;
+  // 3. Жорсткі інструкції щодо обʼєму — ДУБЛЮЄМО на початку і в кінці
+  //    (LLM'и краще дотримуються числових обмежень, якщо вони нагадуються)
+  var vRange = parseVolumeRange(fieldValues && fieldValues.volume);
+  if (vRange) {
+    var openingBanner =
+      '⚠️ ПЕРШ НІЖ ПОЧАТИ: цільовий обʼєм тексту — СУВОРО ' +
+      vRange.min + '–' + vRange.max + ' знаків із пробілами (збп). ' +
+      'Оптимум: ~' + vRange.target + ' збп. ' +
+      'Це ЖОРСТКЕ обмеження з ТЗ, порушення — провалена задача.';
+
+    var closingInstruction = buildVolumeInstructionBlock(vRange);
+
+    result = openingBanner + '\n\n' + result + '\n\n' + closingInstruction;
   }
 
   return result.trim();
 }
 
-// --- Жорсткі інструкції щодо обʼєму ---
-// Парсить "2500-3000", "2500–3000", "2500", "~2500" та повертає інструкцію
-function buildVolumeInstruction(volumeStr) {
-  if (!volumeStr) return '';
-  var str = String(volumeStr).replace(/\s+/g, '').replace(/знб|збп|зн\./gi, '');
+// --- Парсер обʼєму з будь-якого формату ---
+// Вхід:  "500-700", "800", "2500 – 3000 збп", "~1500", "1.5к", "2k-3k"
+// Вихід: { min, max, target } або null
+function parseVolumeRange(volumeStr) {
+  if (!volumeStr) return null;
+  var raw = String(volumeStr).toLowerCase();
+
+  // Очистка: пробіли, одиниці виміру, тильда, "приблизно"
+  var s = raw
+    .replace(/\s+/g, '')
+    .replace(/знб|збп|зн\.|симв|char|chars|characters/g, '')
+    .replace(/приблизно|приблиз|приб\.|~|≈|около|около/g, '');
+
+  // Підтримка "к" / "k" як тисячі: "1.5к" → 1500, "2k-3k" → 2000-3000
+  s = s.replace(/(\d+(?:[\.,]\d+)?)\s*[кk]/gi, function(_, num) {
+    return String(Math.round(parseFloat(num.replace(',', '.')) * 1000));
+  });
+
   var min = null, max = null;
 
-  // Діапазон: 2500-3000, 2500–3000, 2500—3000
-  var rangeMatch = str.match(/(\d{3,6})[\-\u2013\u2014](\d{3,6})/);
+  // Діапазон: 2500-3000, 2500–3000, 2500—3000, 2500..3000, 2500/3000
+  var rangeMatch = s.match(/(\d{2,7})[\-\u2013\u2014\/\.]{1,2}(\d{2,7})/);
   if (rangeMatch) {
     min = parseInt(rangeMatch[1], 10);
     max = parseInt(rangeMatch[2], 10);
+    if (min > max) { var tmp = min; min = max; max = tmp; }
   } else {
-    // Одиночне значення: 2500, ~2500
-    var singleMatch = str.match(/(\d{3,6})/);
+    // Одиночне значення → ±7% коридор
+    var singleMatch = s.match(/(\d{2,7})/);
     if (singleMatch) {
       var n = parseInt(singleMatch[1], 10);
-      min = Math.round(n * 0.95);
-      max = Math.round(n * 1.05);
+      min = Math.round(n * 0.93);
+      max = Math.round(n * 1.07);
     }
   }
 
-  if (!min || !max) return '';
-  var target = Math.round((min + max) / 2);
+  if (!min || !max || min < 50 || max < 100) return null; // санітарна перевірка
 
-  return '=== КРИТИЧНА ВИМОГА ДО ОБʼЄМУ ===\n' +
-    'Цільовий обʼєм тексту: ' + min + '–' + max + ' знаків із пробілами (збп).\n' +
-    'Оптимально: ~' + target + ' збп.\n\n' +
-    'ПРАВИЛА:\n' +
-    '1. НЕ перевищуй ' + max + ' збп за жодних обставин.\n' +
-    '2. НЕ пиши менше ' + min + ' збп.\n' +
-    '3. Перед відповіддю порахуй приблизний обсяг (символи + пробіли).\n' +
-    '4. Якщо тема широка — зосередься на найважливішому, не розширюй штучно.\n' +
+  return { min: min, max: max, target: Math.round((min + max) / 2), raw: raw };
+}
+
+// --- Повний блок інструкцій для кінця промпта ---
+function buildVolumeInstructionBlock(range) {
+  if (!range) return '';
+  var min = range.min, max = range.max, target = range.target;
+  return '═════════════════════════════════════════\n' +
+    '⚠️ КРИТИЧНА ВИМОГА: ОБʼЄМ ТЕКСТУ\n' +
+    '═════════════════════════════════════════\n' +
+    'ЦІЛЬОВИЙ ОБʼЄМ: ' + min + '–' + max + ' знаків із пробілами (збп)\n' +
+    'ОПТИМАЛЬНО: ~' + target + ' збп\n\n' +
+    'ЖОРСТКІ ПРАВИЛА:\n' +
+    '1. НЕ ПЕРЕВИЩУЙ ' + max + ' збп за жодних обставин.\n' +
+    '2. НЕ ПИШИ МЕНШЕ ' + min + ' збп.\n' +
+    '3. ПЕРЕД ВІДПОВІДДЮ ПОРАХУЙ приблизний обсяг тексту (символи + пробіли).\n' +
+    '4. Якщо тема широка — зосередься на найважливішому, НЕ розширюй штучно.\n' +
     '5. Якщо тема вузька — додай конкретні приклади, факти, деталі, НЕ воду.\n' +
-    '6. Заголовки (H1, H2, H3) входять в загальний обсяг.\n' +
+    '6. Заголовки (H1, H2, H3) входять у загальний обсяг.\n' +
     '7. Баланс: вступ ~10%, основні H2-розділи ~75-80%, висновок ~10-15%.\n' +
-    '8. Якщо текст виходить >' + max + ' — скороти другорядні деталі, але зберігай структуру.\n' +
-    '9. Якщо текст <' + min + ' — додай глибину експертних деталей, а НЕ загальні фрази.\n' +
-    '10. Абзаци: 3-5 речень кожен, не більше.';
+    '8. Якщо текст виходить >' + max + ' збп — скороти другорядні деталі, зберігаючи структуру.\n' +
+    '9. Якщо текст <' + min + ' збп — додай глибину експертних деталей, а НЕ загальні фрази.\n' +
+    '10. Абзаци: 3-5 речень кожен, не більше.\n\n' +
+    '🔒 ПЕРЕВІР ОБСЯГ ПЕРЕД ВІДПОВІДДЮ. Якщо не вкладаєшся — перепиши.';
+}
+
+// --- Legacy alias для сумісності ---
+function buildVolumeInstruction(volumeStr) {
+  var range = parseVolumeRange(volumeStr);
+  return range ? buildVolumeInstructionBlock(range) : '';
 }
 
 // --- Генерація ключа з назви ---
