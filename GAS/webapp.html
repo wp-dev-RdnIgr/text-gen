@@ -149,6 +149,30 @@
     </div>
   </div>
 
+  <!-- Модалка: Email спеціаліста перед збереженням у Google Doc -->
+  <div id="modal-specialist-email" class="modal-overlay" style="display:none;">
+    <div class="modal-card" style="max-width:460px;">
+      <div class="modal-header">
+        <h3>Вкажіть ваш email</h3>
+        <button class="modal-close" onclick="closeModal('modal-specialist-email')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-secondary" style="margin-bottom:14px; line-height:1.55;">
+          Документ буде збережено у вашу персональну папку на Google Drive. Введіть email — папка створиться з цією назвою.
+        </p>
+        <div class="field-group">
+          <label class="field-label">Email спеціаліста <span style="color:var(--danger);">*</span></label>
+          <input type="email" id="modal-specialist-email-input" class="input-field" placeholder="name@company.com">
+          <div class="field-hint">Зберігається у задачі — наступного разу питати не будемо.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal('modal-specialist-email')">Скасувати</button>
+        <button class="btn btn-primary" onclick="confirmSpecialistEmailAndSave()">Зберегти та продовжити</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast повідомлення -->
   <div id="toast-container" class="toast-container"></div>
 

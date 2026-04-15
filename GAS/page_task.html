@@ -142,11 +142,9 @@
             <div class="content-card-title">LLM модель</div>
             <div class="content-card-subtitle">Провайдер та модель для генерації</div>
             <select id="task-llm-select" class="input-field" onchange="saveTaskSettings()">
-              <option value="openai|ChatGPT (GPT-4o)">ChatGPT (GPT-4o)</option>
-              <option value="openai|ChatGPT (GPT-4o-mini)">ChatGPT (GPT-4o-mini)</option>
-              <option value="anthropic|Claude Sonnet" selected>Claude Sonnet</option>
-              <option value="anthropic|Claude Opus">Claude Opus</option>
-              <option value="perplexity|Perplexity Online">Perplexity Online</option>
+              <option value="anthropic|Claude Sonnet" selected>Claude Sonnet (баланс)</option>
+              <option value="anthropic|Claude Opus">Claude Opus (найрозумніша)</option>
+              <option value="perplexity|Perplexity Online">Perplexity Online (з вебом)</option>
             </select>
           </div>
 
@@ -161,16 +159,18 @@
         </div>
 
         <!-- Розширені опції -->
-        <div class="content-card" style="margin-top:14px;">
-          <div class="content-card-title">Розширені опції</div>
-          <div class="content-card-subtitle">Додаткові AI-помічники для якіснішого тексту</div>
-          <label class="checkbox-label">
-            <input type="checkbox" id="task-opt-voice-clone" onchange="saveTaskSettings()">
-            Клон голосу
-            <button class="btn btn-sm btn-ghost" style="padding:2px 10px; margin-left:6px;" onclick="event.preventDefault(); openVoiceCloneModal();">Налаштувати</button>
+        <div class="content-card" style="margin-top:14px; opacity:0.55; position:relative;">
+          <div class="content-card-title">Розширені опції <span class="badge badge-warning" style="font-size:10px; margin-left:6px;">скоро</span></div>
+          <div class="content-card-subtitle">Додаткові AI-помічники для якіснішого тексту. Функції в розробці — поки вимкнені.</div>
+          <label class="checkbox-label" style="cursor:not-allowed;">
+            <input type="checkbox" id="task-opt-voice-clone" disabled> Клон голосу
           </label>
-          <label class="checkbox-label"><input type="checkbox" id="task-opt-interview" onchange="saveTaskSettings()"> Інтерв'ю (питання перед генерацією)</label>
-          <label class="checkbox-label"><input type="checkbox" id="task-opt-draft-review" onchange="saveTaskSettings()"> Перегляд чернетки</label>
+          <label class="checkbox-label" style="cursor:not-allowed;">
+            <input type="checkbox" id="task-opt-interview" disabled> Інтерв'ю (питання перед генерацією)
+          </label>
+          <label class="checkbox-label" style="cursor:not-allowed;">
+            <input type="checkbox" id="task-opt-draft-review" disabled> Перегляд чернетки
+          </label>
         </div>
 
         <!-- Промпти — side-by-side previews -->
@@ -235,6 +235,8 @@
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
             <button class="btn btn-primary" onclick="openEditorForLastGen()">Відкрити в редакторі</button>
             <button class="btn" id="btn-save-gdoc" onclick="saveLastGenToGDoc()">Зберегти в Google Doc</button>
+            <button class="btn" id="btn-copy-html" onclick="copyLastGenHtml()" title="Скопіювати HTML у буфер обміну">📋 Скопіювати HTML</button>
+            <button class="btn" onclick="copyLastGenPlainText()" title="Скопіювати чистий текст">📝 Текст</button>
             <a id="gen-gdoc-link" href="#" target="_blank" style="display:none; font-size:12px; color:var(--primary); padding:0 8px;">Відкрити документ</a>
             <button class="btn btn-ghost" onclick="clearGenResult()">Нова генерація</button>
           </div>

@@ -1131,8 +1131,93 @@ function saveLastGenToGDoc() {
     showToast('Немає тексту для збереження', 'error');
     return;
   }
+
+  // Перевірка: чи задано email спеціаліста?
+  var email = (state.currentTask && state.currentTask.specialist_email || '').trim();
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    // Показати модалку для вводу email
+    var inp = document.getElementById('modal-specialist-email-input');
+    if (inp) { inp.value = email || ''; setTimeout(function() { inp.focus(); }, 100); }
+    openModal('modal-specialist-email');
+    return;
+  }
+
+  _doSaveLastGenToGDoc();
+}
+
+function confirmSpecialistEmailAndSave() {
+  var inp = document.getElementById('modal-specialist-email-input');
+  var email = (inp ? inp.value : '').trim();
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    showToast('Введіть коректний email', 'error');
+    return;
+  }
+  // Зберегти email у задачі
+  if (state.currentTask) {
+    state.currentTask.specialist_email = email;
+    // Також записуємо у поле UI
+    var fld = document.getElementById('task-specialist-email');
+    if (fld) fld.value = email;
+    autoSaveTask();
+  }
+  closeModal('modal-specialist-email');
+  _doSaveLastGenToGDoc();
+}
+
+// --- Copy HTML / Plain text ---
+function copyLastGenHtml() {
+  if (!state.lastGeneratedText || !state.lastGeneratedText.content) {
+    showToast('Немає тексту для копіювання', 'error');
+    return;
+  }
+  var html = state.lastGeneratedText.content;
+  _copyToClipboardWithFallback(html, 'HTML');
+}
+
+function copyLastGenPlainText() {
+  if (!state.lastGeneratedText || !state.lastGeneratedText.content) {
+    showToast('Немає тексту для копіювання', 'error');
+    return;
+  }
+  // HTML → plain text
+  var tmp = document.createElement('div');
+  tmp.innerHTML = state.lastGeneratedText.content;
+  var text = tmp.innerText || tmp.textContent || '';
+  _copyToClipboardWithFallback(text, 'Текст');
+}
+
+function _copyToClipboardWithFallback(text, label) {
+  // Modern API
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      showToast(label + ' скопійовано (' + text.length + ' символів)', 'success');
+    }).catch(function(e) {
+      _fallbackCopy(text, label);
+    });
+  } else {
+    _fallbackCopy(text, label);
+  }
+}
+
+function _fallbackCopy(text, label) {
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.top = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast(label + ' скопійовано (' + text.length + ' символів)', 'success');
+  } catch (e) {
+    showToast('Не вдалося скопіювати: ' + e.message, 'error');
+  }
+}
+
+function _doSaveLastGenToGDoc() {
   var btn = document.getElementById('btn-save-gdoc');
-  if (btn) { btn.disabled = true; btn.textContent = 'Збереження...'; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Збереження…'; }
 
   google.script.run.withSuccessHandler(function(url) {
     if (btn) { btn.disabled = false; btn.textContent = 'Зберегти в Google Doc'; }

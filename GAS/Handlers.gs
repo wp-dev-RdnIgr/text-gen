@@ -366,7 +366,8 @@ function generateTextWithAI(taskId, assembledPrompt, fieldValues) {
       fieldValues: fieldValues || {},
       targetVolumeMin: (fieldValues && fieldValues._volumeMin) || null,
       targetVolumeMax: (fieldValues && fieldValues._volumeMax) || null,
-      llm_provider: task ? task.llm_provider : ''
+      llm_provider: task ? task.llm_provider : '',
+      llm_model: task ? task.llm_model : ''
     }),
     muteHttpExceptions: true
   });
@@ -456,10 +457,25 @@ function startGenerationAsync(taskId, assembledPrompt, fieldValues) {
 // --- Зберігання в Google Doc (через n8n) ---
 
 function saveToGoogleDoc(textId) {
+  // Підтягнути task щоб дізнатися специлістовий email і title
+  var text = callCrudApi('getGeneratedText', { id: textId });
+  var row = Array.isArray(text) ? text[0] : text;
+  var taskId = row && row.task_id;
+  var specialistEmail = '';
+  if (taskId) {
+    var task = getTask(taskId);
+    if (task) {
+      specialistEmail = task.specialist_email || '';
+    }
+  }
+
   var response = UrlFetchApp.fetch(N8N_GDOC_URL, {
     method: 'post',
     contentType: 'application/json',
-    payload: JSON.stringify({ textId: textId }),
+    payload: JSON.stringify({
+      textId: textId,
+      specialistEmail: specialistEmail
+    }),
     muteHttpExceptions: true
   });
 
