@@ -501,7 +501,54 @@ function assemblePrompt(promptTemplate, fieldValues) {
     result += '\n\nДодаткові дані:\n' + extras.join('\n');
   }
 
+  // 3. Жорсткі інструкції щодо обʼєму (якщо заданий)
+  var volumeInstruction = buildVolumeInstruction(fieldValues && fieldValues.volume);
+  if (volumeInstruction) {
+    result += '\n\n' + volumeInstruction;
+  }
+
   return result.trim();
+}
+
+// --- Жорсткі інструкції щодо обʼєму ---
+// Парсить "2500-3000", "2500–3000", "2500", "~2500" та повертає інструкцію
+function buildVolumeInstruction(volumeStr) {
+  if (!volumeStr) return '';
+  var str = String(volumeStr).replace(/\s+/g, '').replace(/знб|збп|зн\./gi, '');
+  var min = null, max = null;
+
+  // Діапазон: 2500-3000, 2500–3000, 2500—3000
+  var rangeMatch = str.match(/(\d{3,6})[\-\u2013\u2014](\d{3,6})/);
+  if (rangeMatch) {
+    min = parseInt(rangeMatch[1], 10);
+    max = parseInt(rangeMatch[2], 10);
+  } else {
+    // Одиночне значення: 2500, ~2500
+    var singleMatch = str.match(/(\d{3,6})/);
+    if (singleMatch) {
+      var n = parseInt(singleMatch[1], 10);
+      min = Math.round(n * 0.95);
+      max = Math.round(n * 1.05);
+    }
+  }
+
+  if (!min || !max) return '';
+  var target = Math.round((min + max) / 2);
+
+  return '=== КРИТИЧНА ВИМОГА ДО ОБʼЄМУ ===\n' +
+    'Цільовий обʼєм тексту: ' + min + '–' + max + ' знаків із пробілами (збп).\n' +
+    'Оптимально: ~' + target + ' збп.\n\n' +
+    'ПРАВИЛА:\n' +
+    '1. НЕ перевищуй ' + max + ' збп за жодних обставин.\n' +
+    '2. НЕ пиши менше ' + min + ' збп.\n' +
+    '3. Перед відповіддю порахуй приблизний обсяг (символи + пробіли).\n' +
+    '4. Якщо тема широка — зосередься на найважливішому, не розширюй штучно.\n' +
+    '5. Якщо тема вузька — додай конкретні приклади, факти, деталі, НЕ воду.\n' +
+    '6. Заголовки (H1, H2, H3) входять в загальний обсяг.\n' +
+    '7. Баланс: вступ ~10%, основні H2-розділи ~75-80%, висновок ~10-15%.\n' +
+    '8. Якщо текст виходить >' + max + ' — скороти другорядні деталі, але зберігай структуру.\n' +
+    '9. Якщо текст <' + min + ' — додай глибину експертних деталей, а НЕ загальні фрази.\n' +
+    '10. Абзаци: 3-5 речень кожен, не більше.';
 }
 
 // --- Генерація ключа з назви ---
