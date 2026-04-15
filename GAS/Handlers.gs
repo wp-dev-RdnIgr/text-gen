@@ -304,9 +304,56 @@ function generateInterviewQuestions(taskId, topic) {
 
 // --- Генерація тексту (через AI Agent в n8n) ---
 
+/**
+ * Парсить значення поля "Обʼєм" і повертає ЖОРСТКУ примітку для system prompt'а.
+ * Підтримує формати: "500-700", "1500", "2500 - 3000", "1.5к", "2k-3k".
+ */
+function buildVolumeSystemNote(volumeStr) {
+  if (!volumeStr) return '';
+  var s = String(volumeStr).toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/знб|збп|зн\.|симв|char|chars|characters/g, '')
+    .replace(/приблизно|приблиз|приб\.|~|≈/g, '')
+    .replace(/(\d+(?:[\.,]\d+)?)\s*[кk]/gi, function(_, num) {
+      return String(Math.round(parseFloat(num.replace(',', '.')) * 1000));
+    });
+
+  var min = null, max = null;
+  var rangeMatch = s.match(/(\d{2,7})[\-\u2013\u2014\/\.]{1,2}(\d{2,7})/);
+  if (rangeMatch) {
+    min = parseInt(rangeMatch[1], 10);
+    max = parseInt(rangeMatch[2], 10);
+    if (min > max) { var t = min; min = max; max = t; }
+  } else {
+    var singleMatch = s.match(/(\d{2,7})/);
+    if (singleMatch) {
+      var n = parseInt(singleMatch[1], 10);
+      min = Math.round(n * 0.93);
+      max = Math.round(n * 1.07);
+    }
+  }
+  if (!min || !max || min < 50) return '';
+
+  return '🔒 СУВОРЕ ОБМЕЖЕННЯ ОБʼЄМУ ТЕКСТУ:\n' +
+    'Фінальний текст МАЄ бути в межах ' + min + '–' + max + ' знаків з пробілами.\n' +
+    'Не пишіть менше ' + min + ' і не більше ' + max + '.\n' +
+    'Перед відповіддю порахуйте обсяг та при необхідності скоротіть або доповніть.\n' +
+    'Це критична вимога з технічного завдання, порушити її НЕ МОЖНА.';
+}
+
 function generateTextWithAI(taskId, assembledPrompt, fieldValues) {
   var task = getTask(taskId);
   var sessionId = 'gen_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+
+  // Додаємо volume-інструкції також у system prompt (подвійна гарантія)
+  var systemPrompt = task ? task.system_prompt || '' : '';
+  var volumeNote = buildVolumeSystemNote(fieldValues && fieldValues.volume);
+  if (volumeNote) {
+    systemPrompt = volumeNote + '\n\n' + systemPrompt;
+  }
+
+  Logger.log('generateTextWithAI sessionId=' + sessionId + ' volume=' + (fieldValues && fieldValues.volume));
+
   var response = UrlFetchApp.fetch(N8N_AGENT_URL, {
     method: 'post',
     contentType: 'application/json',
@@ -314,9 +361,11 @@ function generateTextWithAI(taskId, assembledPrompt, fieldValues) {
       sessionId: sessionId,
       taskId: taskId,
       assembledPrompt: assembledPrompt,
-      systemPrompt: task ? task.system_prompt || '' : '',
+      systemPrompt: systemPrompt,
       userPrompt: assembledPrompt,
       fieldValues: fieldValues || {},
+      targetVolumeMin: (fieldValues && fieldValues._volumeMin) || null,
+      targetVolumeMax: (fieldValues && fieldValues._volumeMax) || null,
       llm_provider: task ? task.llm_provider : ''
     }),
     muteHttpExceptions: true
