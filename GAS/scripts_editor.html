@@ -16,25 +16,45 @@ function loadEditorScreen(taskId, textId) {
   }
 
   google.script.run.withSuccessHandler(function(text) {
-    if (!text) { showToast('Текст не знайдено', 'error'); return; }
-    state.editorText = text;
-
-    // Якщо немає блоків — парсимо з контенту
-    if (!text.blocks || !text.blocks.length) {
-      text.blocks = parseContentToBlocks(text.content);
-    }
-
-    // Завантажити назву задачі
-    google.script.run.withSuccessHandler(function(task) {
-      if (task) {
-        backLink.textContent = task.name || 'Задача';
+    try {
+      if (!text) {
+        showToast('Текст не знайдено', 'error');
+        hideScreenLoader();
+        navigateTo('#task/' + taskId);
+        return;
       }
-    }).getTask(taskId);
+      state.editorText = text;
 
-    renderEditorMeta();
-    renderEditorBlocks();
-    renderEditorStats();
+      // Якщо немає блоків — парсимо з контенту
+      if (!text.blocks || !text.blocks.length) {
+        text.blocks = parseContentToBlocks(text.content || '');
+      }
+
+      // Назва задачі з локального state (без RPC)
+      var localTask = (state.allTasks || []).find(function(t) { return String(t.id) === String(taskId); });
+      if (localTask && backLink) {
+        backLink.textContent = localTask.name || 'Задача';
+      } else {
+        // Фолбек — один RPC
+        google.script.run.withSuccessHandler(function(task) {
+          if (task && backLink) backLink.textContent = task.name || 'Задача';
+        }).withFailureHandler(function() {}).getTask(taskId);
+      }
+
+      renderEditorMeta();
+      renderEditorBlocks();
+      renderEditorStats();
+      hideScreenLoader();
+    } catch (err) {
+      console.error('loadEditorScreen render error:', err);
+      showToast('Помилка рендеру редактора: ' + err.message, 'error');
+      hideScreenLoader();
+    }
+  }).withFailureHandler(function(e) {
+    console.error('getGeneratedText error:', e);
+    showToast('Не вдалося завантажити текст: ' + (e && e.message || e), 'error');
     hideScreenLoader();
+    navigateTo('#task/' + taskId);
   }).getGeneratedText(textId);
 }
 

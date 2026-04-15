@@ -486,6 +486,18 @@ function switchTaskTab(tab) {
   if (gen) gen.style.display = tab === 'generate' ? 'block' : 'none';
   if (hist) hist.style.display = tab === 'history' ? 'block' : 'none';
   if (footer) footer.style.display = tab === 'history' ? 'none' : 'flex';
+
+  // Підсвітити крок 4 як активний коли показуємо історію
+  var dots = document.querySelectorAll('#wizard-progress .wizard-step-dot');
+  if (tab === 'history') {
+    for (var i = 0; i < dots.length; i++) {
+      var s = parseInt(dots[i].getAttribute('data-step'), 10);
+      dots[i].classList.toggle('active', s === 4);
+      dots[i].classList.toggle('done', s < 4);
+    }
+    // Рендер списку якщо ще немає
+    if (typeof renderHistoryList === 'function') renderHistoryList();
+  }
 }
 
 // --- Wizard navigation ---
@@ -625,7 +637,7 @@ function startGeneration() {
   var task = state.currentTask;
   var fv = task.field_values || {};
 
-  // Зібрати промпт
+  // Зібрати промпт (включно з жорсткими volume-інструкціями)
   var assembledPrompt = assemblePrompt(task.user_prompt || '', fv);
 
   // Додаткові інструкції
@@ -633,6 +645,10 @@ function startGeneration() {
   if (extra) {
     assembledPrompt += '\n\nДодаткові інструкції:\n' + extra;
   }
+
+  // Debug log (видно в консолі браузера)
+  console.log('[TextGen] Assembled prompt:\n', assembledPrompt);
+  console.log('[TextGen] Field values:', fv);
 
   if (!assembledPrompt.trim()) {
     showToast('Заповніть поля або додайте промт', 'error');

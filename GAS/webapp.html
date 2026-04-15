@@ -113,29 +113,31 @@
 
   <!-- Модалка: Створення задачі -->
   <div id="modal-new-task" class="modal-overlay" style="display:none;">
-    <div class="modal-card" style="max-width:680px;">
+    <div class="modal-card" style="max-width:700px;">
       <div class="modal-header">
         <h3>Створити задачу</h3>
         <button class="modal-close" onclick="closeModal('modal-new-task')">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="text-secondary" style="margin-bottom:14px;">Оберіть шаблон або створіть задачу з нуля</p>
+        <p class="text-secondary" style="margin-bottom:14px;">Оберіть клієнта та шаблон, або створіть задачу з нуля</p>
 
-        <!-- Фільтр за клієнтами -->
-        <div style="margin-bottom:16px;">
-          <label class="field-label">Фільтр за клієнтами</label>
-          <div class="multiselect-box" id="new-task-client-ms" onclick="toggleMultiselect('new-task-client-ms')">
-            <span class="multiselect-placeholder" id="new-task-client-ms-label">Усі клієнти</span>
-            <span class="multiselect-arrow">&#9662;</span>
-          </div>
-          <div class="multiselect-dropdown" id="new-task-client-ms-dropdown" style="display:none;">
-            <input type="text" class="multiselect-search" placeholder="Пошук клієнта…" oninput="filterMultiselectOptions('new-task-client-ms-dropdown', this.value)">
-            <div class="multiselect-options" id="new-task-client-ms-options">
-              <!-- Заповнюється динамічно -->
-            </div>
-          </div>
+        <!-- Клієнт — обов'язковий -->
+        <div class="field-group">
+          <label class="field-label">Клієнт <span style="color:var(--danger);">*</span></label>
+          <select id="new-task-client-select" class="input-field" onchange="onNewTaskClientChange()">
+            <option value="">— Оберіть клієнта —</option>
+          </select>
+          <div class="field-hint">Задача буде створена для цього клієнта. Шаблони нижче фільтруються автоматично.</div>
         </div>
 
+        <!-- Список шаблонів -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin:14px 0 8px;">
+          <label class="field-label" style="margin:0;">Шаблон (необов'язково)</label>
+          <label class="checkbox-label" style="font-size:11px; padding:0;">
+            <input type="checkbox" id="new-task-show-all-templates" onchange="renderNewTaskTemplateList()">
+            Показати всі шаблони
+          </label>
+        </div>
         <div id="new-task-template-list" class="task-template-grid">
           <!-- Заповнюється динамічно -->
         </div>

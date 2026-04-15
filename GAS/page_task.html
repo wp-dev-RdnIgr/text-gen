@@ -15,9 +15,6 @@
       <div class="wizard-title-row">
         <input type="text" id="task-name-input" class="input-title" placeholder="Назва задачі" onchange="saveTaskName()" style="flex:1; min-width:0;">
         <div class="wizard-actions">
-          <button class="btn btn-sm" onclick="switchTaskTab('history')" title="Історія генерацій">
-            Історія <span id="task-history-count" class="badge badge-neutral" style="margin-left:4px; font-size:10px;">0</span>
-          </button>
           <button class="btn btn-sm" onclick="openTaskImportModal()">Імпорт з Sheets</button>
           <button class="btn btn-sm btn-danger" onclick="deleteCurrentTask()">Видалити</button>
         </div>
@@ -38,6 +35,11 @@
         <button class="wizard-step-dot" data-step="3" onclick="goToWizardStep(3)">
           <span class="wizard-step-num">3</span>
           <span class="wizard-step-label">Генерація</span>
+        </button>
+        <div class="wizard-step-sep"></div>
+        <button class="wizard-step-dot" data-step="4" onclick="switchTaskTab('history')" title="Історія генерацій та результати">
+          <span class="wizard-step-num">4</span>
+          <span class="wizard-step-label">Результати <span id="task-history-count" class="badge badge-neutral" style="font-size:10px; margin-left:2px;">0</span></span>
         </button>
       </div>
     </div>
@@ -244,12 +246,15 @@
 
     </div>
 
-    <!-- History view (toggled via "Історія" button) -->
+    <!-- History / Results view -->
     <div id="task-tab-history" class="wizard-body" style="display:none;">
       <div style="max-width:900px; margin:0 auto;">
-        <div class="wizard-step-header">
-          <div class="wizard-step-heading">Історія генерацій</div>
-          <div class="wizard-step-description">Усі згенеровані тексти для цієї задачі.</div>
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; gap:16px;">
+          <div>
+            <div class="wizard-step-heading">Результати та історія</div>
+            <div class="wizard-step-description">Усі згенеровані тексти. Клік — відкриває в редакторі.</div>
+          </div>
+          <button class="btn" onclick="switchTaskTab('generate'); goToWizardStep(1);">← До ТЗ</button>
         </div>
         <div id="history-empty" class="empty-state" style="display:none;">
           <div class="empty-state-icon">✎</div>
