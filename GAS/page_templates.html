@@ -131,9 +131,21 @@
             <div class="content-card-title">LLM модель</div>
             <div class="content-card-subtitle">Провайдер та модель для генерації</div>
             <select id="tpl-llm-select" class="input-field">
-              <option value="anthropic|Claude Sonnet" selected>Claude Sonnet (баланс)</option>
-              <option value="anthropic|Claude Opus">Claude Opus (найрозумніша)</option>
-              <option value="perplexity|Perplexity Online">Perplexity Online (з вебом)</option>
+              <optgroup label="Claude (Anthropic)">
+                <option value="anthropic|Claude Sonnet 4.6" selected>Claude Sonnet 4.6 (баланс, найновіша)</option>
+                <option value="anthropic|Claude Sonnet 4.5">Claude Sonnet 4.5</option>
+                <option value="anthropic|Claude Opus 4.6">Claude Opus 4.6 (найрозумніша)</option>
+                <option value="anthropic|Claude Opus 4.5">Claude Opus 4.5</option>
+                <option value="anthropic|Claude Opus 4.1">Claude Opus 4.1</option>
+                <option value="anthropic|Claude Haiku 4.5">Claude Haiku 4.5 (найшвидша)</option>
+              </optgroup>
+              <optgroup label="Perplexity (з вебом)">
+                <option value="perplexity|Perplexity Sonar">Perplexity Sonar (базова)</option>
+                <option value="perplexity|Perplexity Sonar Pro">Perplexity Sonar Pro</option>
+                <option value="perplexity|Perplexity Sonar Reasoning">Sonar Reasoning</option>
+                <option value="perplexity|Perplexity Sonar Reasoning Pro">Sonar Reasoning Pro</option>
+                <option value="perplexity|Perplexity Sonar Deep Research">Sonar Deep Research</option>
+              </optgroup>
             </select>
           </div>
 

@@ -312,13 +312,22 @@ function handleHashRoute() {
           catch (e) { console.error('renderClientsTable error:', e); }
         }
         break;
-      case '#templates':
-        showScreen('screen-templates');
+    case '#templates':
+      showScreen('screen-templates');
+      // Завжди тягнути свіжі шаблони при заході — уникнути stale cache
+      google.script.run.withSuccessHandler(function(tt) {
+        state.taskTemplates = tt || [];
         if (typeof renderTemplateList === 'function') {
           try { renderTemplateList(); }
           catch (e) { console.error('renderTemplateList error:', e); }
         }
-        break;
+      }).withFailureHandler(function(e) {
+        console.error('getTaskTemplates (templates page) error:', e);
+        if (typeof renderTemplateList === 'function') {
+          try { renderTemplateList(); } catch (e2) {}
+        }
+      }).getTaskTemplates();
+      break;
       case '#task':
         showScreen('screen-task');
         if (parts[1]) {
