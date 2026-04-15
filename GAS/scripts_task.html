@@ -631,6 +631,46 @@ function deleteCurrentTask() {
   }).deleteTask(taskId);
 }
 
+// --- Pre-flight check: знайти незаповнені або невідомі {{key}} у промпті ---
+// Повертає { missing: [], empty: [] }
+//   missing — ключі, яких немає ні в field_values, ні в core_fields, ні в flex_blocks
+//   empty   — ключі, які існують, але мають порожнє значення
+function _findUnresolvedPromptKeys(promptText, fv, task) {
+  var result = { missing: [], empty: [] };
+  if (!promptText) return result;
+  var matches = promptText.match(/\{\{(\w+)\}\}/g) || [];
+  if (!matches.length) return result;
+
+  // Множина всіх "відомих" ключів у задачі (навіть якщо значення порожнє)
+  var knownKeys = {};
+  var cf = (task && task.core_fields) || {};
+  Object.keys(cf).forEach(function(k) { if (cf[k]) knownKeys[k] = true; });
+  var fb = (task && task.flex_blocks) || [];
+  fb.forEach(function(b) { if (b && b.key) knownKeys[b.key] = true; });
+  // Також ключі з самих field_values (якщо flex-блоки не в задачі але значення є)
+  Object.keys(fv || {}).forEach(function(k) {
+    if (!k.startsWith('_')) knownKeys[k] = true;
+  });
+
+  var seen = {};
+  matches.forEach(function(m) {
+    var key = m.replace(/[\{\}]/g, '');
+    if (seen[key]) return;
+    seen[key] = true;
+    var val = fv ? fv[key] : undefined;
+    var hasValue = val && String(val).trim();
+    if (Array.isArray(val)) {
+      hasValue = val.some(function(x) { return x && String(x).trim(); });
+    }
+    if (!knownKeys[key]) {
+      result.missing.push(key);
+    } else if (!hasValue) {
+      result.empty.push(key);
+    }
+  });
+  return result;
+}
+
 // --- Генерація (multi-step flow) ---
 function startGeneration() {
   if (!state.currentTask) return;
@@ -662,9 +702,33 @@ function startGeneration() {
     return;
   }
 
+  // --- Pre-flight перевірка: знайти незаповнені / невідомі {{key}} ---
+  var unresolvedKeys = _findUnresolvedPromptKeys(rawUserPrompt, fv, task);
+  if (unresolvedKeys.missing.length || unresolvedKeys.empty.length) {
+    var msg = '';
+    if (unresolvedKeys.missing.length) {
+      msg += '⚠️ Невідомі змінні (немає такого поля в задачі):\n' +
+        unresolvedKeys.missing.map(function(k) { return '  • {{' + k + '}}'; }).join('\n') + '\n\n';
+    }
+    if (unresolvedKeys.empty.length) {
+      msg += '⚠️ Незаповнені змінні (поле існує, але порожнє):\n' +
+        unresolvedKeys.empty.map(function(k) { return '  • {{' + k + '}}'; }).join('\n') + '\n\n';
+    }
+    msg += 'При генерації ці змінні стануть порожнечею.\n\nВсе одно згенерувати?';
+    if (!confirm(msg)) {
+      // Повернутись на Крок 1 щоб юзер міг виправити
+      goToWizardStep(1);
+      if (startCard) startCard.style.display = '';
+      return;
+    }
+  }
+
   // Debug
   console.log('[TextGen] Raw user prompt:\n', rawUserPrompt);
   console.log('[TextGen] Field values (будуть підставлені в n8n):', fv);
+  if (unresolvedKeys.missing.length || unresolvedKeys.empty.length) {
+    console.warn('[TextGen] Unresolved keys:', unresolvedKeys);
+  }
 
   var opts = task.options || {};
 
