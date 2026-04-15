@@ -284,13 +284,38 @@ function saveCurrentTemplate() {
   var lSel = document.getElementById('tpl-llm-select');
   var parts = lSel.value.split('|');
 
+  var userPrompt = document.getElementById('tpl-user-prompt').value;
+  var systemPrompt = document.getElementById('tpl-system-prompt').value;
+  var coreFields = getTplCoreFields();
+
+  // Перевірка: чи всі {{ключі}} у шаблоні існують як core_field або flex_block
+  var unknownKeys = [];
+  var allText = userPrompt + '\n' + systemPrompt;
+  var matches = allText.match(/\{\{(\w+)\}\}/g) || [];
+  var seen = {};
+  var validKeys = {};
+  Object.keys(coreFields).forEach(function(k) { if (coreFields[k]) validKeys[k] = true; });
+  _tplFlexBlocks.forEach(function(b) { validKeys[b.key] = true; });
+  matches.forEach(function(m) {
+    var key = m.replace(/[\{\}]/g, '');
+    if (seen[key]) return;
+    seen[key] = true;
+    if (!validKeys[key]) unknownKeys.push(key);
+  });
+  if (unknownKeys.length) {
+    var msg = 'У промптах є змінні, які не існують у ядрових полях чи гнучких блоках:\n\n' +
+      unknownKeys.map(function(k) { return '• {{' + k + '}}'; }).join('\n') +
+      '\n\nВони замінються на порожні рядки при генерації.\n\nЗберегти все одно?';
+    if (!confirm(msg)) return;
+  }
+
   var data = {
     name: name,
     description: document.getElementById('tpl-description').value.trim(),
-    system_prompt: document.getElementById('tpl-system-prompt').value,
-    user_prompt: document.getElementById('tpl-user-prompt').value,
+    system_prompt: systemPrompt,
+    user_prompt: userPrompt,
     client_ids: state.tplClientIds,
-    core_fields: getTplCoreFields(),
+    core_fields: coreFields,
     flex_blocks: _tplFlexBlocks,
     llm_provider: parts[0] || '',
     llm_model: parts[1] || '',
