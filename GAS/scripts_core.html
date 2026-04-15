@@ -133,10 +133,28 @@ function hideScreenLoader() {
 
 // --- Ініціалізація ---
 document.addEventListener('DOMContentLoaded', function() {
-  restoreSidebarState();
-  loadInitialData();
-  handleHashRoute();
-  window.addEventListener('hashchange', handleHashRoute);
+  try {
+    restoreSidebarState();
+    loadInitialData();
+    handleHashRoute();
+    window.addEventListener('hashchange', handleHashRoute);
+  } catch (e) {
+    console.error('Init FATAL:', e);
+    alert('Помилка ініціалізації TextGen: ' + e.message + '\n\nВідкрийте DevTools (F12) → Console для деталей.');
+  }
+
+  // Failsafe: якщо через 3 секунди дашборд все ще прихований — примусово показати
+  setTimeout(function() {
+    var dash = document.getElementById('screen-dashboard');
+    var anyVisible = document.querySelector('.screen[style*="block"]');
+    if (dash && !anyVisible) {
+      console.warn('[TextGen] Failsafe: forcing dashboard visible');
+      dash.style.display = 'block';
+      if (typeof renderDashboardOverview === 'function') {
+        try { renderDashboardOverview(); } catch (e) { console.error(e); }
+      }
+    }
+  }, 3000);
 });
 
 function loadInitialData(force) {
@@ -264,46 +282,78 @@ function renderRecentTasks() {
 
 // --- Роутер ---
 function handleHashRoute() {
-  var hash = window.location.hash || '#dashboard';
-  var parts = hash.split('/');
-  var screen = parts[0];
+  try {
+    var hash = window.location.hash || '#dashboard';
+    var parts = hash.split('/');
+    var screen = parts[0];
 
-  hideAllScreens();
-  updateActiveNav(screen);
+    hideAllScreens();
+    updateActiveNav(screen);
 
-  switch (screen) {
-    case '#dashboard':
+    switch (screen) {
+      case '#dashboard':
+        showScreen('screen-dashboard');
+        if (typeof renderDashboardOverview === 'function') {
+          try { renderDashboardOverview(); }
+          catch (e) { console.error('renderDashboardOverview error:', e); showToast('Помилка дашборду: ' + e.message, 'error'); }
+        }
+        break;
+      case '#tasks':
+        showScreen('screen-tasks');
+        if (typeof renderTasksPage === 'function') {
+          try { renderTasksPage(); }
+          catch (e) { console.error('renderTasksPage error:', e); }
+        }
+        break;
+      case '#clients':
+        showScreen('screen-clients');
+        if (typeof renderClientsTable === 'function') {
+          try { renderClientsTable(); }
+          catch (e) { console.error('renderClientsTable error:', e); }
+        }
+        break;
+      case '#templates':
+        showScreen('screen-templates');
+        if (typeof renderTemplateList === 'function') {
+          try { renderTemplateList(); }
+          catch (e) { console.error('renderTemplateList error:', e); }
+        }
+        break;
+      case '#task':
+        showScreen('screen-task');
+        if (parts[1]) {
+          showScreenLoader();
+          if (typeof loadTaskScreen === 'function') loadTaskScreen(parts[1]);
+        }
+        break;
+      case '#editor':
+        showScreen('screen-editor');
+        if (parts[1] && parts[2]) {
+          showScreenLoader();
+          if (typeof loadEditorScreen === 'function') loadEditorScreen(parts[1], parts[2]);
+        }
+        break;
+      default:
+        showScreen('screen-dashboard');
+        if (typeof renderDashboardOverview === 'function') renderDashboardOverview();
+    }
+  } catch (e) {
+    console.error('handleHashRoute FATAL:', e);
+    // Показати мінімальний дашборд щоб сторінка не лишалась пустою
+    try {
+      hideAllScreens();
       showScreen('screen-dashboard');
-      if (typeof renderDashboardOverview === 'function') renderDashboardOverview();
-      break;
-    case '#tasks':
-      showScreen('screen-tasks');
-      if (typeof renderTasksPage === 'function') renderTasksPage();
-      break;
-    case '#clients':
-      showScreen('screen-clients');
-      renderClientsTable();
-      break;
-    case '#templates':
-      showScreen('screen-templates');
-      renderTemplateList();
-      break;
-    case '#task':
-      showScreen('screen-task');
-      if (parts[1]) {
-        showScreenLoader();
-        loadTaskScreen(parts[1]);
+      // Покажемо alert з помилкою у основному контенті
+      var dash = document.getElementById('screen-dashboard');
+      if (dash) {
+        dash.innerHTML = '<div class="page-wrap"><div class="content-card" style="border-color:var(--danger); background:var(--danger-light);">' +
+          '<div class="content-card-title" style="color:var(--danger);">⚠️ Помилка ініціалізації</div>' +
+          '<div class="content-card-subtitle">' + (e.message || e) + '</div>' +
+          '<div style="font-family:monospace; font-size:11px; margin-top:10px; white-space:pre-wrap;">' + (e.stack || '').substring(0, 500) + '</div>' +
+          '<button class="btn btn-primary" style="margin-top:12px;" onclick="location.reload()">Перезавантажити</button>' +
+          '</div></div>';
       }
-      break;
-    case '#editor':
-      showScreen('screen-editor');
-      if (parts[1] && parts[2]) {
-        showScreenLoader();
-        loadEditorScreen(parts[1], parts[2]);
-      }
-      break;
-    default:
-      showScreen('screen-dashboard');
+    } catch (e2) { /* nothing we can do */ }
   }
 }
 

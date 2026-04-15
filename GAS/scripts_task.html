@@ -419,6 +419,9 @@ function saveFieldValues() {
   task.field_values.language = document.getElementById('fv-language').value;
   task.field_values.volume = document.getElementById('fv-volume').value;
 
+  // Оновити live prompt preview (Крок 2) — побачимо підстановку одразу
+  if (typeof updatePromptPreviews === 'function') updatePromptPreviews();
+
   autoSaveTask();
 }
 
@@ -430,8 +433,47 @@ function updatePromptPreviews() {
   var up = document.getElementById('task-user-prompt').value || '';
   var spPreview = document.getElementById('task-system-prompt-preview');
   var upPreview = document.getElementById('task-user-prompt-preview');
-  if (spPreview) spPreview.textContent = sp ? (sp.length > 150 ? sp.substring(0, 150) + '...' : sp) : '(порожньо)';
-  if (upPreview) upPreview.textContent = up ? (up.length > 150 ? up.substring(0, 150) + '...' : up) : '(порожньо)';
+
+  // Зібрати поточні field_values з UI (що ввів юзер в Кроці 1)
+  var fv = (state.currentTask && state.currentTask.field_values) || {};
+  // Доповнити з ядрових полів якщо вони є у DOM
+  ['url','keywords','topic','language','volume'].forEach(function(k) {
+    var el = document.getElementById('fv-' + k);
+    if (el && el.value) fv[k] = el.value;
+  });
+
+  // Асембльований user-prompt (з підстановкою)
+  var assembled = '';
+  try {
+    assembled = (typeof assemblePrompt === 'function') ? assemblePrompt(up, fv) : up;
+  } catch (e) { assembled = up; }
+
+  // Підсвітка нерозв'язаних {{змінних}} — щоб юзер бачив що не підставилось
+  var unresolved = [];
+  var matches = up.match(/\{\{(\w+)\}\}/g) || [];
+  matches.forEach(function(m) {
+    var key = m.replace(/[\{\}]/g, '');
+    if (!fv[key] || !String(fv[key]).trim()) {
+      if (unresolved.indexOf(key) === -1) unresolved.push(key);
+    }
+  });
+
+  if (spPreview) {
+    spPreview.textContent = sp ? (sp.length > 280 ? sp.substring(0, 280) + '…' : sp) : '(порожньо)';
+  }
+  if (upPreview) {
+    var txt = assembled || up || '(порожньо)';
+    if (txt.length > 400) txt = txt.substring(0, 400) + '…';
+    upPreview.textContent = txt;
+
+    // Показати попередження про нерозвʼязані змінні
+    if (unresolved.length) {
+      upPreview.textContent += '\n\n⚠️ Незаповнені змінні: ' + unresolved.map(function(k) { return '{{' + k + '}}'; }).join(', ');
+      upPreview.style.color = 'var(--warning)';
+    } else {
+      upPreview.style.color = '';
+    }
+  }
 }
 
 function toggleSettingsSection(sectionId) {
